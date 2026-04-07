@@ -1,0 +1,8 @@
+out/
+.vs/
+
+
+*.exe
+*.pdb
+*.lib
+*.dll
