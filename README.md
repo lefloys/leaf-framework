@@ -14,7 +14,7 @@ and the complexity of a 3D game in mind.
 
 The goal is to provide a simple standard library for game development 
 that doesn't require the user to learn complex things but leaves the
-door open. leaf provides an OpenGL like API in a C++ style. That means 
+door open. Leaf provides an OpenGL like API in a C++ style. That means 
 with more type saftey and using features like RAII and templates.
 
 ---
