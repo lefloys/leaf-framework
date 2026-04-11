@@ -27,8 +27,5 @@ namespace lf::detail {
 	template<typename T>
 	struct Resource {
 		static void Destroy(handle<T> obj);
-		struct Backend {
-			decltype(Destroy)* destroy = nullptr;
-		};
 	};
 }

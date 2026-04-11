@@ -14,8 +14,5 @@ namespace lf {
 		static void SetSize(view<Window> wnd, dim2<u32> extent);
 
 
-		struct Backend : detail::Resource<Window>::Backend {
-			decltype(Create)* create = nullptr;
-		};
 	};
 }

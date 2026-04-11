@@ -5,6 +5,4 @@ add_subdirectory("math")
 add_files("leaf-framework" 
 	"leaf.cpp"
 	"leaf.hpp"
-	"native_window.cpp"
-	"native_window.hpp"
 )
