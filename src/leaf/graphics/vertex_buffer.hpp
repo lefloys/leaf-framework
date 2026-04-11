@@ -3,6 +3,5 @@
 #include "detail/buffer.hpp"
 
 namespace lf {
-	struct VertexBuffer : detail::Buffer<VertexBuffer> {
-	};
+	struct VertexBuffer : detail::Buffer<VertexBuffer> {};
 }
