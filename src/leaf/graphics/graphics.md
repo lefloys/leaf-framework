@@ -1,16 +1,121 @@
-# leaf-framework graphics module
+﻿# leaf-framework graphics module
 
-This document describes the public types, enums and functions used by the `leaf` graphics module. It assumes modern C++ (C++23) idioms and RAII ownership patterns.
+This document describes the public types, enums and functions used by the `leaf` graphics module. 
+It assumes modern C++23.
 
 ## Types
-- `lf::handle<T>`: opaque low-level handle to an implementation object (non-owning view to a resource handle).
-- `lf::unique<T>`: RAII-owned, non-copyable owning handle (single ownership). Destruction frees the underlying resource.
-- `lf::shared<T>`: reference-counted owning handle. Multiple owners may hold a `shared` to keep a resource alive.
-- `lf::weak<T>`: non-owning observation of a `shared` handle. Can be promoted to `shared` if the resource is still alive.
-- `lf::view<T>`: non-owning, lightweight view used for API parameters where the callee does not take ownership or extend lifetime.
-- `lf::Window`: platform window abstraction.
-- `lf::FrameBuffer` : render target abstraction.
 
+Objects
+
+- [`lf::handle<T>`](#raw-handle)
+- [`lf::view<T>`](#view-handle)
+- [`lf::unique<T>`](#unique-handle)
+- [`lf::shared<T>`](#shared-handle)
+- [`lf::weak<T>`](#weak-handle)
+
+---
+
+Resources
+
+- [`lf::Window`](#window)
+
+
+---
+
+#### [`lf::handle<T>`](#raw-handle)
+A `lf::handle<T>` is a lightweight, non-owning token referencing a dynamically
+allocated resource. It is freely copyable but does not manage lifetime.
+
+Returning a `handle<T>` transfers responsibility to the caller, which must be
+passed along through the API until the resource is ultimately consumed.
+Passing a `handle<T>` to a function transfers responsibility to the callee,
+and the caller must not use it afterward unless explicitly documented
+otherwise.
+
+Handles do not enforce ownership, but invalid usage—such as double consumption,
+use-after-release, or other lifetime violations result in an exception.
+
+For safer usage, handles should be wrapped in `lf::unique<T>` (exclusive
+ownership) or `lf::shared<T>` (reference-counted). Direct use is exposed to
+allow manual management.
+
+This concept is similar to a dynamically allocated raw pointer.
+#### [`lf::Window`](#window)
+
+---
+
+#### [`lf::view<T>`](#view-handle)
+A `lf::view<T>` is a lightweight, non-owning reference to an existing resource.
+It provides temporary access without participating in lifetime management.
+
+A view does not carry responsibility and must not be used to destroy or
+transfer ownership. It is strictly for observing or using a resource owned
+elsewhere.
+
+Views are intended for short-lived, transient use, such as passing resources to
+functions (e.g., command recording or pipeline setup).
+
+The caller must ensure the underlying resource remains valid for the entire
+duration of the view’s use. A view must not outlive the resource it refers to
+and should not be stored beyond the scope in which validity is guaranteed.
+
+There is also a `lf::view<const T>` variant for read-only access, which enforces
+const-correctness at compile time.
+
+This concept is similar to `std::string_view` or `std::span`.
+
+---
+
+#### [`lf::unique<T>`](#unique-handle)
+A `lf::unique<T>` is a move-only smart handle that exclusively owns a resource.
+It automatically releases the resource when it goes out of scope, ensuring
+proper cleanup.
+
+A `unique<T>` cannot be copied, only moved. Moving transfers ownership,
+leaving the source in a valid but unspecified state (typically empty or null).
+
+`unique<T>` is ideal for resources with clear ownership semantics, such as
+buffers, textures, or windows that should be automatically cleaned up when no
+longer needed.
+
+This concept is similar to `std::unique_ptr<T>`
+
+---
+
+#### [`lf::shared<T>`](#shared-handle)
+A `lf::shared<T>` is a reference-counted smart handle that allows multiple
+owners of a resource. It automatically releases the resource when the last
+owner goes out of scope.
+
+A `shared<T>` can be copied, which increments the reference count. Moving a
+`shared<T>` transfers ownership without changing the reference count.
+
+`shared<T>` is useful for resources that may be shared across different parts
+of an application, such as a texture used by multiple objects or a window
+accessed by various systems.
+
+This concept is similar to `std::shared<T>`
+
+---
+
+#### [`lf::weak<T>`](#weak-handle)
+A `lf::weak<T>` is a non-owning reference to a resource managed by `lf::shared<T>`.
+
+It provides temporary access to a resource without affecting its reference
+count and without extending its lifetime.
+
+A `weak<T>` does not guarantee that the resource is still alive. It must be
+upgraded to a `lf::shared<T>` before use. If the resource has already been
+destroyed, the upgrade fails and yields an empty or invalid result.
+
+`weak<T>` is used to break reference cycles and to observe shared resources
+without contributing to ownership.---
+
+
+
+
+- `lf::Window`: platform window abstraction.
+- `lf::Framebuffer`: render target abstraction.
 
 ### Buffers
 - `lf::VertexBuffer`
@@ -20,7 +125,7 @@ This document describes the public types, enums and functions used by the `leaf`
 
 
 ### Command pipeline
-- `lf::CommandBuffer`
+- `lf::Commandbuffer`
 - `lf::CommandPool`
 - `lf::Queue`
 - `lf::QueueTimepoint`: lightweight timeline value returned from `Queue::Submit` used for synchronization. A `QueueTimepoint` can be waited on from any `lf::Queue` on the same device or consumed by a `CommandBuffer` for GPU-side waits.
@@ -45,14 +150,14 @@ This document describes the public types, enums and functions used by the `leaf`
  
 
 ## Enums
-- `lf::buffer_usage`: enum describing intended GPU usage (`static_draw, dynamic_draw, stream_draw`). Note: `Buffer::Data` is allowed to change the usage flags of an existing buffer � usage is not necessarily immutable.
+- `lf::buffer_usage`: enum describing intended GPU usage (`static_draw, dynamic_draw, stream_draw`). Note: `Buffer::Data` is allowed to change the usage flags of an existing buffer — usage is not necessarily immutable.
 - `lf::texture_format`: enum describing texture formats (e.g., `rgba8_unorm`, `rgba16_float`, `depth24_stencil8`, etc.). The API should use a consistent set of format enums across texture creation and data upload/download to avoid confusion.
 - `lf::draw_mode`: enum describing primitive types for draw calls (e.g., `triangles`, `lines`, `points`, etc.).
 - `lf::queue_flag_bits`: enum describing queue capabilities (e.g., `graphics`, `compute`, `transfer`).
 
 
 ## Helpers
-- `std::span<std::byte> lf::to_bytes(...)` helper: convert typed trivially-copyable data or contiguous containers into `std::span<std::byte>` for passing to `Buffer::Data`. This avoids overload proliferation and keeps the buffer API uniform. The helper requires that the source is safely representable as a contiguous sequence of bytes (e.g., a POD/trivially-copyable type or a std::span).
+- `std::span<std::byte> lf::to_bytes(...)`
 
 Example:
 ```cpp
@@ -76,47 +181,51 @@ lf::unique<lf::IndexBuffer> uebo = lf::unique(lf::IndexBuffer::Create())`
 
 
 ### Buffer functions
-- `void Buffer::Data(lf::view<Buffer> buf, std::span<std::byte> data, lf::buffer_usage usage, size_t offset = 0)`
-- `size_t Buffer::GetSize(lf::view<const Buffer> buf)` : returns the size in bytes of the buffer.
-- `void Buffer::Reserve(lf::view<Buffer> buf, size_t size, lf::buffer_usage usage)` : allocate or reallocate a buffer to the specified size and usage. if reallocation happens, data will be copied. if size is smaller than before, buffer does not get reallocated
+- `static void Buffer::Data(lf::view<Buffer> buf, std::span<std::byte> data, lf::buffer_usage usage, size_t offset = 0)`
+- `static size_t Buffer::GetSize(lf::view<const Buffer> buf)` : returns the size in bytes of the buffer.
+- `static size_t Buffer::GetCapacity(lf::view<const Buffer> buf)` : returns the capacity in bytes of the buffer.
+- `static void Buffer::Reserve(lf::view<Buffer> buf, size_t size, lf::buffer_usage usage)`
 
 
 ### Framebuffer functions
-- `lf::view<const lf::Texture2D> Framebuffer::GetColorAttachment(lf::view<const Framebuffer> fb, u32 index)` : returns a view to the color attachment texture at the specified index. The returned texture is owned by the framebuffer and should not be modified or destroyed by the caller.
+- `static lf::view<const lf::Texture2D> Framebuffer::GetColorAttachment(lf::view<const Framebuffer> fb, u32 index)` : returns a view to the color attachment texture at the specified index. The returned texture is owned by the framebuffer and should not be modified or destroyed by the caller.
 
 
 ### Window functions
-- `void Window::Show(lf::view<Window> wnd)` : show the window.
-- `void Window::Hide(lf::view<Window> wnd)` : hide the window.
-- `void Window::Resize(lf::view<Window> wnd, dim2<u32> dim)` : set window size in pixels. 
-- `dim2<u32> Window::GetSize(lf::view<Window> wnd)` : returns the current size of the window in pixels.
-- `void Window::SetInputHandler(InputHandler& handler)` : register an input handler. The handler lifetime is managed by the caller; the window stores only a non-owning reference.
-- `lf::view<lf::Framebuffer> Window::BeginFrame(lf::view<Window> wnd)` : begin a new frame and return a framebuffer view for rendering. The framebuffer is valid until the next call to `BeginFrame` on the same window. This function may also handle platform-specific frame preparation (e.g., acquiring swapchain images).
-- `void Window::EndFrame(lf::view<Window> wnd)` : end the current frame and present the rendered content. This function may also handle platform-specific frame finalization (e.g., presenting swapchain images).)
+- `static void Window::Show(lf::view<Window> wnd)` : show the window.
+- `static void Window::Hide(lf::view<Window> wnd)` : hide the window.
+- `static void Window::Resize(lf::view<Window> wnd, dim2<u32> dim)` : set window size in pixels. 
+- `static dim2<u32> Window::GetSize(lf::view<Window> wnd)` : returns the current size of the window in pixels.
+- `static void Window::SetInputHandler(InputHandler& handler)` : register an input handler. The handler lifetime is managed by the caller; the window stores only a non-owning reference.
+- `static lf::view<lf::Framebuffer> Window::BeginFrame(lf::view<Window> wnd)` : begin a new frame and return a framebuffer view for rendering. The framebuffer is valid until the next call to `BeginFrame` on the same window. This function may also handle platform-specific frame preparation (e.g., acquiring swapchain images).
+- `static void Window::EndFrame(lf::view<Window> wnd)` : end the current frame and present the rendered content. This function may also handle platform-specific frame finalization (e.g., presenting swapchain images).)
 
 
 ### Shader and pipeline functions
-- `void lf::GraphicsPipeline::Attach(lf::view<GraphicsPipeline> pipeline, lf::view<const Shader> shader)`
-- `error lf::GraphicsPipeline::Link(lf::view<GraphicsPipeline> pipeline)`
+- `static void lf::GraphicsPipeline::Attach(lf::view<GraphicsPipeline> pipeline, lf::view<const Shader> shader)`
+- `static error lf::GraphicsPipeline::Link(lf::view<GraphicsPipeline> pipeline)`
 
 
 ### Command buffers, queues and synchronization
-- `lf::view<lf::CommandBuffer> lf::CommandPool::Allocate(lf::view<lf::CommandPool> pool)` : allocate a command buffer from the command pool.
-- `lf::QueueTimepoint lf::Queue::Submit(lf::view<Queue> queue, lf::view<const CommandBuffer> cmd)` : submit a command buffer to the queue and return a `QueueTimepoint` that can be used for synchronization.
-- `void CommandBuffer::WaitFor(lf::view<lf::CommandBuffer> cmd, lf::QueueTimepoint timepoint)` : block the command buffer until the specified timepoint has been reached on the GPU. This can be used to synchronize between command buffers or to wait for a submitted command buffer to finish before reusing it.
-- `void CommandBuffer::Draw(lf::view<lf::CommandBuffer> cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance)` : record a draw command into the command buffer.
+- `static lf::view<lf::CommandBuffer> lf::CommandPool::Allocate(lf::view<lf::CommandPool> pool)` : allocate a command buffer from the command pool.
+- `static lf::QueueTimepoint lf::Queue::Submit(lf::view<Queue> queue, lf::view<const CommandBuffer> cmd)` : submit a command buffer to the queue and return a `QueueTimepoint` that can be used for synchronization.
+- `static void lf::CommandBuffer::WaitFor(lf::view<lf::CommandBuffer> cmd, lf::QueueTimepoint timepoint)` : block the command buffer until the specified timepoint has been reached on the GPU. This can be used to synchronize between command buffers or to wait for a submitted command buffer to finish before reusing it.
+- `static void lf::CommandBuffer::Draw(lf::view<lf::CommandBuffer> cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance)` : record a draw command into the command buffer.
 - Various other draw functions with similar parameters for indexed draws, indirect draws, etc.
-- `void lf::CommandBuffer::Begin(lf::view<lf::CommandBuffer> cmd)`
-- `void lf::CommandBuffer::BeginRendering(lf::view<lf::CommandBuffer> cmd, lf::view<Framebuffer> fb)`
-- `void lf::CommandBuffer::EndRendering(lf::view<lf::CommandBuffer> cmd)`
-- `void lf::CommandBuffer::End(lf::view<lf::CommandBuffer> cmd)`
-- `void lf::CommandBuffer::Reset(lf::view<lf::CommandBuffer> cmd)`
+- `static void lf::CommandBuffer::Begin(lf::view<lf::CommandBuffer> cmd)`
+- `static void lf::CommandBuffer::BeginRendering(lf::view<lf::CommandBuffer> cmd, lf::view<Framebuffer> fb)`
+- `static void lf::CommandBuffer::EndRendering(lf::view<lf::CommandBuffer> cmd)`
+- `static void lf::CommandBuffer::End(lf::view<lf::CommandBuffer> cmd)`
+- `static void lf::CommandBuffer::Reset(lf::view<lf::CommandBuffer> cmd)`
 - `void lf::QueueTimepoint::wait(QueueTimepoint* this)` : block cpu execution until the timepoint has been reached on the GPU. This can be used to synchronize CPU work with GPU progress, such as waiting for a submitted command buffer to finish before reusing resources.
-- `void lf::Queue::Acquire(lf::queue_flag_bits`
+- `static void lf::Queue::Acquire(lf::queue_flag_bits`
 
 
 ### Texture functions
-- We have an Image type that can be used for staging texture data on the CPU side, and then a `Texture::Upload` function to copy from an Image to a GPU texture. This keeps the texture API focused on GPU resources and allows for flexible CPU-side image manipulation before uploading.
+We have an Image type that can be used for staging texture data on the CPU side,
+and then a `Texture::Upload` function to copy from an Image to a GPU texture. 
+This keeps the texture API focused on GPU resources and allows for flexible 
+CPU-side image manipulation before uploading.
 ```cpp
 
 struct Image1D {
@@ -134,13 +243,13 @@ struct Image3D {
 	std::vector<std::byte> data;
 }
 ```
-- `void Texture1D::Reserve(lf::view<Texture> tex, u32 extent, u32 layers, u32 mip_levels)`
-- `void Texture2D::Reserve(lf::view<Texture> tex, dim2<u32> extent, u32 layers, u32 mip_levels)`
-- `void Texture3D::Reserve(lf::view<Texture> tex, dim3<u32> extent, u32 layers, u32 mip_levels)`
+- `static void Texture1D::Reserve(lf::view<Texture> tex, u32 extent, u32 layers, u32 mip_levels)`
+- `static void Texture2D::Reserve(lf::view<Texture> tex, dim2<u32> extent, u32 layers, u32 mip_levels)`
+- `static void Texture3D::Reserve(lf::view<Texture> tex, dim3<u32> extent, u32 layers, u32 mip_levels)`
 
-- `void Texture1D::Upload(lf::view<Texture> tex, const Image1D& img, u32 mip_level)` : upload image data to the specified mip level of the texture. 
-- `void Texture2D::Upload(lf::view<Texture> tex, const Image2D& img, u32 mip_level)` : upload image data to the specified mip level of the texture. 
-- `void Texture3D::Upload(lf::view<Texture> tex, const Image3D& img, u32 mip_level)` : upload image data to the specified mip level of the texture. 
-- `Image1D Texture1D::Download(lf::view<const Texture1D> tex, u32 mip_level)` : download image data
-- `Image2D Texture2D::Download(lf::view<const Texture2D> tex, u32 mip_level)` : download image data
-- `Image3D Texture3D::Download(lf::view<const Texture3D> tex, u32 mip_level)` : download image data
+- `static void Texture1D::Upload(lf::view<Texture> tex, const Image1D& img, u32 mip_level)` : upload image data to the specified mip level of the texture. 
+- `static void Texture2D::Upload(lf::view<Texture> tex, const Image2D& img, u32 mip_level)` : upload image data to the specified mip level of the texture. 
+- `static void Texture3D::Upload(lf::view<Texture> tex, const Image3D& img, u32 mip_level)` : upload image data to the specified mip level of the texture. 
+- `static Image1D Texture1D::Download(lf::view<const Texture1D> tex, u32 mip_level)` : download image data
+- `static Image2D Texture2D::Download(lf::view<const Texture2D> tex, u32 mip_level)` : download image data
+- `static Image3D Texture3D::Download(lf::view<const Texture3D> tex, u32 mip_level)` : download image data
