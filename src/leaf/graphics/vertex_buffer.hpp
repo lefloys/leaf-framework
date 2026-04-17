@@ -1,7 +1,8 @@
 #pragma once
 
-#include "detail/buffer.hpp"
+#include "detail/resource.hpp"
 
-namespace lf {
-	struct VertexBuffer : detail::Buffer<VertexBuffer> {};
+namespace lf::VertexBuffer {
+	handle<vertex_buffer> Create(buffer_usage usage, u64 size, const void* data);
+	void Destroy(handle<vertex_buffer> buf);
 }

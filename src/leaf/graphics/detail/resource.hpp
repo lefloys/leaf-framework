@@ -1,17 +1,58 @@
 #pragma once
 
-#include "leaf/core/types.hpp"
+#include <leaf/core/types.hpp>
+
+
+namespace lf::resource {
+	// Target
+	struct window;
+	struct framebuffer;
+
+	// Shaders
+	struct graphics_pipeline;
+	struct compute_pipeline;
+
+	// Command
+	struct command_buffer;
+
+	// Buffers
+	struct vertex_buffer;
+	struct element_buffer;
+	struct storage_buffer;
+
+	// Textures
+	struct texture1d;
+	struct texture2d;
+	struct texture3d;
+}
+namespace lf::constant {
+	enum class buffer_usage : u08;
+	enum class texture_format : u08;
+	enum class draw_mode : u08;
+	enum class queue_flag_bits : u08;
+}
 
 namespace lf {
+	using namespace resource;
+	using namespace constant;
+
+	template<typename T> struct handle;
+	template<typename T> struct view;
+
 	template<typename T>
 	struct handle {
-		u32 id;
-		u32 generation_id;
+		u32 id = 0;
+		u32 generation_id = 0;
+
+		operator view<T>() const { return { id, generation_id }; }
+		operator view<const T>() const { return { id, generation_id }; }
+
 	};
 	template<typename T>
 	struct view {
-		u32 id;
-		u32 generation_id;
+		u32 id = 0;
+		u32 generation_id = 0;
+		operator view<const T>() const { return { id, generation_id }; }
 	};
 	template<typename T>
 	struct unique {
@@ -20,12 +61,5 @@ namespace lf {
 		view<T> get() const;
 
 		handle<T> value;
-	};
-}
-
-namespace lf::detail {
-	template<typename T>
-	struct Resource {
-		static void Destroy(handle<T> obj);
 	};
 }
