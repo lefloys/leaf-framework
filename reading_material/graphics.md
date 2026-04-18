@@ -277,11 +277,11 @@ Image3D Texture3D::Download(view<const texture3d> tex, u32 mip_level);
 ---
 #### Window
 ```cpp
-handle<window> Window::Create(string_view title, dim2<u32> extent);
+handle<window> Window::Create(string_view title, dim2<i32> extent);
 void Window::Show(view<window> wnd);
 void Window::Hide(view<window> wnd);
-void Window::Resize(view<window> wnd, dim2<u32> dim);
-dim2<u32> Window::GetSize(view<const window> wnd);
+void Window::Resize(view<window> wnd, dim2<i32> dim);
+dim2<i32> Window::GetSize(view<const window> wnd);
 // this view invalidates after EndFrame is called. Using it afterwards will crash the program.
 view<framebuffer> Window::BeginFrame(view<window> wnd);
 void Window::EndFrame(view<window> wnd);
@@ -305,3 +305,11 @@ lf::Window::EndFrame(wnd);
 ```
 
 ---
+
+## Backend Implementation
+The frontend is implemented by calling into the backend. For example, a create 
+function will call into the create backend. a function that does more complex
+things might call multiple backend functions to express behaviour.
+
+This is the full definition of all function (pointers) exposed by the backend:
+

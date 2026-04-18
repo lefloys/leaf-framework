@@ -1,8 +1,10 @@
 add_files("leaf-framework" 
 	"error.cpp"
 	"error.hpp"
+	"iterator.hpp"
 	"optional.hpp"
 	"string.hpp"
+	"type_name.hpp"
 	"types.hpp"
 	"vector.hpp"
 )

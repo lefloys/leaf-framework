@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.5.0)
+if(POLICY CMP0079)
+    cmake_policy(SET CMP0079 NEW)
+endif()
 project("leaf-framework")
 
 set(CMAKE_CXX_STANDARD 23)
@@ -25,6 +28,7 @@ FetchContent_MakeAvailable(glfw)
 
 add_library("leaf-framework")
 add_subdirectory("src")
+add_subdirectory("backend")
 
 
 target_include_directories("leaf-framework" PUBLIC

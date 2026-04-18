@@ -44,6 +44,7 @@ namespace lf {
 		u32 id = 0;
 		u32 generation_id = 0;
 
+		explicit operator bool() const noexcept { return id != 0; }
 		operator view<T>() const { return { id, generation_id }; }
 		operator view<const T>() const { return { id, generation_id }; }
 
@@ -52,14 +53,8 @@ namespace lf {
 	struct view {
 		u32 id = 0;
 		u32 generation_id = 0;
+
+		explicit operator bool() const noexcept { return id != 0; }
 		operator view<const T>() const { return { id, generation_id }; }
-	};
-	template<typename T>
-	struct unique {
-
-		handle<T> release();
-		view<T> get() const;
-
-		handle<T> value;
 	};
 }
