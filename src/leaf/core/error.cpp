@@ -7,7 +7,7 @@ namespace lf {
         return "generic";
     }
 
-    std::string generic_error_category::message(i32 ev) const {
+    string generic_error_category::message(i32 ev) const {
         switch (static_cast<generic_errc>(ev)) {
             case generic_errc::unknown: return "Unknown error";
             default: return "Unrecognized error code";
@@ -23,9 +23,9 @@ namespace lf {
 
 
     error::operator bool() const noexcept { return code.value() != 0; }
-    error& error::add_context(std::string_view context) {
+    error& error::add_context(string_view context) {
         if (context.empty()) { return *this; }
-        message = std::format("{}\n -> {}", context, message);
+        message = lf::format("{}\n -> {}", context, message);
         return *this;
 	}
 

@@ -1,21 +1,22 @@
 find_package(Vulkan REQUIRED)
 
-target_include_directories("leaf-framework" PUBLIC
+add_library("leaf-graphics-vulkan" STATIC)
+
+add_subdirectory("src")
+add_files("leaf-graphics-vulkan"
+	"include/leaf/graphics/backends/vulkan.hpp"
+)
+
+target_include_directories("leaf-graphics-vulkan" PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-target_include_directories("leaf-framework" PRIVATE
+target_include_directories("leaf-graphics-vulkan" PRIVATE
 	"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	"${CMAKE_SOURCE_DIR}/src"
 )
-target_link_libraries("leaf-framework" PUBLIC Vulkan::Vulkan)
 
-add_files("leaf-framework"
-	"include/leaf/graphics/backends/vulkan.hpp"
-	"src/object_allocator.hpp"
-	"src/vulkan_context.hpp"
-	"src/vulkan_context.cpp"
-	"src/vulkan_backend.cpp"
-	"src/resources/resource.hpp"
-	"src/resources/window_vk.hpp"
-	"src/resources/window_vk.cpp"
+target_link_libraries("leaf-graphics-vulkan" PUBLIC
+	"leaf-framework"
+	Vulkan::Vulkan
 )

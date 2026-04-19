@@ -1,8 +1,9 @@
 #include "window.hpp"
+#include "framebuffer.hpp"
 #include "detail/api.hpp"
 
 namespace lf {
-	handle<window> Window::Create(std::string_view title, dim2<i32> extent) {
+	handle<window> Window::Create(string_view title, dim2<i32> extent) {
 		return Graphics.Window.create(title, extent);
 	}
 
@@ -27,10 +28,11 @@ namespace lf {
 	}
 
 	view<framebuffer> Window::BeginFrame(view<window> wnd) {
-		return Graphics.Window.begin_frame(wnd);
+		Graphics.Window.acquire_image(wnd);
+		return Framebuffer::Create(wnd);
 	}
 
 	void Window::EndFrame(view<window> wnd) {
-		Graphics.Window.end_frame(wnd);
+		Graphics.Window.present(wnd);
 	}
 }

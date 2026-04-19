@@ -1,10 +1,10 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdlib>
-#include <iterator>
+#include "cstddef.hpp"
+#include "cstdlib.hpp"
+#include "utility.hpp"
+
 #include <type_traits>
-#include <utility>
 
 namespace lf {
 	class range_view {
@@ -12,7 +12,7 @@ namespace lf {
 		class iterator {
 		public:
 			using value_type = size_t;
-			using difference_type = std::ptrdiff_t;
+			using difference_type = ptrdiff_t;
 
 			iterator(size_t current, size_t end, size_t step, bool finished)
 				: current_(current), end_(end), step_(step), finished_(finished) {}
@@ -51,8 +51,8 @@ namespace lf {
 		};
 
 		range_view(size_t begin, size_t end, size_t step) : begin_(begin), end_(end), step_(step) {
-			if (step_ == 0) {
-				std::abort();
+				if (step_ == 0) {
+				abort();
 			}
 		}
 
@@ -83,7 +83,7 @@ namespace lf {
 		class iterator {
 		public:
 			using value_type = size_t;
-			using difference_type = std::ptrdiff_t;
+			using difference_type = ptrdiff_t;
 
 			iterator(size_t current, size_t begin, size_t step, bool finished)
 				: current_(current), begin_(begin), step_(step), finished_(finished) {}
@@ -126,8 +126,8 @@ namespace lf {
 		};
 
 		rrange_view(size_t begin, size_t end, size_t step) : begin_(begin), end_(end), step_(step) {
-			if (step_ == 0) {
-				std::abort();
+				if (step_ == 0) {
+				abort();
 			}
 		}
 
@@ -161,7 +161,7 @@ namespace lf {
 	template<typename Iterator>
 	class enumerate_iterator {
 	public:
-		using difference_type = std::ptrdiff_t;
+		using difference_type = ptrdiff_t;
 
 		enumerate_iterator(size_t index, Iterator current) : index_(index), current_(current) {}
 
@@ -191,7 +191,7 @@ namespace lf {
 	template<typename Iterator>
 	class renumerate_iterator {
 	public:
-		using difference_type = std::ptrdiff_t;
+		using difference_type = ptrdiff_t;
 
 		renumerate_iterator(size_t index, Iterator current) : index_(index), current_(current) {}
 
@@ -224,11 +224,11 @@ namespace lf {
 		explicit enumerate_view(Range& range) : range_(range) {}
 
 		auto begin() const {
-			return enumerate_iterator(size_t(0), std::begin(range_));
+			return enumerate_iterator(size_t(0), lf::begin(range_));
 		}
 
 		auto end() const {
-			return enumerate_iterator(size_t(0), std::end(range_));
+			return enumerate_iterator(size_t(0), lf::end(range_));
 		}
 
 	private:
@@ -241,15 +241,15 @@ namespace lf {
 		explicit renumerate_view(Range& range) : range_(range) {}
 
 		auto begin() const {
-			if (std::size(range_) == 0) {
+			if (lf::size(range_) == 0) {
 				return end();
 			}
 
-			return renumerate_iterator(std::size(range_) - 1, std::rbegin(range_));
+			return renumerate_iterator(lf::size(range_) - 1, lf::rbegin(range_));
 		}
 
 		auto end() const {
-			return renumerate_iterator(size_t(0), std::rend(range_));
+			return renumerate_iterator(size_t(0), lf::rend(range_));
 		}
 
 	private:

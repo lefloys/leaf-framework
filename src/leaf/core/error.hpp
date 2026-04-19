@@ -1,12 +1,11 @@
 #pragma once
 
-
 #include "types.hpp"
+#include "expected.hpp"
+#include "format.hpp"
+#include "string.hpp"
 
-#include <format>
-#include <string>
 #include <stdexcept>
-#include <expected>
 #include <system_error>
 
 #define IF_ERROR_RETURN_ERROR(expr) do { if (auto err = (expr); err) { return err; } } while(0)
@@ -33,7 +32,7 @@ namespace lf {
 
 	struct generic_error_category : public std::error_category {
 		const char* name() const noexcept override;
-		std::string message(i32 ev) const override;
+		string message(i32 ev) const override;
 	};
 
 	const error_category& generic_category();
@@ -44,21 +43,20 @@ namespace lf {
 		static const error unknown_error;
 		error() = default;
 		template <typename error_enum> requires std::is_error_code_enum_v<error_enum>
-		error(error_enum e, std::string_view msg = "");
-		error(error_code c, std::string_view msg = "") : code(c), message(std::string(msg)) {}
-		error(std::string_view msg) : code(make_error_code(generic_errc::unknown)), message(std::string(msg)) {}
+		error(error_enum e, string_view msg = "");
+		error(error_code c, string_view msg = "") : code(c), message(string(msg)) {}
+		error(string_view msg) : code(make_error_code(generic_errc::unknown)), message(string(msg)) {}
 		explicit operator bool() const noexcept;
 
-		error& add_context(std::string_view context);
+		error& add_context(string_view context);
 
-		std::string message;
+		string message;
 		error_code code;
 	};
 
 	template <typename error_enum> requires std::is_error_code_enum_v<error_enum>
-	error::error(error_enum e, std::string_view msg) : code(make_error_code(e)), message(std::string(msg)) {}
+	error::error(error_enum e, string_view msg) : code(make_error_code(e)), message(string(msg)) {}
 
-	template<typename T> using result = std::expected<T, error_code>;
-	template<typename T> using report = std::expected<T, error>;
-	using std::unexpected;
+	template<typename T> using result = expected<T, error_code>;
+	template<typename T> using report = expected<T, error>;
 }

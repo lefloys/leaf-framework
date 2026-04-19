@@ -2,6 +2,6 @@
 #include <string>
 
 namespace lf {
-	using string = std::string;
-	using string_view = std::string_view;
+	using std::string;
+	using std::string_view;
 }

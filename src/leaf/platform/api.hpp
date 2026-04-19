@@ -33,4 +33,5 @@ namespace lf {
 	extern PlatformAPI Platform;
 
 	void SetPlatformAPI(PlatformAPI api);
+	bool has_platform_backend();
 }

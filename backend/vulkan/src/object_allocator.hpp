@@ -1,16 +1,15 @@
 #pragma once
 
+#include <leaf/core/cstddef.hpp>
+#include <leaf/core/cstdlib.hpp>
+#include <leaf/core/iostream.hpp>
 #include <leaf/core/iterator.hpp>
+#include <leaf/core/memory.hpp>
+#include <leaf/core/optional.hpp>
 #include <leaf/core/type_name.hpp>
+#include <leaf/core/utility.hpp>
+#include <leaf/core/vector.hpp>
 #include <leaf/graphics/detail/resource.hpp>
-
-#include <cstdlib>
-#include <iostream>
-#include <memory>
-#include <optional>
-#include <cstddef>
-#include <utility>
-#include <vector>
 
 template<typename Tag, typename Resource>
 class resource_pool {
@@ -22,13 +21,13 @@ public:
 				continue;
 			}
 
-			current.resource->emplace(std::forward<Args>(args)...);
+			current.resource->emplace(lf::forward<Args>(args)...);
 			return { static_cast<u32>(index + 1), current.generation };
 		}
 
 		slots.emplace_back();
 		slot& current = slots.back();
-		current.resource->emplace(std::forward<Args>(args)...);
+		current.resource->emplace(lf::forward<Args>(args)...);
 		return { static_cast<u32>(slots.size()), current.generation };
 	}
 
@@ -49,21 +48,21 @@ public:
 		}
 	}
 	void clear_leaked_resources() {
-		const std::size_t leaked_resources = live_resource_count();
+		const lf::size_t leaked_resources = live_resource_count();
 		if (leaked_resources != 0) {
-			std::cerr
+			lf::cerr
 				<< "leaf backend warning: cleaning up "
 				<< leaked_resources
 				<< " leaked "
-				<< lf::type_name<Resource>()
+				<< lf::type_name<Tag>()
 				<< " resource(s).\n";
 		}
 
 		clear();
 	}
 
-	size_t live_resource_count() const {
-		std::size_t count = 0;
+	lf::size_t live_resource_count() const {
+		lf::size_t count = 0;
 		for (const auto& current : slots) {
 			if (current.resource->has_value()) {
 				++count;
@@ -82,43 +81,43 @@ public:
 private:
 	struct slot {
 		u32 generation = 1;
-		std::unique_ptr<std::optional<Resource>> resource = std::make_unique<std::optional<Resource>>();
+		lf::unique_ptr<lf::optional<Resource>> resource = lf::make_unique<lf::optional<Resource>>();
 	};
 
 	slot& require_slot(lf::view<Tag> resource_view) {
 		if (resource_view.id == 0) {
-			std::abort();
+			lf::abort();
 		}
 
-		const std::size_t index = static_cast<std::size_t>(resource_view.id - 1);
+		const lf::size_t index = static_cast<lf::size_t>(resource_view.id - 1);
 		if (index >= slots.size()) {
-			std::abort();
+			lf::abort();
 		}
 
 		slot& current = slots[index];
 		if (!current.resource->has_value() || current.generation != resource_view.generation_id) {
-			std::abort();
+			lf::abort();
 		}
 
 		return current;
 	}
 	const slot& require_slot(lf::view<const Tag> resource_view) const {
 		if (resource_view.id == 0) {
-			std::abort();
+			lf::abort();
 		}
 
-		const std::size_t index = static_cast<std::size_t>(resource_view.id - 1);
+		const lf::size_t index = static_cast<lf::size_t>(resource_view.id - 1);
 		if (index >= slots.size()) {
-			std::abort();
+			lf::abort();
 		}
 
 		const slot& current = slots[index];
 		if (!current.resource->has_value() || current.generation != resource_view.generation_id) {
-			std::abort();
+			lf::abort();
 		}
 
 		return current;
 	}
 
-	std::vector<slot> slots;
+	lf::vector<slot> slots;
 };

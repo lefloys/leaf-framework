@@ -1,7 +1,9 @@
 #pragma once
 
-#include <leaf/core/types.hpp>
 
+#include "leaf/core/types.hpp"
+#include "leaf/core/type_name.hpp"
+#include "leaf/core/string.hpp"
 
 namespace lf::resource {
 	// Target
@@ -24,7 +26,11 @@ namespace lf::resource {
 	struct texture1d;
 	struct texture2d;
 	struct texture3d;
+
 }
+
+
+
 namespace lf::constant {
 	enum class buffer_usage : u08;
 	enum class texture_format : u08;
@@ -33,8 +39,10 @@ namespace lf::constant {
 }
 
 namespace lf {
+
 	using namespace resource;
 	using namespace constant;
+
 
 	template<typename T> struct handle;
 	template<typename T> struct view;
@@ -57,4 +65,9 @@ namespace lf {
 		explicit operator bool() const noexcept { return id != 0; }
 		operator view<const T>() const { return { id, generation_id }; }
 	};
+
+	template<> struct type_name_trait<window> { static constexpr string_view value = "window"; };
+	template<> struct type_name_trait<framebuffer> { static constexpr string_view value = "framebuffer"; };
+
+
 }

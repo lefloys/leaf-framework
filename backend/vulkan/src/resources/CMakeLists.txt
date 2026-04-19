@@ -1,0 +1,9 @@
+add_files("leaf-graphics-vulkan"
+	"command_buffer_vk.cpp"
+	"command_buffer_vk.hpp"
+	"framebuffer_vk.cpp"
+	"framebuffer_vk.hpp"
+	"resource.hpp"
+	"window_vk.cpp"
+	"window_vk.hpp"
+)

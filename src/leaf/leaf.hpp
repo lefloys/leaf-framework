@@ -5,6 +5,6 @@
 #include "leaf/core/error.hpp"
 
 namespace lf {
-	error Init(i32 argc, char* argv[]);
+	error Init();
 	void Exit();
 }

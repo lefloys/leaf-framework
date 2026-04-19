@@ -1,21 +1,36 @@
 #pragma once
 
-#include "../object_allocator.hpp"
-#include "../vulkan_context.hpp"
 #include "resource.hpp"
 
 #include "leaf/core/string.hpp"
+#include "leaf/core/vector.hpp"
+#include "leaf/graphics/detail/resource.hpp"
 #include "leaf/math/dim.hpp"
 #include "leaf/platform/api.hpp"
 
 #include <vulkan/vulkan.h>
 
+
 struct WindowVK : Resource {
+	struct swapchain_image {
+		VkImage vk_image = VK_NULL_HANDLE;
+		VkImageView vk_image_view = VK_NULL_HANDLE;
+		lf::handle<lf::framebuffer> framebuffer{};
+	};
 	lf::platform_window* platform_window = nullptr;
-	VkSurfaceKHR surface = VK_NULL_HANDLE;
+	VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
+	VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
+	VkFormat vk_swapchain_image_format = VK_FORMAT_UNDEFINED;
+	VkExtent2D vk_swapchain_extent{};
+	VkQueue vk_present_queue = VK_NULL_HANDLE;
+	u32 vk_present_queue_family_index = 0;
+	lf::vector<swapchain_image> swapchain_images;
 
 	WindowVK(lf::string_view title, lf::dim2<i32> extent);
 	~WindowVK();
+
+	void create_swapchain();
+	void destroy_swapchain();
 };
 
 namespace Window {
@@ -25,11 +40,6 @@ namespace Window {
 	void Hide(lf::view<lf::window> wnd);
 	void Resize(lf::view<lf::window> wnd, lf::dim2<i32> extent);
 	lf::dim2<i32> GetSize(lf::view<const lf::window> wnd);
-	lf::view<lf::framebuffer> BeginFrame(lf::view<lf::window> wnd);
-	void EndFrame(lf::view<lf::window> wnd);
+	void AcquireImage(lf::view<lf::window> wnd);
+	void Present(lf::view<lf::window> wnd);
 }
-
-template<>
-struct lf::type_name_trait<WindowVK> {
-	static constexpr lf::string_view value = "window";
-};

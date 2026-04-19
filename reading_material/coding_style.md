@@ -11,6 +11,11 @@ the codebase direction changes.
   `snake_case`.
 - Prefer `Resource` over `Object` when naming backend-managed GPU-facing data.
 
+## General C++ style
+
+- Do not silence unused variables/parameters with `(void)x;`.
+- Ignore unused variable warnings in WIP code.
+
 ## Backend architecture
 
 - The framework does not choose a graphics backend by itself.
@@ -84,3 +89,6 @@ the codebase direction changes.
   explicitly.
 - Preferred style:
   `VkInstanceCreateInfo create_info = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };`
+- vulkan types should be prefixed with vk_ : `VkInstance vk_instance;`
+- There should not be an explicit null handle check before destruction, unless 
+  you want to avoid the API call because you expect something to be null
