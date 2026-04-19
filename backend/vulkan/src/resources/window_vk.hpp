@@ -10,6 +10,7 @@
 
 #include <vulkan/vulkan.h>
 
+struct vulkan_context;
 
 struct WindowVK : Resource {
 	struct swapchain_image {
@@ -17,6 +18,7 @@ struct WindowVK : Resource {
 		VkImageView vk_image_view = VK_NULL_HANDLE;
 		lf::handle<lf::framebuffer> framebuffer{};
 	};
+	vulkan_context& ctx;
 	lf::platform_window* platform_window = nullptr;
 	VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
 	VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
@@ -26,7 +28,7 @@ struct WindowVK : Resource {
 	u32 vk_present_queue_family_index = 0;
 	lf::vector<swapchain_image> swapchain_images;
 
-	WindowVK(lf::string_view title, lf::dim2<i32> extent);
+	WindowVK(vulkan_context& ctx, lf::string_view title, lf::dim2<i32> extent);
 	~WindowVK();
 
 	void create_swapchain();

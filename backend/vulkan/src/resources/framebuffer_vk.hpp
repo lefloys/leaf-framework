@@ -2,11 +2,14 @@
 
 #include "resource.hpp"
 
-#include "leaf/core/vector.hpp"
-#include "leaf/graphics/command_buffer.hpp"
+#include <leaf/core/vector.hpp>
+#include <leaf/graphics/command_buffer.hpp>
 
 struct FramebufferVK : Resource {
-
+	// this is the primary command buffer that will be submitted for rendering
+	// Everything else is submitted to it. by calling flush it is submitted.
+	// It is reset every time it gets submitted.
+	VkCommandBuffer vk_command_buffer;
 };
 
 namespace Framebuffer {

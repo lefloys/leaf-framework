@@ -36,6 +36,11 @@ public:
 		current.resource->reset();
 		++current.generation;
 	}
+	lf::handle<Tag> bump_id(lf::handle<Tag> resource_handle) {
+		slot& current = require_slot(resource_handle);
+		++current.generation;
+		return { resource_handle.id, current.generation };
+	}
 
 	void clear() {
 		for (slot& current : slots) {

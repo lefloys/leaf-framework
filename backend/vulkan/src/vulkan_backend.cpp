@@ -59,8 +59,8 @@ lf::error graphics_init() {
 		return lf::error::no_error;
 	}
 
-	create_context();
-	vulkan_context& ctx = get_context();
+	vulkan_context& ctx = allocate_context();
+	create_context(ctx);
 	const bool has_platform = lf::has_platform_backend();
 	const bool debug =
 #ifdef LEAF_DEBUG
@@ -70,7 +70,7 @@ lf::error graphics_init() {
 #endif
 
 	if (has_platform && !lf::Platform.platform_vulkan_supported()) {
-		destroy_context();
+		destroy_context(ctx);
 		return lf::error(lf::generic_errc::unknown, "the active platform backend reports that Vulkan is not supported");
 	}
 
@@ -79,15 +79,15 @@ lf::error graphics_init() {
 		? lf::Platform.get_platform_vulkan_instance_extensions(extension_count)
 		: nullptr;
 	if (has_platform && (!extensions || extension_count == 0)) {
-		destroy_context();
+		destroy_context(ctx);
 		return lf::error(lf::generic_errc::unknown, "failed to query required Vulkan instance extensions from the platform backend");
 	}
 	if (debug && !has_instance_layer(k_validation_layer_name)) {
-		destroy_context();
+		destroy_context(ctx);
 		return lf::error(lf::generic_errc::unknown, "debug mode requested Vulkan validation layers, but VK_LAYER_KHRONOS_validation is unavailable");
 	}
 	if (debug && !has_instance_extension(k_debug_utils_extension_name)) {
-		destroy_context();
+		destroy_context(ctx);
 		return lf::error(lf::generic_errc::unknown, "debug mode requested VK_EXT_debug_utils, but the extension is unavailable");
 	}
 
@@ -119,19 +119,19 @@ lf::error graphics_init() {
 	create_info.ppEnabledLayerNames = enabled_layers.data();
 
 	if (VkResult result = vkCreateInstance(&create_info, nullptr, &ctx.vk_instance); result != VK_SUCCESS) {
-		destroy_context();
+		destroy_context(ctx);
 		return lf::error(lf::generic_errc::unknown, "failed to create Vulkan instance");
 	}
 
 	if (debug) {
 		if (lf::error err = create_vk_debug_messenger(ctx)) {
-			destroy_context();
+			destroy_context(ctx);
 			return err;
 		}
 	}
 
 	if (lf::error err = ctx.init_device()) {
-		destroy_context();
+		destroy_context(ctx);
 		return err;
 	}
 
@@ -143,7 +143,7 @@ void graphics_exit() {
 		return;
 	}
 
-	destroy_context();
+	destroy_context(get_context());
 }
 
 namespace lf {

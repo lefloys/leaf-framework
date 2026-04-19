@@ -297,18 +297,23 @@ void assert_context() {
 	}
 }
 
-void create_context() {
+vulkan_context& allocate_context() {
 	if (!context_ptr) {
 		context_ptr = lf::make_unique<vulkan_context>();
 	}
+
+	return *context_ptr;
 }
-
-void destroy_context() {
-	if (context_ptr) {
-		context_ptr->shutdown();
+void create_context(vulkan_context& ctx) {
+	if (context_ptr.get() != &ctx) {
+		lf::abort();
 	}
-
-	context_ptr.reset();
+}
+void destroy_context(vulkan_context& ctx) {
+	ctx.shutdown();
+	if (context_ptr.get() == &ctx) {
+		context_ptr.reset();
+	}
 }
 
 vulkan_context& get_context() {

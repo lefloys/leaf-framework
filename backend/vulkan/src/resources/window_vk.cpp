@@ -96,9 +96,8 @@ u32 choose_swapchain_image_count(const VkSurfaceCapabilitiesKHR& capabilities) {
 	return image_count;
 }
 
-WindowVK::WindowVK(lf::string_view title, lf::dim2<i32> extent) {
-	vulkan_context& ctx = get_context();
-
+WindowVK::WindowVK(vulkan_context& ctx, lf::string_view title, lf::dim2<i32> extent)
+	: ctx(ctx) {
 	if (!lf::has_platform_backend()) {
 		throw lf::runtime_exception("no platform backend is active");
 	}
@@ -116,8 +115,6 @@ WindowVK::WindowVK(lf::string_view title, lf::dim2<i32> extent) {
 	create_swapchain();
 }
 WindowVK::~WindowVK() {
-	vulkan_context& ctx = get_context();
-
 	destroy_swapchain();
 	vkDestroySurfaceKHR(ctx.vk_instance, vk_surface, nullptr);
 	lf::Platform.destroy_platform_window(platform_window);
@@ -127,8 +124,6 @@ WindowVK::~WindowVK() {
 }
 
 void WindowVK::create_swapchain() {
-	vulkan_context& ctx = get_context();
-
 	bool present_queue_found = false;
 	for (const vk_queue& queue : ctx.vk_queues) {
 		VkBool32 present_supported = VK_FALSE;
@@ -242,8 +237,6 @@ void WindowVK::create_swapchain() {
 }
 
 void WindowVK::destroy_swapchain() {
-	vulkan_context& ctx = get_context();
-
 	for (swapchain_image& image : swapchain_images) {
 		vkDestroyImageView(ctx.vk_device, image.vk_image_view, nullptr);
 		image.vk_image_view = VK_NULL_HANDLE;
@@ -264,43 +257,69 @@ void WindowVK::destroy_swapchain() {
 }
 
 namespace Window {
+	lf::handle<lf::window> create(vulkan_context& ctx, lf::string_view title, lf::dim2<i32> extent) {
+		return ctx.windows.create(ctx, title, extent);
+	}
 	lf::handle<lf::window> Create(lf::string_view title, lf::dim2<i32> extent) {
 		assert_context();
-		return get_context().windows.create(title, extent);
+		return create(get_context(), title, extent);
 	}
 
+	void destroy(vulkan_context& ctx, lf::handle<lf::window> wnd) {
+		ctx.windows.destroy(wnd);
+	}
 	void Destroy(lf::handle<lf::window> wnd) {
 		assert_context();
-		get_context().windows.destroy(wnd);
+		destroy(get_context(), wnd);
 	}
 
+	void show(WindowVK& wnd) {
+		lf::Platform.show_platform_window(wnd.platform_window);
+	}
 	void Show(lf::view<lf::window> wnd) {
 		assert_context();
-		lf::Platform.show_platform_window(unhandle(wnd).platform_window);
+		show(unhandle(get_context(), wnd));
 	}
 
+	void hide(WindowVK& wnd) {
+		lf::Platform.hide_platform_window(wnd.platform_window);
+	}
 	void Hide(lf::view<lf::window> wnd) {
 		assert_context();
-		lf::Platform.hide_platform_window(unhandle(wnd).platform_window);
+		hide(unhandle(get_context(), wnd));
 	}
 
+	void resize(WindowVK& wnd, lf::dim2<i32> extent) {
+		lf::Platform.set_platform_window_extent(wnd.platform_window, extent);
+	}
 	void Resize(lf::view<lf::window> wnd, lf::dim2<i32> extent) {
 		assert_context();
-		lf::Platform.set_platform_window_extent(unhandle(wnd).platform_window, extent);
+		resize(unhandle(get_context(), wnd), extent);
 	}
 
+	lf::dim2<i32> get_size(const WindowVK& wnd) {
+		return lf::Platform.get_platform_window_extent(wnd.platform_window);
+	}
 	lf::dim2<i32> GetSize(lf::view<const lf::window> wnd) {
 		assert_context();
-		return lf::Platform.get_platform_window_extent(unhandle(wnd).platform_window);
+		return get_size(unhandle(get_context(), wnd));
 	}
 
-	void AcquireImage(lf::view<lf::window> wnd) {
-		assert_context();
+	void acquire_image(WindowVK& wnd) {
+		(void)wnd;
 		throw lf::runtime_exception("Window::AcquireImage is not implemented until the synchronization model exists");
 	}
+	void AcquireImage(lf::view<lf::window> wnd) {
+		assert_context();
+		acquire_image(unhandle(get_context(), wnd));
+	}
 
+	void present(WindowVK& wnd) {
+		(void)wnd;
+		throw lf::runtime_exception("Window::Present is not implemented until the synchronization model exists");
+	}
 	void Present(lf::view<lf::window> wnd) {
 		assert_context();
-		throw lf::runtime_exception("Window::Present is not implemented until the synchronization model exists");
+		present(unhandle(get_context(), wnd));
 	}
 }
