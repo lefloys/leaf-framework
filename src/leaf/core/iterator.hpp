@@ -7,28 +7,35 @@
 #include <utility>
 
 namespace lf {
-	template<typename T>
 	class range_view {
-		static_assert(std::is_integral_v<T>, "range_view requires an integral type");
-
 	public:
 		class iterator {
 		public:
-			using value_type = T;
+			using value_type = size_t;
 			using difference_type = std::ptrdiff_t;
 
-			iterator(T current, T end, T step) : current_(current), end_(end), step_(step) {}
+			iterator(size_t current, size_t end, size_t step, bool finished)
+				: current_(current), end_(end), step_(step), finished_(finished) {}
 
-			T operator*() const {
+			size_t operator*() const {
 				return current_;
 			}
 
 			iterator& operator++() {
+				if (finished_) {
+					return *this;
+				}
+
 				current_ += step_;
+				finished_ = step_ > 0 ? current_ >= end_ : current_ <= end_;
 				return *this;
 			}
 
 			bool operator==(const iterator& other) const {
+				if (finished_ || other.finished_) {
+					return finished_ == other.finished_;
+				}
+
 				return current_ == other.current_;
 			}
 
@@ -37,56 +44,59 @@ namespace lf {
 			}
 
 		private:
-			T current_;
-			T end_;
-			T step_;
+			size_t current_;
+			size_t end_;
+			size_t step_;
+			bool finished_;
 		};
 
-		range_view(T begin, T end, T step) : begin_(begin), end_(end), step_(step) {
-			if (step_ <= 0) {
+		range_view(size_t begin, size_t end, size_t step) : begin_(begin), end_(end), step_(step) {
+			if (step_ == 0) {
 				std::abort();
 			}
 		}
 
 		iterator begin() const {
-			if (begin_ >= end_) {
+			if (is_empty()) {
 				return end();
 			}
 
-			return iterator(begin_, end_, step_);
+			return iterator(begin_, end_, step_, false);
 		}
 
 		iterator end() const {
-			const T distance = end_ - begin_;
-			const T remainder = distance % step_;
-			const T stop = remainder == 0 ? end_ : end_ + (step_ - remainder);
-			return iterator(stop, end_, step_);
+			return iterator(begin_, end_, step_, true);
 		}
 
 	private:
-		T begin_;
-		T end_;
-		T step_;
+		bool is_empty() const {
+			return begin_ >= end_;
+		}
+
+		size_t begin_;
+		size_t end_;
+		size_t step_;
 	};
 
-	template<typename T>
 	class rrange_view {
-		static_assert(std::is_integral_v<T>, "rrange_view requires an integral type");
-
 	public:
 		class iterator {
 		public:
-			using value_type = T;
+			using value_type = size_t;
 			using difference_type = std::ptrdiff_t;
 
-			iterator(T current, T begin, T step, bool finished)
+			iterator(size_t current, size_t begin, size_t step, bool finished)
 				: current_(current), begin_(begin), step_(step), finished_(finished) {}
 
-			T operator*() const {
+			size_t operator*() const {
 				return current_;
 			}
 
 			iterator& operator++() {
+				if (finished_) {
+					return *this;
+				}
+
 				if (current_ < begin_ + step_) {
 					finished_ = true;
 					return *this;
@@ -109,14 +119,14 @@ namespace lf {
 			}
 
 		private:
-			T current_;
-			T begin_;
-			T step_;
+			size_t current_;
+			size_t begin_;
+			size_t step_;
 			bool finished_;
 		};
 
-		rrange_view(T begin, T end, T step) : begin_(begin), end_(end), step_(step) {
-			if (step_ <= 0) {
+		rrange_view(size_t begin, size_t end, size_t step) : begin_(begin), end_(end), step_(step) {
+			if (step_ == 0) {
 				std::abort();
 			}
 		}
@@ -126,9 +136,9 @@ namespace lf {
 				return end();
 			}
 
-			const T distance = end_ - begin_;
-			const T count = (distance + step_ - 1) / step_;
-			const T last = begin_ + (count - 1) * step_;
+			const size_t distance = end_ - begin_;
+			const size_t count = (distance + step_ - 1) / step_;
+			const size_t last = begin_ + (count - 1) * step_;
 			return iterator(last, begin_, step_, false);
 		}
 
@@ -137,9 +147,9 @@ namespace lf {
 		}
 
 	private:
-		T begin_;
-		T end_;
-		T step_;
+		size_t begin_;
+		size_t end_;
+		size_t step_;
 	};
 
 	template<typename Index, typename Reference>
@@ -153,10 +163,10 @@ namespace lf {
 	public:
 		using difference_type = std::ptrdiff_t;
 
-		enumerate_iterator(std::size_t index, Iterator current) : index_(index), current_(current) {}
+		enumerate_iterator(size_t index, Iterator current) : index_(index), current_(current) {}
 
 		auto operator*() const {
-			return enumerate_item<std::size_t, decltype(*current_)>{ index_, *current_ };
+			return enumerate_item<size_t, decltype(*current_)>{ index_, *current_ };
 		}
 
 		enumerate_iterator& operator++() {
@@ -174,7 +184,7 @@ namespace lf {
 		}
 
 	private:
-		std::size_t index_;
+		size_t index_;
 		Iterator current_;
 	};
 
@@ -183,10 +193,10 @@ namespace lf {
 	public:
 		using difference_type = std::ptrdiff_t;
 
-		renumerate_iterator(std::size_t index, Iterator current) : index_(index), current_(current) {}
+		renumerate_iterator(size_t index, Iterator current) : index_(index), current_(current) {}
 
 		auto operator*() const {
-			return enumerate_item<std::size_t, decltype(*current_)>{ index_, *current_ };
+			return enumerate_item<size_t, decltype(*current_)>{ index_, *current_ };
 		}
 
 		renumerate_iterator& operator++() {
@@ -204,7 +214,7 @@ namespace lf {
 		}
 
 	private:
-		std::size_t index_;
+		size_t index_;
 		Iterator current_;
 	};
 
@@ -214,11 +224,11 @@ namespace lf {
 		explicit enumerate_view(Range& range) : range_(range) {}
 
 		auto begin() const {
-			return enumerate_iterator(std::size_t(0), std::begin(range_));
+			return enumerate_iterator(size_t(0), std::begin(range_));
 		}
 
 		auto end() const {
-			return enumerate_iterator(std::size_t(0), std::end(range_));
+			return enumerate_iterator(size_t(0), std::end(range_));
 		}
 
 	private:
@@ -239,31 +249,19 @@ namespace lf {
 		}
 
 		auto end() const {
-			return renumerate_iterator(std::size_t(0), std::rend(range_));
+			return renumerate_iterator(size_t(0), std::rend(range_));
 		}
 
 	private:
 		Range& range_;
 	};
 
-	template<typename T>
-	range_view<T> range(T begin, T end) {
-		return range_view<T>(begin, end, 1);
+	inline range_view range(size_t begin, size_t end, size_t step = 1) {
+		return range_view(begin, end, step);
 	}
 
-	template<typename T>
-	range_view<T> range(T begin, T end, T step) {
-		return range_view<T>(begin, end, step);
-	}
-
-	template<typename T>
-	rrange_view<T> rrange(T begin, T end) {
-		return rrange_view<T>(begin, end, 1);
-	}
-
-	template<typename T>
-	rrange_view<T> rrange(T begin, T end, T step) {
-		return rrange_view<T>(begin, end, step);
+	inline rrange_view rrange(size_t begin, size_t end, size_t step = 1) {
+		return rrange_view(begin, end, step);
 	}
 
 	template<typename Range>

@@ -5,35 +5,31 @@
 #include "resource.hpp"
 
 #include "leaf/core/string.hpp"
-#include "leaf/platform/window.hpp"
+#include "leaf/math/dim.hpp"
+#include "leaf/platform/api.hpp"
 
 #include <vulkan/vulkan.h>
 
-namespace lf::detail::vk {
-	struct WindowVK : Resource {
-		platform_window* platform_window = nullptr;
-		VkSurfaceKHR surface = VK_NULL_HANDLE;
+struct WindowVK : Resource {
+	lf::platform_window* platform_window = nullptr;
+	VkSurfaceKHR surface = VK_NULL_HANDLE;
 
-		WindowVK(string_view title, dim2<i32> extent);
-		~WindowVK();
-	};
+	WindowVK(lf::string_view title, lf::dim2<i32> extent);
+	~WindowVK();
+};
 
-	template<>
-	resource_pool<resource::window, WindowVK>& Pool<resource::window, WindowVK>();
-
-	namespace Window {
-		handle<window> Create(string_view title, dim2<i32> extent);
-		void Destroy(handle<window> wnd);
-		void Show(view<window> wnd);
-		void Hide(view<window> wnd);
-		void Resize(view<window> wnd, dim2<i32> extent);
-		dim2<i32> GetSize(view<const window> wnd);
-		view<framebuffer> BeginFrame(view<window> wnd);
-		void EndFrame(view<window> wnd);
-	}
+namespace Window {
+	lf::handle<lf::window> Create(lf::string_view title, lf::dim2<i32> extent);
+	void Destroy(lf::handle<lf::window> wnd);
+	void Show(lf::view<lf::window> wnd);
+	void Hide(lf::view<lf::window> wnd);
+	void Resize(lf::view<lf::window> wnd, lf::dim2<i32> extent);
+	lf::dim2<i32> GetSize(lf::view<const lf::window> wnd);
+	lf::view<lf::framebuffer> BeginFrame(lf::view<lf::window> wnd);
+	void EndFrame(lf::view<lf::window> wnd);
 }
 
 template<>
-struct lf::type_name_trait<lf::detail::vk::WindowVK> {
+struct lf::type_name_trait<WindowVK> {
 	static constexpr lf::string_view value = "window";
 };

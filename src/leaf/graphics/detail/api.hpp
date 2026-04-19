@@ -24,8 +24,3 @@ namespace lf {
 	extern GraphicsAPI Graphics;
 	void SetGraphicsAPI(GraphicsAPI api);
 }
-
-namespace lf::detail {
-	error graphics_init();
-	void graphics_exit();
-}

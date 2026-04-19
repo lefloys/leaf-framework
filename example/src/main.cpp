@@ -1,6 +1,7 @@
 #include <leaf/leaf.hpp>
 #include <leaf/graphics/backends/vulkan.hpp>
 #include <leaf/graphics/window.hpp>
+#include <leaf/platform/backends/glfw.hpp>
 
 #include <chrono>
 #include <iostream>
@@ -8,6 +9,7 @@
 
 
 int main(int argc, char* argv[]) {
+	lf::SetPlatformAPI(lf::CreateGLFWPlatformAPI());
 	lf::SetGraphicsAPI(lf::CreateVulkanGraphicsAPI());
 
 	if (lf::error err = lf::Init(argc, argv)) {
