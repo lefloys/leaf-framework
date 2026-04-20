@@ -4,12 +4,20 @@
 
 #include <leaf/core/vector.hpp>
 #include <leaf/graphics/command_buffer.hpp>
+#include <leaf/graphics/window.hpp>
+#include <vulkan/vulkan.h>
+
+struct vulkan_context;
 
 struct FramebufferVK : Resource {
-	// this is the primary command buffer that will be submitted for rendering
-	// Everything else is submitted to it. by calling flush it is submitted.
-	// It is reset every time it gets submitted.
-	VkCommandBuffer vk_command_buffer;
+	vulkan_context& ctx;
+	lf::vector<VkImageView> color_attachments;
+	lf::vector<VkCommandBuffer> submitted_secondary_buffers;
+	VkCommandPool vk_command_pool = VK_NULL_HANDLE;
+	VkCommandBuffer vk_primary_command_buffer = VK_NULL_HANDLE;
+
+	FramebufferVK(vulkan_context& ctx);
+	~FramebufferVK();
 };
 
 namespace Framebuffer {

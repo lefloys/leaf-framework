@@ -29,7 +29,7 @@ namespace lf {
 
 	view<framebuffer> Window::BeginFrame(view<window> wnd) {
 		Graphics.Window.acquire_image(wnd);
-		return Framebuffer::Create(wnd);
+		return Graphics.Window.get_framebuffer(wnd);
 	}
 
 	void Window::EndFrame(view<window> wnd) {

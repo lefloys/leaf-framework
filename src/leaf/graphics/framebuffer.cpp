@@ -2,10 +2,6 @@
 #include "detail/api.hpp"
 
 namespace lf {
-	handle<framebuffer> Framebuffer::Create(view<const window> wnd) {
-		return Graphics.Framebuffer.create(wnd);
-	}
-
 	void Framebuffer::Destroy(handle<framebuffer> fb) {
 		Graphics.Framebuffer.destroy(fb);
 	}

@@ -3,8 +3,18 @@
 #include "resource.hpp"
 
 #include "leaf/graphics/command_buffer.hpp"
+#include <vulkan/vulkan.h>
+
+struct vulkan_context;
 
 struct CommandBufferVK : Resource {
+	vulkan_context& ctx;
+	VkCommandBuffer vk_command_buffer = VK_NULL_HANDLE;
+	bool recording = false;
+	bool ended = false;
+
+	CommandBufferVK(vulkan_context& ctx);
+	~CommandBufferVK();
 };
 
 namespace CommandBuffer {

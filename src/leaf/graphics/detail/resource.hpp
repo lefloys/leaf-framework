@@ -16,6 +16,8 @@ namespace lf::resource {
 
 	// Command
 	struct command_buffer;
+	struct queue;
+
 
 	// Buffers
 	struct vertex_buffer;
@@ -68,6 +70,8 @@ namespace lf {
 
 	template<> struct type_name_trait<window> { static constexpr string_view value = "window"; };
 	template<> struct type_name_trait<framebuffer> { static constexpr string_view value = "framebuffer"; };
+	template<> struct type_name_trait<command_buffer> { static constexpr string_view value = "command_buffer"; };
+	template<> struct type_name_trait<queue> { static constexpr string_view value = "queue"; };
 
 
 }

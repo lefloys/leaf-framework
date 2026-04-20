@@ -9,6 +9,7 @@
 #include <leaf/core/exception.hpp>
 #include <leaf/core/iostream.hpp>
 #include <leaf/core/memory.hpp>
+#include <leaf/core/types.hpp>
 #include <leaf/core/vector.hpp>
 #include <leaf/platform/api.hpp>
 
@@ -140,38 +141,26 @@ lf::error vulkan_context::init_physical_device() {
 		: "failed to find a Vulkan physical device that could create a logical device");
 }
 
-namespace Setting {
-	#ifdef LEAF_DEBUG
-	constexpr bool DEBUG = true;
-	#else
-	constexpr bool DEBUG = false;
-	#endif
-}
+
 lf::error vulkan_context::init_device() {
 
-	if (lf::error err = init_physical_device()) {
-		return err;
-	}
+	if (lf::error err = init_physical_device()) { return err; }
 
 	u32 queue_family_count = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(vk_physical_device, &queue_family_count, nullptr);
-	if (queue_family_count == 0) {
-		exit_physical_device();
-		return lf::error(lf::generic_errc::unknown, "the Vulkan physical device does not expose any queue families");
-	}
 
 	lf::vector<VkQueueFamilyProperties> queue_family_properties(queue_family_count);
 	vkGetPhysicalDeviceQueueFamilyProperties(vk_physical_device, &queue_family_count, queue_family_properties.data());
 
 	lf::vector<VkDeviceQueueCreateInfo> queue_create_infos;
-	lf::vector<lf::vector<float>> queue_priorities;
+	lf::vector<lf::vector<f32>> queue_priorities;
 	for (u32 family_index = 0; family_index < queue_family_count; ++family_index) {
 		const VkQueueFamilyProperties& family = queue_family_properties[family_index];
 		if (family.queueCount == 0) {
 			continue;
 		}
 
-		queue_priorities.emplace_back(static_cast<lf::size_t>(family.queueCount), 1.0f);
+		queue_priorities.emplace_back(static_cast<size_t>(family.queueCount), 1.0f);
 
 		VkDeviceQueueCreateInfo queue_create_info{ VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
 		queue_create_info.queueFamilyIndex = family_index;
@@ -224,43 +213,46 @@ lf::error vulkan_context::init_device() {
 }
 
 lf::error vulkan_context::init_queues(lf::span<VkQueueFamilyProperties> queue_family_properties) {
-	vk_queues.clear();
+	queues.clear();
+	graphics_queue = {};
+	vk_command_pool = VK_NULL_HANDLE;
 
 	for (u32 family_index = 0; family_index < queue_family_properties.size(); ++family_index) {
 		const VkQueueFamilyProperties& family = queue_family_properties[family_index];
 		for (u32 queue_index = 0; queue_index < family.queueCount; ++queue_index) {
 			VkQueue vk_queue_handle = VK_NULL_HANDLE;
 			vkGetDeviceQueue(vk_device, family_index, queue_index, &vk_queue_handle);
-
-			VkSemaphoreTypeCreateInfo vk_timeline_semaphore_type_create_info = { VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO };
-			vk_timeline_semaphore_type_create_info.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-			vk_timeline_semaphore_type_create_info.initialValue = 0;
-
-			VkSemaphoreCreateInfo vk_semaphore_create_info = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-			vk_semaphore_create_info.pNext = &vk_timeline_semaphore_type_create_info;
-
-			vk_queue& queue = vk_queues.emplace_back();
-			queue.vk_queue_handle = vk_queue_handle;
-			queue.family_index = family_index;
-			queue.queue_index = queue_index;
-			queue.flags = family.queueFlags;
-			if (VkResult result = vkCreateSemaphore(vk_device, &vk_semaphore_create_info, nullptr, &queue.vk_timeline_semaphore); result != VK_SUCCESS) {
-				vk_queues.pop_back(); // remove the invalid element
-				return lf::error(lf::generic_errc::unknown, "failed to create a Vulkan timeline semaphore for a device queue");
-			}
+			queues.push_back(queues_pool.create(*this, vk_queue_handle, family_index, queue_index, family.queueFlags));
 		}
+	}
+
+	// For now, leaf picks queue family 0 / queue 0 as the primary graphics submission queue.
+	// This keeps the model simple while the backend is still being built out.
+	if (queues.empty()) {
+		return lf::error(lf::generic_errc::unknown, "the Vulkan device does not expose any usable queues");
+	}
+	graphics_queue = queues[0];
+	const QueueVK& graphics_queue_resource = unhandle(*this, lf::view<const lf::queue>(graphics_queue));
+
+	VkCommandPoolCreateInfo pool_create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+	pool_create_info.queueFamilyIndex = graphics_queue_resource.family_index;
+	pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	if (VkResult result = vkCreateCommandPool(vk_device, &pool_create_info, nullptr, &vk_command_pool); result != VK_SUCCESS) {
+		return lf::error(lf::generic_errc::unknown, "failed to create a Vulkan command pool");
 	}
 
 	return lf::error::no_error;
 }
 
 void vulkan_context::exit_queues() {
-	for (vk_queue& queue : vk_queues) {
-		vkDestroySemaphore(vk_device, queue.vk_timeline_semaphore, nullptr);
-		queue.vk_timeline_semaphore = VK_NULL_HANDLE;
-		queue.vk_queue_handle = VK_NULL_HANDLE;
+	if (vk_command_pool) {
+		vkDestroyCommandPool(vk_device, vk_command_pool, nullptr);
+		vk_command_pool = VK_NULL_HANDLE;
 	}
-	vk_queues.clear();
+
+	queues_pool.clear();
+	queues.clear();
+	graphics_queue = {};
 }
 
 void vulkan_context::exit_device() {
@@ -273,7 +265,16 @@ void vulkan_context::exit_physical_device() {
 }
 
 void vulkan_context::shutdown() {
+	// Make teardown robust: resources (windows/framebuffers/command buffers) may still have
+	// in-flight work referencing semaphores, swapchains, or command pools.
+	if (vk_device) {
+		vkDeviceWaitIdle(vk_device);
+	}
+
 	windows.clear_leaked_resources();
+	queues_pool.clear_leaked_resources();
+	framebuffers.clear_leaked_resources();
+	command_buffers.clear_leaked_resources();
 
 	exit_queues();
 	exit_device();

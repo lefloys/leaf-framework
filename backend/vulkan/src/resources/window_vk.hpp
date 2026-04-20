@@ -2,12 +2,11 @@
 
 #include "resource.hpp"
 
-#include "leaf/core/string.hpp"
-#include "leaf/core/vector.hpp"
-#include "leaf/graphics/detail/resource.hpp"
-#include "leaf/math/dim.hpp"
-#include "leaf/platform/api.hpp"
-
+#include <leaf/core/string.hpp>
+#include <leaf/core/vector.hpp>
+#include <leaf/graphics/detail/resource.hpp>
+#include <leaf/math/dim.hpp>
+#include <leaf/platform/api.hpp>
 #include <vulkan/vulkan.h>
 
 struct vulkan_context;
@@ -16,7 +15,11 @@ struct WindowVK : Resource {
 	struct swapchain_image {
 		VkImage vk_image = VK_NULL_HANDLE;
 		VkImageView vk_image_view = VK_NULL_HANDLE;
-		lf::handle<lf::framebuffer> framebuffer{};
+	};
+	struct frame_sync {
+		VkSemaphore vk_image_available = VK_NULL_HANDLE;
+		VkSemaphore vk_render_finished = VK_NULL_HANDLE;
+		VkFence vk_in_flight = VK_NULL_HANDLE;
 	};
 	vulkan_context& ctx;
 	lf::platform_window* platform_window = nullptr;
@@ -27,6 +30,11 @@ struct WindowVK : Resource {
 	VkQueue vk_present_queue = VK_NULL_HANDLE;
 	u32 vk_present_queue_family_index = 0;
 	lf::vector<swapchain_image> swapchain_images;
+	lf::vector<frame_sync> frames;
+	lf::vector<lf::handle<lf::framebuffer>> framebuffers;
+	u32 current_frame = 0;
+	u32 acquired_image_index = 0;
+	lf::handle<lf::framebuffer> active_framebuffer{};
 
 	WindowVK(vulkan_context& ctx, lf::string_view title, lf::dim2<i32> extent);
 	~WindowVK();
@@ -43,5 +51,6 @@ namespace Window {
 	void Resize(lf::view<lf::window> wnd, lf::dim2<i32> extent);
 	lf::dim2<i32> GetSize(lf::view<const lf::window> wnd);
 	void AcquireImage(lf::view<lf::window> wnd);
+	lf::view<lf::framebuffer> GetFramebuffer(lf::view<lf::window> wnd);
 	void Present(lf::view<lf::window> wnd);
 }

@@ -3,6 +3,7 @@
 #include "object_allocator.hpp"
 #include "resources/command_buffer_vk.hpp"
 #include "resources/framebuffer_vk.hpp"
+#include "resources/queue_vk.hpp"
 #include "resources/window_vk.hpp"
 
 #include <leaf/core/vector.hpp>
@@ -14,27 +15,18 @@
 template<typename>
 struct vk_resource_traits;
 
-struct QueueTimepoint {
-	VkSemaphore vk_timeline_semaphore = VK_NULL_HANDLE;
-	u64 value = 0;
-};
-
-struct vk_queue {
-	VkQueue vk_queue_handle = VK_NULL_HANDLE;
-	u32 family_index = 0;
-	u32 queue_index = 0;
-	VkQueueFlags flags = 0;
-	VkSemaphore vk_timeline_semaphore = VK_NULL_HANDLE;
-	u64 next_timeline_value = 1;
-};
 
 struct vulkan_context {
 	VkInstance vk_instance = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT vk_debug_messenger = VK_NULL_HANDLE;
 	VkPhysicalDevice vk_physical_device = VK_NULL_HANDLE;
 	VkDevice vk_device = VK_NULL_HANDLE;
-	lf::vector<vk_queue> vk_queues;
+	lf::vector<lf::handle<lf::queue>> queues;
 
+	lf::handle<lf::queue> graphics_queue;
+	VkCommandPool vk_command_pool = VK_NULL_HANDLE;
+
+	resource_pool<lf::queue, QueueVK> queues_pool;
 	resource_pool<lf::window, WindowVK> windows;
 	resource_pool<lf::framebuffer, FramebufferVK> framebuffers;
 	resource_pool<lf::command_buffer, CommandBufferVK> command_buffers;
@@ -55,6 +47,14 @@ struct vk_resource_traits<lf::window> {
 
 	static auto& pool(vulkan_context& ctx) { return ctx.windows; }
 	static const auto& pool(const vulkan_context& ctx) { return ctx.windows; }
+};
+
+template<>
+struct vk_resource_traits<lf::queue> {
+	using resource_type = QueueVK;
+
+	static auto& pool(vulkan_context& ctx) { return ctx.queues_pool; }
+	static const auto& pool(const vulkan_context& ctx) { return ctx.queues_pool; }
 };
 
 template<>

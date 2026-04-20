@@ -4,6 +4,8 @@
 #include <leaf/graphics/window.hpp>
 #include <leaf/platform/backends/glfw.hpp>
 
+
+
 int main() {
 	lf::SetPlatformAPI(lf::CreateGLFWPlatformAPI());
 	lf::SetGraphicsAPI(lf::CreateVulkanGraphicsAPI());
@@ -18,7 +20,7 @@ int main() {
 
 	lf::dim2<i32> size = lf::Window::GetSize(wnd);
 	lf::cout << "Window size: " << size.width << "x" << size.height << '\n';
-	while (true) {
+	while (lf::Update()) {
 		lf::Window::BeginFrame(wnd);
 		lf::Window::EndFrame(wnd);
 	}

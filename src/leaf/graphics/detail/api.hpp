@@ -18,6 +18,7 @@ namespace lf {
 			void (*resize)(view<window> wnd, dim2<i32> extent);
 			dim2<i32> (*get_size)(view<const window> wnd);
 			void (*acquire_image)(view<window> wnd);
+			view<framebuffer> (*get_framebuffer)(view<window> wnd);
 			void (*present)(view<window> wnd);
 		} Window;
 		struct {
@@ -29,7 +30,6 @@ namespace lf {
 			void (*draw)(view<command_buffer> cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance);
 		} CommandBuffer;
 		struct {
-			handle<framebuffer> (*create)(view<const window> wnd);
 			void (*destroy)(handle<framebuffer> fb);
 			void (*flush)(view<framebuffer> fb);
 			void (*submit)(view<framebuffer> fb, view<const command_buffer> cmd);

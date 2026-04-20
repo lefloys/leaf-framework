@@ -26,6 +26,8 @@ namespace lf {
 		void (*hide_platform_window)(platform_window* window);
 		void (*set_platform_window_extent)(platform_window* window, dim2<i32> extent);
 		dim2<i32> (*get_platform_window_extent)(const platform_window* window);
+		void (*poll_events)();
+		bool (*any_window_should_close)();
 
 		result<VkSurface> (*create_platform_vulkan_surface)(VkInstance instance, platform_window* window);
 	};

@@ -27,4 +27,16 @@ namespace lf {
 			Platform.exit();
 		}
 	}
+
+	bool Update() {
+		if (has_platform_backend() && Platform.poll_events) {
+			Platform.poll_events();
+		}
+
+		if (has_platform_backend() && Platform.any_window_should_close) {
+			return !Platform.any_window_should_close();
+		}
+
+		return true;
+	}
 }

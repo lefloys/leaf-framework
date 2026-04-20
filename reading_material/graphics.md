@@ -311,5 +311,7 @@ The frontend is implemented by calling into the backend. For example, a create
 function will call into the create backend. a function that does more complex
 things might call multiple backend functions to express behaviour.
 
-This is the full definition of all function (pointers) exposed by the backend:
+To see the actual backend look at graphics/detail/api.hpp.
 
+You are allowed to call these functions. However, they are poorly documented
+so it is not recommended unless you have implemented your own backend already
