@@ -14,23 +14,23 @@
 constexpr u32 PREFERRED_SWAPCHAIN_IMAGE_COUNT = 3;
 constexpr u32 MAX_FRAMES_IN_FLIGHT = 3;
 
-constexpr lf::array<VkFormat, 4> PREFERRED_SWAPCHAIN_FORMATS = {{
+constexpr lf::array<VkFormat, 4> PREFERRED_SWAPCHAIN_FORMATS = { {
 	VK_FORMAT_B8G8R8A8_UNORM,
 	VK_FORMAT_R8G8B8A8_UNORM,
 	VK_FORMAT_B8G8R8A8_SRGB,
 	VK_FORMAT_R8G8B8A8_SRGB,
-}};
-constexpr lf::array<VkColorSpaceKHR, 3> PREFERRED_SWAPCHAIN_COLOR_SPACES = {{
+} };
+constexpr lf::array<VkColorSpaceKHR, 3> PREFERRED_SWAPCHAIN_COLOR_SPACES = { {
 	VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
 	VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT,
 	VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT,
-}};
-constexpr lf::array<VkPresentModeKHR, 4> PREFERRED_PRESENT_MODE = {{
+} };
+constexpr lf::array<VkPresentModeKHR, 4> PREFERRED_PRESENT_MODE = { {
 	VK_PRESENT_MODE_MAILBOX_KHR,
 	VK_PRESENT_MODE_FIFO_RELAXED_KHR,
 	VK_PRESENT_MODE_FIFO_KHR,
 	VK_PRESENT_MODE_IMMEDIATE_KHR,
-}};
+} };
 
 VkFormat choose_swapchain_format(lf::span<const VkSurfaceFormatKHR> available_formats) {
 	for (const VkFormat preferred_format : PREFERRED_SWAPCHAIN_FORMATS) {
@@ -119,7 +119,6 @@ WindowVK::WindowVK(vulkan_context& ctx, lf::string_view title, lf::dim2<i32> ext
 		if (VkResult result = vkCreateFence(ctx.vk_device, &fence_create_info, nullptr, &frame.vk_in_flight); result != VK_SUCCESS) {
 			throw lf::runtime_exception("failed to create a Vulkan fence for frame synchronization");
 		}
-
 	}
 
 	framebuffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -127,7 +126,7 @@ WindowVK::WindowVK(vulkan_context& ctx, lf::string_view title, lf::dim2<i32> ext
 		fb = ctx.framebuffers.create(ctx);
 	}
 
-	lf::result<lf::VkSurface> platform_surface = lf::Platform.create_platform_vulkan_surface(ctx.vk_instance, platform_window);
+	lf::result<VkSurface> platform_surface = lf::Platform.create_platform_vulkan_surface(ctx.vk_instance, platform_window);
 	if (!platform_surface) {
 		lf::Platform.destroy_platform_window(platform_window);
 		platform_window = nullptr;
@@ -188,7 +187,7 @@ void WindowVK::create_swapchain() {
 			continue;
 		}
 		vk_present_queue = queue.vk_queue;
-		vk_present_queue_family_index = queue.family_index;
+		present_queue_family_index = queue.family_index;
 		present_queue_found = true;
 		break;
 	}
@@ -224,88 +223,56 @@ void WindowVK::create_swapchain() {
 
 
 	const VkSurfaceFormatKHR surface_format = choose_swapchain_surface_format(surface_formats);
-	vk_swapchain_image_format = surface_format.format;
-	vk_swapchain_extent = choose_swapchain_extent(surface_capabilities, lf::Platform.get_platform_window_extent(platform_window));
+	Swapchain.vk_swapchain_image_format = surface_format.format;
+	Swapchain.vk_swapchain_extent = choose_swapchain_extent(surface_capabilities, lf::Platform.get_platform_window_extent(platform_window));
 
 	VkSwapchainCreateInfoKHR swapchain_create_info = { VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
 	swapchain_create_info.surface = vk_surface;
 	swapchain_create_info.minImageCount = choose_swapchain_image_count(surface_capabilities);
-	swapchain_create_info.imageFormat = vk_swapchain_image_format;
+	swapchain_create_info.imageFormat = Swapchain.vk_swapchain_image_format;
 	swapchain_create_info.imageColorSpace = surface_format.colorSpace;
-	swapchain_create_info.imageExtent = vk_swapchain_extent;
+	swapchain_create_info.imageExtent = Swapchain.vk_swapchain_extent;
 	swapchain_create_info.imageArrayLayers = 1;
 	swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-	const QueueVK& graphics_queue = unhandle(ctx, lf::view<const lf::queue>(ctx.graphics_queue));
-	const u32 queue_family_indices[] = { graphics_queue.family_index, vk_present_queue_family_index };
-	if (graphics_queue.family_index != vk_present_queue_family_index) {
-		swapchain_create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-		swapchain_create_info.queueFamilyIndexCount = 2;
-		swapchain_create_info.pQueueFamilyIndices = queue_family_indices;
-	} else {
-		swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	}
+	swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	swapchain_create_info.preTransform = surface_capabilities.currentTransform;
 	swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	swapchain_create_info.presentMode = choose_swapchain_present_mode(present_modes);
 	swapchain_create_info.clipped = VK_TRUE;
 
-	if (VkResult result = vkCreateSwapchainKHR(ctx.vk_device, &swapchain_create_info, nullptr, &vk_swapchain); result != VK_SUCCESS) {
+	if (VkResult result = vkCreateSwapchainKHR(ctx.vk_device, &swapchain_create_info, nullptr, &Swapchain.vk_swapchain); result != VK_SUCCESS) {
 		throw lf::runtime_exception("failed to create Vulkan swapchain");
 	}
 
 	u32 swapchain_image_count = 0;
-	if (VkResult result = vkGetSwapchainImagesKHR(ctx.vk_device, vk_swapchain, &swapchain_image_count, nullptr); result != VK_SUCCESS) {
+	if (VkResult result = vkGetSwapchainImagesKHR(ctx.vk_device, Swapchain.vk_swapchain, &swapchain_image_count, nullptr); result != VK_SUCCESS) {
 		throw lf::runtime_exception("failed to query Vulkan swapchain images");
 	}
 
 	lf::vector<VkImage> vk_images(swapchain_image_count);
-	if (VkResult result = vkGetSwapchainImagesKHR(ctx.vk_device, vk_swapchain, &swapchain_image_count, vk_images.data()); result != VK_SUCCESS) {
+	if (VkResult result = vkGetSwapchainImagesKHR(ctx.vk_device, Swapchain.vk_swapchain, &swapchain_image_count, vk_images.data()); result != VK_SUCCESS) {
 		throw lf::runtime_exception("failed to query Vulkan swapchain images");
 	}
 
-	swapchain_images.reserve(vk_images.size());
-	for (auto vk_image : vk_images) {
-		auto& image = swapchain_images.emplace_back();
-		image.vk_image = vk_image;
-
-		VkImageViewCreateInfo image_view_create_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-		image_view_create_info.image = image.vk_image;
-		image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		image_view_create_info.format = vk_swapchain_image_format;
-		image_view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-		image_view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-		image_view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-		image_view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-		image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		image_view_create_info.subresourceRange.baseMipLevel = 0;
-		image_view_create_info.subresourceRange.levelCount = 1;
-		image_view_create_info.subresourceRange.baseArrayLayer = 0;
-		image_view_create_info.subresourceRange.layerCount = 1;
-
-		if (VkResult result = vkCreateImageView(ctx.vk_device, &image_view_create_info, nullptr, &image.vk_image_view); result != VK_SUCCESS) {
-			throw lf::runtime_exception("failed to create a Vulkan swapchain image view");
-		}
+	Swapchain.images.reserve(vk_images.size());
+	for (auto i : lf::range(0, vk_images.size())) {
+		Swapchain.images.emplace_back(ctx.texture_bases.create(ctx, vk_images[i], Swapchain.vk_swapchain_image_format, VK_IMAGE_VIEW_TYPE_2D));
 	}
 }
 
 void WindowVK::destroy_swapchain() {
-	for (swapchain_image& image : swapchain_images) {
-		vkDestroyImageView(ctx.vk_device, image.vk_image_view, nullptr);
-		image.vk_image_view = VK_NULL_HANDLE;
-		
-
-		image.vk_image = VK_NULL_HANDLE;
+	for (auto& image : Swapchain.images) {
+		ctx.texture_bases.destroy(image);
+		image = {};
 	}
+	Swapchain.images.clear();
 
-	swapchain_images.clear();
-
-	vkDestroySwapchainKHR(ctx.vk_device, vk_swapchain, nullptr);
-	vk_swapchain = VK_NULL_HANDLE;
+	vkDestroySwapchainKHR(ctx.vk_device, Swapchain.vk_swapchain, nullptr);
+	Swapchain.vk_swapchain = VK_NULL_HANDLE;
 
 	vk_present_queue = VK_NULL_HANDLE;
-	vk_swapchain_extent = {};
-	vk_swapchain_image_format = VK_FORMAT_UNDEFINED;
+	Swapchain.vk_swapchain_extent = {};
+	Swapchain.vk_swapchain_image_format = VK_FORMAT_UNDEFINED;
 	acquired_image_index = 0;
 	active_framebuffer = {};
 }
@@ -327,183 +294,183 @@ namespace Window {
 		destroy(get_context(), wnd);
 	}
 
-	void show(WindowVK& wnd) {
+	void show(vulkan_context& ctx, WindowVK& wnd) {
 		lf::Platform.show_platform_window(wnd.platform_window);
 	}
 	void Show(lf::view<lf::window> wnd) {
-		assert_context();
-		show(unhandle(get_context(), wnd));
+		auto& ctx = get_context();
+		show(ctx, unhandle(ctx, wnd));
 	}
 
-	void hide(WindowVK& wnd) {
+	void hide(vulkan_context& ctx, WindowVK& wnd) {
 		lf::Platform.hide_platform_window(wnd.platform_window);
 	}
 	void Hide(lf::view<lf::window> wnd) {
-		assert_context();
-		hide(unhandle(get_context(), wnd));
+		auto& ctx = get_context();
+		hide(ctx, unhandle(ctx, wnd));
 	}
 
-	void resize(WindowVK& wnd, lf::dim2<i32> extent) {
+	void resize(vulkan_context& ctx, WindowVK& wnd, lf::dim2<i32> extent) {
 		lf::Platform.set_platform_window_extent(wnd.platform_window, extent);
 	}
 	void Resize(lf::view<lf::window> wnd, lf::dim2<i32> extent) {
-		assert_context();
-		resize(unhandle(get_context(), wnd), extent);
+		auto& ctx = get_context();
+		resize(ctx, unhandle(ctx, wnd), extent);
 	}
 
-	lf::dim2<i32> get_size(const WindowVK& wnd) {
+	lf::dim2<i32> get_size(vulkan_context& ctx, const WindowVK& wnd) {
 		return lf::Platform.get_platform_window_extent(wnd.platform_window);
 	}
 	lf::dim2<i32> GetSize(lf::view<const lf::window> wnd) {
-		assert_context();
-		return get_size(unhandle(get_context(), wnd));
+		auto& ctx = get_context();
+		return get_size(ctx, unhandle(ctx, wnd));
 	}
 
-	void acquire_image(WindowVK& wnd) {
+	void acquire_image(vulkan_context& ctx, WindowVK& wnd) {
 		if (wnd.active_framebuffer) {
 			throw lf::runtime_exception("BeginFrame was called twice without a matching EndFrame");
 		}
 
 		const u32 frame_slot = wnd.current_frame % static_cast<u32>(wnd.frames.size());
 		WindowVK::frame_sync& frame = wnd.frames[frame_slot];
-		if (VkResult result = vkWaitForFences(wnd.ctx.vk_device, 1, &frame.vk_in_flight, VK_TRUE, UINT64_MAX); result != VK_SUCCESS) {
+		if (VkResult result = vkWaitForFences(ctx.vk_device, 1, &frame.vk_in_flight, VK_TRUE, UINT64_MAX); result != VK_SUCCESS) {
 			throw lf::runtime_exception("failed to wait for the Vulkan in-flight fence");
 		}
-		if (VkResult result = vkResetFences(wnd.ctx.vk_device, 1, &frame.vk_in_flight); result != VK_SUCCESS) {
+		if (VkResult result = vkResetFences(ctx.vk_device, 1, &frame.vk_in_flight); result != VK_SUCCESS) {
 			throw lf::runtime_exception("failed to reset the Vulkan in-flight fence");
 		}
 
-		VkResult acquire_result = vkAcquireNextImageKHR(wnd.ctx.vk_device, wnd.vk_swapchain, UINT64_MAX, frame.vk_image_available, VK_NULL_HANDLE, &wnd.acquired_image_index);
+		VkResult acquire_result = vkAcquireNextImageKHR(ctx.vk_device, wnd.Swapchain.vk_swapchain, UINT64_MAX, frame.vk_image_available, VK_NULL_HANDLE, &wnd.acquired_image_index);
 		if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR || acquire_result == VK_SUBOPTIMAL_KHR) {
 			wnd.destroy_swapchain();
 			wnd.create_swapchain();
-			acquire_result = vkAcquireNextImageKHR(wnd.ctx.vk_device, wnd.vk_swapchain, UINT64_MAX, frame.vk_image_available, VK_NULL_HANDLE, &wnd.acquired_image_index);
+			acquire_result = vkAcquireNextImageKHR(ctx.vk_device, wnd.Swapchain.vk_swapchain, UINT64_MAX, frame.vk_image_available, VK_NULL_HANDLE, &wnd.acquired_image_index);
 		}
 		if (acquire_result != VK_SUCCESS) {
 			throw lf::runtime_exception("failed to acquire the next Vulkan swapchain image");
 		}
 
 		wnd.active_framebuffer = wnd.framebuffers[frame_slot];
-
-		FramebufferVK& fb = wnd.ctx.framebuffers.get(wnd.active_framebuffer);
-		fb.submitted_secondary_buffers.clear();
-		fb.color_attachments.clear();
-		fb.color_attachments.push_back(wnd.swapchain_images[wnd.acquired_image_index].vk_image_view);
 	}
 	void AcquireImage(lf::view<lf::window> wnd) {
-		assert_context();
-		acquire_image(unhandle(get_context(), wnd));
+		auto& ctx = get_context();
+		acquire_image(ctx, unhandle(ctx, wnd));
 	}
 
 	lf::view<lf::framebuffer> GetFramebuffer(lf::view<lf::window> wnd) {
-		assert_context();
-		WindowVK& window = unhandle(get_context(), wnd);
-		if (!window.active_framebuffer) {
-			throw lf::runtime_exception("Window::BeginFrame has not been called for this window");
-		}
-		return window.active_framebuffer;
+		return unhandle(get_context(), wnd).active_framebuffer;
 	}
 
-	void present(WindowVK& wnd) {
+	void present(vulkan_context& ctx, WindowVK& wnd) {
 		if (!wnd.active_framebuffer) {
 			throw lf::runtime_exception("EndFrame was called without a matching BeginFrame");
 		}
 
 		const u32 frame_slot = wnd.current_frame % static_cast<u32>(wnd.frames.size());
 		WindowVK::frame_sync& frame = wnd.frames[frame_slot];
-		FramebufferVK& fb = wnd.ctx.framebuffers.get(wnd.active_framebuffer);
+		FramebufferVK& fb = ctx.framebuffers.get(wnd.active_framebuffer);
 
-		if (VkResult result = vkResetCommandPool(wnd.ctx.vk_device, fb.vk_command_pool, 0); result != VK_SUCCESS) {
-			throw lf::runtime_exception("failed to reset the Vulkan command pool for the frame");
-		}
+		//if (VkResult result = vkResetCommandPool(ctx.vk_device, fb.vk_command_pool, 0); result != VK_SUCCESS) {
+		//	throw lf::runtime_exception("failed to reset the Vulkan command pool for the frame");
+		//}
 
-		VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-		begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-		if (VkResult result = vkBeginCommandBuffer(fb.vk_primary_command_buffer, &begin_info); result != VK_SUCCESS) {
-			throw lf::runtime_exception("failed to begin recording the Vulkan primary command buffer for the frame");
-		}
+		//VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+		//begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		//if (VkResult result = vkBeginCommandBuffer(fb.vk_primary_command_buffer, &begin_info); result != VK_SUCCESS) {
+		//	throw lf::runtime_exception("failed to begin recording the Vulkan primary command buffer for the frame");
+		//}
 
-		const VkImage swapchain_image = wnd.swapchain_images[wnd.acquired_image_index].vk_image;
+		//const VkImage swapchain_image = wnd.swapchain_images[wnd.acquired_image_index].vk_image;
 
-		VkImageMemoryBarrier to_color_attachment = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-		to_color_attachment.srcAccessMask = 0;
-		to_color_attachment.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		to_color_attachment.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		to_color_attachment.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		to_color_attachment.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		to_color_attachment.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		to_color_attachment.image = swapchain_image;
-		to_color_attachment.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		to_color_attachment.subresourceRange.baseMipLevel = 0;
-		to_color_attachment.subresourceRange.levelCount = 1;
-		to_color_attachment.subresourceRange.baseArrayLayer = 0;
-		to_color_attachment.subresourceRange.layerCount = 1;
+		//VkImageMemoryBarrier to_color_attachment = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+		//to_color_attachment.srcAccessMask = 0;
+		//to_color_attachment.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		//to_color_attachment.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		//to_color_attachment.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		//to_color_attachment.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		//to_color_attachment.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		//to_color_attachment.image = swapchain_image;
+		//to_color_attachment.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		//to_color_attachment.subresourceRange.baseMipLevel = 0;
+		//to_color_attachment.subresourceRange.levelCount = 1;
+		//to_color_attachment.subresourceRange.baseArrayLayer = 0;
+		//to_color_attachment.subresourceRange.layerCount = 1;
 
-		vkCmdPipelineBarrier(fb.vk_primary_command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_color_attachment);
+		//vkCmdPipelineBarrier(fb.vk_primary_command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_color_attachment);
 
-		if (!fb.submitted_secondary_buffers.empty()) {
-			vkCmdExecuteCommands(fb.vk_primary_command_buffer, static_cast<u32>(fb.submitted_secondary_buffers.size()), fb.submitted_secondary_buffers.data());
-		}
+		//if (!fb.submitted_secondary_buffers.empty()) {
+		//	vkCmdExecuteCommands(fb.vk_primary_command_buffer, static_cast<u32>(fb.submitted_secondary_buffers.size()), fb.submitted_secondary_buffers.data());
+		//}
 
-		VkImageMemoryBarrier to_present = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-		to_present.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		to_present.dstAccessMask = 0;
-		to_present.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-		to_present.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		to_present.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		to_present.image = swapchain_image;
-		to_present.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		to_present.subresourceRange.baseMipLevel = 0;
-		to_present.subresourceRange.levelCount = 1;
-		to_present.subresourceRange.baseArrayLayer = 0;
-		to_present.subresourceRange.layerCount = 1;
+		//VkImageMemoryBarrier to_present = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+		//to_present.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		//to_present.dstAccessMask = 0;
+		//to_present.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		//to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		//to_present.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		//to_present.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		//to_present.image = swapchain_image;
+		//to_present.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		//to_present.subresourceRange.baseMipLevel = 0;
+		//to_present.subresourceRange.levelCount = 1;
+		//to_present.subresourceRange.baseArrayLayer = 0;
+		//to_present.subresourceRange.layerCount = 1;
 
-		vkCmdPipelineBarrier( fb.vk_primary_command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_present);
+		//vkCmdPipelineBarrier(fb.vk_primary_command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_present);
 
-		if (VkResult result = vkEndCommandBuffer(fb.vk_primary_command_buffer); result != VK_SUCCESS) {
-			throw lf::runtime_exception("failed to finish recording the Vulkan primary command buffer for the frame");
-		}
+		//if (VkResult result = vkEndCommandBuffer(fb.vk_primary_command_buffer); result != VK_SUCCESS) {
+		//	throw lf::runtime_exception("failed to finish recording the Vulkan primary command buffer for the frame");
+		//}
 
-		VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-		VkSubmitInfo submit_info = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-		submit_info.waitSemaphoreCount = 1;
-		submit_info.pWaitSemaphores = &frame.vk_image_available;
-		submit_info.pWaitDstStageMask = wait_stages;
-		submit_info.commandBufferCount = 1;
-		submit_info.pCommandBuffers = &fb.vk_primary_command_buffer;
-		submit_info.signalSemaphoreCount = 1;
-		submit_info.pSignalSemaphores = &frame.vk_render_finished;
+		//VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+		//VkSubmitInfo submit_info = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+		//submit_info.waitSemaphoreCount = 1;
+		//submit_info.pWaitSemaphores = &frame.vk_image_available;
+		//submit_info.pWaitDstStageMask = wait_stages;
+		//submit_info.commandBufferCount = 1;
+		//submit_info.pCommandBuffers = &fb.vk_primary_command_buffer;
+		//submit_info.signalSemaphoreCount = 1;
+		//submit_info.pSignalSemaphores = &frame.vk_render_finished;
 
-		const QueueVK& graphics_queue = unhandle(wnd.ctx, lf::view<const lf::queue>(wnd.ctx.graphics_queue));
-		if (VkResult result = vkQueueSubmit(graphics_queue.vk_queue, 1, &submit_info, frame.vk_in_flight); result != VK_SUCCESS) {
-			throw lf::runtime_exception("failed to submit the Vulkan primary command buffer for the frame");
-		}
+		//const QueueVK& graphics_queue = unhandle(wnd.ctx, lf::view<const lf::queue>(ctx.graphics_queue));
+		//if (VkResult result = vkQueueSubmit(graphics_queue.vk_queue, 1, &submit_info, frame.vk_in_flight); result != VK_SUCCESS) {
+		//	throw lf::runtime_exception("failed to submit the Vulkan primary command buffer for the frame");
+		//}
 
-		fb.submitted_secondary_buffers.clear();
+		//fb.submitted_secondary_buffers.clear();
 
-		VkSwapchainKHR swapchain = wnd.vk_swapchain;
-		VkPresentInfoKHR present_info = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
-		present_info.waitSemaphoreCount = 1;
-		present_info.pWaitSemaphores = &frame.vk_render_finished;
-		present_info.swapchainCount = 1;
-		present_info.pSwapchains = &swapchain;
-		present_info.pImageIndices = &wnd.acquired_image_index;
+		//VkSwapchainKHR swapchain = wnd.vk_swapchain;
+		//VkPresentInfoKHR present_info = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
+		//present_info.waitSemaphoreCount = 1;
+		//present_info.pWaitSemaphores = &frame.vk_render_finished;
+		//present_info.swapchainCount = 1;
+		//present_info.pSwapchains = &swapchain;
+		//present_info.pImageIndices = &wnd.acquired_image_index;
 
-		VkResult result = vkQueuePresentKHR(wnd.vk_present_queue, &present_info);
-		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-			wnd.destroy_swapchain();
-			wnd.create_swapchain();
-		} else if (result != VK_SUCCESS) {
-			throw lf::runtime_exception("failed to present the Vulkan swapchain image");
-		}
+		//VkResult result = vkQueuePresentKHR(wnd.vk_present_queue, &present_info);
+		//if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+		//	wnd.destroy_swapchain();
+		//	wnd.create_swapchain();
+		//}
+		//else if (result != VK_SUCCESS) {
+		//	throw lf::runtime_exception("failed to present the Vulkan swapchain image");
+		//}
 
-		wnd.framebuffers[frame_slot] = wnd.ctx.framebuffers.bump_id(wnd.framebuffers[frame_slot]);
+		wnd.framebuffers[frame_slot] = ctx.framebuffers.bump_id(wnd.framebuffers[frame_slot]);
 		wnd.active_framebuffer = {};
 		++wnd.current_frame;
 	}
 	void Present(lf::view<lf::window> wnd) {
+		auto& ctx = get_context();
+		present(ctx, unhandle(ctx, wnd));
+	}
+
+
+	bool should_close(const WindowVK& wnd) {
+		return lf::Platform.platform_window_should_close(wnd.platform_window);
+	}
+	bool ShouldClose(lf::view<const lf::window> wnd) {
 		assert_context();
-		present(unhandle(get_context(), wnd));
+		return should_close(unhandle(get_context(), wnd));
 	}
 }

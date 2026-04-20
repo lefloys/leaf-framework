@@ -18,13 +18,14 @@ namespace {
 	constexpr const char* k_swapchain_extension_name = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 
 	VKAPI_ATTR VkBool32 VKAPI_CALL debug_messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void*) {
-
 		const char* severity = "info";
 		if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) {
 			severity = "error";
-		} else if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0) {
+		}
+		else if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0) {
 			severity = "warning";
-		} else if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) != 0) {
+		}
+		else if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) != 0) {
 			severity = "verbose";
 		}
 
@@ -45,7 +46,7 @@ namespace {
 
 		return lf::any_of(layers.begin(), layers.end(), [layer_name](const VkLayerProperties& layer) {
 			return lf::strcmp(layer.layerName, layer_name) == 0;
-		});
+			});
 	}
 
 	bool has_instance_extension(const char* extension_name) {
@@ -61,7 +62,7 @@ namespace {
 
 		return lf::any_of(extensions.begin(), extensions.end(), [extension_name](const VkExtensionProperties& extension) {
 			return lf::strcmp(extension.extensionName, extension_name) == 0;
-		});
+			});
 	}
 
 	bool has_device_extension(VkPhysicalDevice physical_device, const char* extension_name) {
@@ -77,7 +78,7 @@ namespace {
 
 		return lf::any_of(extensions.begin(), extensions.end(), [extension_name](const VkExtensionProperties& extension) {
 			return lf::strcmp(extension.extensionName, extension_name) == 0;
-		});
+			});
 	}
 
 	VkDebugUtilsMessengerCreateInfoEXT make_debug_messenger_create_info() {
@@ -92,7 +93,6 @@ namespace {
 		create_info.pfnUserCallback = &debug_messenger_callback;
 		return create_info;
 	}
-
 }
 
 lf::error create_vk_debug_messenger(vulkan_context& ctx) {
@@ -113,7 +113,6 @@ lf::error create_vk_debug_messenger(vulkan_context& ctx) {
 lf::unique_ptr<vulkan_context> context_ptr;
 
 lf::error vulkan_context::init_physical_device() {
-
 	u32 physical_device_count = 0;
 	if (VkResult result = vkEnumeratePhysicalDevices(vk_instance, &physical_device_count, nullptr); result != VK_SUCCESS) {
 		return lf::error(lf::generic_errc::unknown, "failed to enumerate Vulkan physical devices");
@@ -143,7 +142,6 @@ lf::error vulkan_context::init_physical_device() {
 
 
 lf::error vulkan_context::init_device() {
-
 	if (lf::error err = init_physical_device()) { return err; }
 
 	u32 queue_family_count = 0;
@@ -213,10 +211,6 @@ lf::error vulkan_context::init_device() {
 }
 
 lf::error vulkan_context::init_queues(lf::span<VkQueueFamilyProperties> queue_family_properties) {
-	queues.clear();
-	graphics_queue = {};
-	vk_command_pool = VK_NULL_HANDLE;
-
 	for (u32 family_index = 0; family_index < queue_family_properties.size(); ++family_index) {
 		const VkQueueFamilyProperties& family = queue_family_properties[family_index];
 		for (u32 queue_index = 0; queue_index < family.queueCount; ++queue_index) {
@@ -226,33 +220,13 @@ lf::error vulkan_context::init_queues(lf::span<VkQueueFamilyProperties> queue_fa
 		}
 	}
 
-	// For now, leaf picks queue family 0 / queue 0 as the primary graphics submission queue.
-	// This keeps the model simple while the backend is still being built out.
-	if (queues.empty()) {
-		return lf::error(lf::generic_errc::unknown, "the Vulkan device does not expose any usable queues");
-	}
-	graphics_queue = queues[0];
-	const QueueVK& graphics_queue_resource = unhandle(*this, lf::view<const lf::queue>(graphics_queue));
-
-	VkCommandPoolCreateInfo pool_create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
-	pool_create_info.queueFamilyIndex = graphics_queue_resource.family_index;
-	pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	if (VkResult result = vkCreateCommandPool(vk_device, &pool_create_info, nullptr, &vk_command_pool); result != VK_SUCCESS) {
-		return lf::error(lf::generic_errc::unknown, "failed to create a Vulkan command pool");
-	}
 
 	return lf::error::no_error;
 }
 
 void vulkan_context::exit_queues() {
-	if (vk_command_pool) {
-		vkDestroyCommandPool(vk_device, vk_command_pool, nullptr);
-		vk_command_pool = VK_NULL_HANDLE;
-	}
-
 	queues_pool.clear();
 	queues.clear();
-	graphics_queue = {};
 }
 
 void vulkan_context::exit_device() {
@@ -265,23 +239,21 @@ void vulkan_context::exit_physical_device() {
 }
 
 void vulkan_context::shutdown() {
-	// Make teardown robust: resources (windows/framebuffers/command buffers) may still have
-	// in-flight work referencing semaphores, swapchains, or command pools.
-	if (vk_device) {
-		vkDeviceWaitIdle(vk_device);
-	}
+	vkDeviceWaitIdle(vk_device);
 
 	windows.clear_leaked_resources();
 	queues_pool.clear_leaked_resources();
 	framebuffers.clear_leaked_resources();
 	command_buffers.clear_leaked_resources();
+	texture_bases.clear_leaked_resources();
+
 
 	exit_queues();
 	exit_device();
 	exit_physical_device();
 
 	PFN_vkDestroyDebugUtilsMessengerEXT destroy_debug_utils_messenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(vk_instance, "vkDestroyDebugUtilsMessengerEXT"));
-	if (destroy_debug_utils_messenger) {destroy_debug_utils_messenger(vk_instance, vk_debug_messenger, nullptr); }
+	if (destroy_debug_utils_messenger) { destroy_debug_utils_messenger(vk_instance, vk_debug_messenger, nullptr); }
 	vk_debug_messenger = VK_NULL_HANDLE;
 
 	vkDestroyInstance(vk_instance, nullptr);
@@ -318,8 +290,6 @@ void destroy_context(vulkan_context& ctx) {
 }
 
 vulkan_context& get_context() {
-	if (!context_ptr) {
-		lf::abort();
-	}
+	assert_context();
 	return *context_ptr;
 }

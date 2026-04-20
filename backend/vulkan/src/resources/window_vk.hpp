@@ -1,6 +1,7 @@
 #pragma once
 
 #include "resource.hpp"
+#include "texture_vk.hpp"
 
 #include <leaf/core/string.hpp>
 #include <leaf/core/vector.hpp>
@@ -12,35 +13,38 @@
 struct vulkan_context;
 
 struct WindowVK : Resource {
-	struct swapchain_image {
-		VkImage vk_image = VK_NULL_HANDLE;
-		VkImageView vk_image_view = VK_NULL_HANDLE;
-	};
 	struct frame_sync {
 		VkSemaphore vk_image_available = VK_NULL_HANDLE;
 		VkSemaphore vk_render_finished = VK_NULL_HANDLE;
 		VkFence vk_in_flight = VK_NULL_HANDLE;
 	};
-	vulkan_context& ctx;
-	lf::platform_window* platform_window = nullptr;
-	VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
-	VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
-	VkFormat vk_swapchain_image_format = VK_FORMAT_UNDEFINED;
-	VkExtent2D vk_swapchain_extent{};
-	VkQueue vk_present_queue = VK_NULL_HANDLE;
-	u32 vk_present_queue_family_index = 0;
-	lf::vector<swapchain_image> swapchain_images;
-	lf::vector<frame_sync> frames;
-	lf::vector<lf::handle<lf::framebuffer>> framebuffers;
-	u32 current_frame = 0;
-	u32 acquired_image_index = 0;
-	lf::handle<lf::framebuffer> active_framebuffer{};
+	struct {
+		VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
+		VkExtent2D vk_swapchain_extent{};
+		VkFormat vk_swapchain_image_format = VK_FORMAT_UNDEFINED;
+		lf::vector<lf::handle<lf::texture_base>> images;
+	} Swapchain;
+
 
 	WindowVK(vulkan_context& ctx, lf::string_view title, lf::dim2<i32> extent);
 	~WindowVK();
 
 	void create_swapchain();
 	void destroy_swapchain();
+
+	vulkan_context& ctx;
+
+	lf::platform_window* platform_window = nullptr;
+	VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
+	VkQueue vk_present_queue = VK_NULL_HANDLE;
+
+	lf::vector<lf::handle<lf::framebuffer>> framebuffers;
+	lf::handle<lf::framebuffer> active_framebuffer;
+	lf::vector<frame_sync> frames;
+
+	u32 present_queue_family_index = 0;
+	u32 current_frame = 0;
+	u32 acquired_image_index = 0;
 };
 
 namespace Window {
@@ -53,4 +57,5 @@ namespace Window {
 	void AcquireImage(lf::view<lf::window> wnd);
 	lf::view<lf::framebuffer> GetFramebuffer(lf::view<lf::window> wnd);
 	void Present(lf::view<lf::window> wnd);
+	bool ShouldClose(lf::view<const lf::window> wnd);
 }

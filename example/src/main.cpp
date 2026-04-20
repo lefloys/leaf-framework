@@ -21,8 +21,10 @@ int main() {
 	lf::dim2<i32> size = lf::Window::GetSize(wnd);
 	lf::cout << "Window size: " << size.width << "x" << size.height << '\n';
 	while (lf::Update()) {
-		lf::Window::BeginFrame(wnd);
-		lf::Window::EndFrame(wnd);
+		if (lf::Window::ShouldClose(wnd)) { break; }
+
+		// lf::Window::BeginFrame(wnd);
+		// lf::Window::EndFrame(wnd);
 	}
 
 	lf::Window::Destroy(wnd);

@@ -8,4 +8,6 @@ add_files("leaf-graphics-vulkan"
 	"resource.hpp"
 	"window_vk.cpp"
 	"window_vk.hpp"
+	"texture_vk.cpp"
+	"texture_vk.hpp"
 )

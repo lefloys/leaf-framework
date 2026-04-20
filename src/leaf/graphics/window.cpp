@@ -35,4 +35,8 @@ namespace lf {
 	void Window::EndFrame(view<window> wnd) {
 		Graphics.Window.present(wnd);
 	}
+
+	bool Window::ShouldClose(view<const window> wnd) {
+		return Graphics.Window.should_close(wnd);
+	}
 }

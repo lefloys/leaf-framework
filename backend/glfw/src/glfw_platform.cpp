@@ -7,20 +7,17 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-namespace {
-	lf::vector<GLFWwindow*> g_windows;
+
+lf::platform_window* to_platform_window(GLFWwindow* wnd) {
+	return reinterpret_cast<lf::platform_window*>(wnd);
 }
 
-lf::platform_window* to_platform_window(GLFWwindow* window) {
-	return reinterpret_cast<lf::platform_window*>(window);
+GLFWwindow* to_glfw_window(lf::platform_window* wnd) {
+	return reinterpret_cast<GLFWwindow*>(wnd);
 }
 
-GLFWwindow* to_glfw_window(lf::platform_window* window) {
-	return reinterpret_cast<GLFWwindow*>(window);
-}
-
-const GLFWwindow* to_glfw_window(const lf::platform_window* window) {
-	return reinterpret_cast<const GLFWwindow*>(window);
+const GLFWwindow* to_glfw_window(const lf::platform_window* wnd) {
+	return reinterpret_cast<const GLFWwindow*>(wnd);
 }
 
 lf::error platform_init() {
@@ -54,31 +51,23 @@ lf::platform_window* create_platform_window(lf::string_view title, lf::dim2<i32>
 		throw lf::runtime_exception(description ? description : "failed to create GLFW window");
 	}
 
-	g_windows.push_back(glfw_window);
 	return to_platform_window(glfw_window);
 }
 
-void destroy_platform_window(lf::platform_window* window) {
-	GLFWwindow* glfw_window = to_glfw_window(window);
-	for (lf::size_t index = 0; index < g_windows.size(); ++index) {
-		if (g_windows[index] == glfw_window) {
-			g_windows.erase(g_windows.begin() + index);
-			break;
-		}
-	}
-	glfwDestroyWindow(glfw_window);
+void destroy_platform_window(lf::platform_window* wnd) {
+	glfwDestroyWindow(to_glfw_window(wnd));
 }
 
-void show_platform_window(lf::platform_window* window) {
-	glfwShowWindow(to_glfw_window(window));
+void show_platform_window(lf::platform_window* wnd) {
+	glfwShowWindow(to_glfw_window(wnd));
 }
 
-void hide_platform_window(lf::platform_window* window) {
-	glfwHideWindow(to_glfw_window(window));
+void hide_platform_window(lf::platform_window* wnd) {
+	glfwHideWindow(to_glfw_window(wnd));
 }
 
-void set_platform_window_extent(lf::platform_window* window, lf::dim2<i32> extent) {
-	glfwSetWindowSize(to_glfw_window(window), static_cast<int>(extent.width), static_cast<int>(extent.height));
+void set_platform_window_extent(lf::platform_window* wnd, lf::dim2<i32> extent) {
+	glfwSetWindowSize(to_glfw_window(wnd), extent.width, extent.height);
 }
 
 lf::dim2<i32> get_platform_window_extent(const lf::platform_window* window) {
@@ -87,27 +76,22 @@ lf::dim2<i32> get_platform_window_extent(const lf::platform_window* window) {
 	return result;
 }
 
+bool platform_window_should_close(lf::platform_window* wnd) {
+	return glfwWindowShouldClose(to_glfw_window(wnd));
+}
+
 void poll_events() {
 	glfwPollEvents();
 }
 
-bool any_window_should_close() {
-	for (GLFWwindow* window : g_windows) {
-		if (glfwWindowShouldClose(window)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-lf::result<lf::VkSurface> create_platform_vulkan_surface(lf::VkInstance instance, lf::platform_window* window) {
+lf::result<VkSurface> create_platform_vulkan_surface(VkInstance instance, lf::platform_window* wnd) {
 	VkSurfaceKHR created_surface = VK_NULL_HANDLE;
-	VkResult result = glfwCreateWindowSurface(instance, to_glfw_window(window), nullptr, &created_surface);
+	VkResult result = glfwCreateWindowSurface(instance, to_glfw_window(wnd), nullptr, &created_surface);
 	if (result != VK_SUCCESS) {
 		return lf::unexpected(lf::generic_errc::unknown);
 	}
 
-	return reinterpret_cast<lf::VkSurface>(created_surface);
+	return created_surface;
 }
 
 namespace lf {
@@ -124,8 +108,8 @@ namespace lf {
 		api.set_platform_window_extent = &set_platform_window_extent;
 		api.get_platform_window_extent = &get_platform_window_extent;
 		api.poll_events = &poll_events;
-		api.any_window_should_close = &any_window_should_close;
 		api.create_platform_vulkan_surface = &create_platform_vulkan_surface;
+		api.platform_window_should_close = &platform_window_should_close;
 		return api;
 	}
 }

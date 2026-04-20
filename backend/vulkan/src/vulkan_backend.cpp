@@ -160,9 +160,8 @@ namespace lf {
 		api.Window.acquire_image = &::Window::AcquireImage;
 		api.Window.get_framebuffer = &::Window::GetFramebuffer;
 		api.Window.present = &::Window::Present;
+		api.Window.should_close = &::Window::ShouldClose;
 		api.Framebuffer.destroy = &Framebuffer::Destroy;
-		api.Framebuffer.submit = &Framebuffer::Submit;
-		api.Framebuffer.flush = &Framebuffer::Flush;
 		return api;
 	}
 }

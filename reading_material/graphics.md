@@ -31,7 +31,7 @@ Resource operations are exposed via CamelCase namespace (eg. Window::)
 
 ### [Command Pipeline](#command-pipeline)
 * [`CommandBuffer`](#command-buffer)
-* [`CommandPool`](#command-pool)
+* [`CommandContext`](#command-context)
 * [`Queue`](#queue)
 
 ### Shaders and Pipelines
@@ -196,18 +196,18 @@ size_t Buffer::GetCapacity(view<const buffer> buf);
 ```
 
 ---
-#### Command Pipeline
+#### Command Buffer
 
 ```cpp
 void QueueTimepoint::wait(QueueTimepoint* this);
 
-void CommandBuffer::Reset(view<command_buffer> cmd);
-CommandBuffer::BindPipeline(view<command_buffer> cmd, view<graphics_pipeline> pipeline);
-CommandBuffer::BindVertexBuffer(view<command_buffer> cmd, view<vertex_buffer> vbo, u32 binding);
-CommandBuffer::Draw(view<command_buffer> cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance);
-CommandBuffer::Wait(view<command_buffer> cmd, QueueTimepoint timepoint);
-CommandBuffer::Begin(view<command_buffer> cmd);
-CommandBuffer::End(view<command_buffer> cmd);
+void CommandBuffer::Reset(view<command_buffer> cmd_buf);
+CommandBuffer::BindPipeline(view<command_buffer> cmd_buf, view<graphics_pipeline> pipeline);
+CommandBuffer::BindVertexBuffer(view<command_buffer> cmd_buf, view<vertex_buffer> vbo, u32 binding);
+CommandBuffer::Draw(view<command_buffer> cmd_buf, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance);
+CommandBuffer::Wait(view<command_buffer> cmd_buf, QueueTimepoint timepoint);
+CommandBuffer::Begin(view<command_buffer> cmd_buf);
+CommandBuffer::End(view<command_buffer> cmd_buf);
 ```
 
 
@@ -221,10 +221,18 @@ lf::CommandBuffer::End(cmd);
 ```
 
 ---
+### Command Context
+Command contexts are the equivilent of primary command buffers. You might get a
+command context from beginning a frame on a window, or by allocating your own
+if you want to submit compute commands.
+```cpp
+void CommandContext::Submit(view<command_context> ctx, view<command_buffer> cmd_buf);
+```
+---
 
 ### Framebuffer
 ```cpp
-void Framebuffer::Submit(view<framebuffer> fb, view<command_buffer> cmd);
+void Framebuffer::Submit(view<framebuffer> fb, view<command_buffer> cmd_buf);
 void Framebuffer::Flush(view<framebuffer> fb);
 ```
 
@@ -282,8 +290,7 @@ void Window::Show(view<window> wnd);
 void Window::Hide(view<window> wnd);
 void Window::Resize(view<window> wnd, dim2<i32> dim);
 dim2<i32> Window::GetSize(view<const window> wnd);
-// this view invalidates after EndFrame is called. Using it afterwards will crash the program.
-view<framebuffer> Window::BeginFrame(view<window> wnd);
+void Window::BeginFrame(view<window> wnd);
 void Window::EndFrame(view<window> wnd);
 ```
 
@@ -296,10 +303,8 @@ lf::CommandBuffer::Begin(cmd);
 lf::CommandBuffer::Draw(cmd, 3, 1, 0, 0);
 lf::CommandBuffer::End(cmd);
 
-lf::view<lf::framebuffer> fb = lf::Window::BeginFrame(wnd);
-
-lf::Framebuffer::Submit(fb, cmd);
-
+lf::view<lf::CommandContext> cmd_ctx = lf::Window::BeginFrame(wnd);
+lf::CommandContext::Execute(cmd_ctx, cmd);
 lf::Window::EndFrame(wnd);
 
 ```

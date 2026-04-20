@@ -16,6 +16,7 @@ namespace lf::resource {
 
 	// Command
 	struct command_buffer;
+	struct command_context;
 	struct queue;
 
 
@@ -25,10 +26,9 @@ namespace lf::resource {
 	struct storage_buffer;
 
 	// Textures
-	struct texture1d;
-	struct texture2d;
-	struct texture3d;
+	struct texture_2d;
 
+	struct texture_view_2d;
 }
 
 
@@ -41,7 +41,6 @@ namespace lf::constant {
 }
 
 namespace lf {
-
 	using namespace resource;
 	using namespace constant;
 
@@ -73,5 +72,11 @@ namespace lf {
 	template<> struct type_name_trait<command_buffer> { static constexpr string_view value = "command_buffer"; };
 	template<> struct type_name_trait<queue> { static constexpr string_view value = "queue"; };
 
+}
 
+namespace lf {
+	class QueueTimepoint {
+		view<const queue> queue;
+		u64 timepoint;
+	};
 }

@@ -13,6 +13,7 @@ namespace lf::Window {
 
 	dim2<i32> GetSize(view<const window> wnd);
 	void Resize(view<window> wnd, dim2<i32> extent);
+	bool ShouldClose(view<const window> wnd);
 
 	view<framebuffer> BeginFrame(view<window> wnd);
 	void EndFrame(view<window> wnd);

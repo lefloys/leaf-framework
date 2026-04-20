@@ -5,6 +5,7 @@
 #include "resources/framebuffer_vk.hpp"
 #include "resources/queue_vk.hpp"
 #include "resources/window_vk.hpp"
+#include "resources/texture_vk.hpp"
 
 #include <leaf/core/vector.hpp>
 #include <leaf/core/error.hpp>
@@ -23,13 +24,11 @@ struct vulkan_context {
 	VkDevice vk_device = VK_NULL_HANDLE;
 	lf::vector<lf::handle<lf::queue>> queues;
 
-	lf::handle<lf::queue> graphics_queue;
-	VkCommandPool vk_command_pool = VK_NULL_HANDLE;
-
 	resource_pool<lf::queue, QueueVK> queues_pool;
 	resource_pool<lf::window, WindowVK> windows;
 	resource_pool<lf::framebuffer, FramebufferVK> framebuffers;
 	resource_pool<lf::command_buffer, CommandBufferVK> command_buffers;
+	resource_pool<lf::texture_base, TextureBaseVK> texture_bases;
 
 	lf::error init_physical_device();
 	lf::error init_device();

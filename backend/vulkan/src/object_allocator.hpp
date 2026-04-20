@@ -25,8 +25,7 @@ public:
 			return { static_cast<u32>(index + 1), current.generation };
 		}
 
-		slots.emplace_back();
-		slot& current = slots.back();
+		slot& current = slots.emplace_back();
 		current.resource->emplace(lf::forward<Args>(args)...);
 		return { static_cast<u32>(slots.size()), current.generation };
 	}

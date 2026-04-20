@@ -83,34 +83,14 @@ namespace CommandBuffer {
 	}
 
 	void draw(vulkan_context& ctx, CommandBufferVK& cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance) {
-		(void)ctx;
-		(void)cmd;
-		(void)vertex_count;
-		(void)instance_count;
-		(void)first_vertex;
-		(void)first_instance;
 	}
 	void Draw(lf::view<lf::command_buffer> cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance) {
 		assert_context();
 		assert(cmd);
 		draw(get_context(), unhandle(get_context(), cmd), vertex_count, instance_count, first_vertex, first_instance);
 	}
-
 }
 
-CommandBufferVK::CommandBufferVK(vulkan_context& ctx) : ctx(ctx) {
-	VkCommandBufferAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
-	alloc_info.commandPool = ctx.vk_command_pool;
-	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
-	alloc_info.commandBufferCount = 1;
-	if (VkResult result = vkAllocateCommandBuffers(ctx.vk_device, &alloc_info, &vk_command_buffer); result != VK_SUCCESS) {
-		lf::abort();
-	}
-}
+CommandBufferVK::CommandBufferVK(vulkan_context& ctx) : ctx(ctx) {}
 
-CommandBufferVK::~CommandBufferVK() {
-	if (vk_command_buffer) {
-		vkFreeCommandBuffers(ctx.vk_device, ctx.vk_command_pool, 1, &vk_command_buffer);
-		vk_command_buffer = VK_NULL_HANDLE;
-	}
-}
+CommandBufferVK::~CommandBufferVK() {}

@@ -1,4 +1,3 @@
-
 #include "leaf.hpp"
 #include "graphics/detail/api.hpp"
 #include "platform/api.hpp"
@@ -29,12 +28,8 @@ namespace lf {
 	}
 
 	bool Update() {
-		if (has_platform_backend() && Platform.poll_events) {
+		if (has_platform_backend()) {
 			Platform.poll_events();
-		}
-
-		if (has_platform_backend() && Platform.any_window_should_close) {
-			return !Platform.any_window_should_close();
 		}
 
 		return true;

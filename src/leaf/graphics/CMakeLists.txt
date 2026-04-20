@@ -2,6 +2,8 @@ add_subdirectory("detail")
 add_files("leaf-framework" 
 	"command_buffer.cpp"
 	"command_buffer.hpp"
+	"command_context.cpp"
+	"command_context.hpp"
 	"framebuffer.cpp"
 	"framebuffer.hpp"
 	"vertex_buffer.hpp"
