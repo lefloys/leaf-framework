@@ -14,13 +14,8 @@ namespace CommandBuffer {
 	}
 
 
-	void destroy(vulkan_context& ctx, lf::handle<lf::command_buffer> cmd) {
-		ctx.command_buffers.destroy(cmd);
-	}
 	void Destroy(lf::handle<lf::command_buffer> cmd) {
-		assert_context();
-		assert(cmd);
-		destroy(get_context(), cmd);
+		get_context().command_buffers.destroy(cmd);
 	}
 
 	void reset(vulkan_context& ctx, CommandBufferVK& cmd) {
@@ -34,9 +29,9 @@ namespace CommandBuffer {
 		cmd.ended = false;
 	}
 	void Reset(lf::view<lf::command_buffer> cmd) {
-		assert_context();
 		assert(cmd);
-		reset(get_context(), unhandle(get_context(), cmd));
+		auto& ctx = get_context();
+		reset(get_context(), ctx.unhandle(cmd));
 	}
 
 	void begin(vulkan_context& ctx, CommandBufferVK& cmd) {
@@ -59,9 +54,9 @@ namespace CommandBuffer {
 		cmd.ended = false;
 	}
 	void Begin(lf::view<lf::command_buffer> cmd) {
-		assert_context();
 		assert(cmd);
-		begin(get_context(), unhandle(get_context(), cmd));
+		auto& ctx = get_context();
+		begin(ctx, ctx.unhandle(cmd));
 	}
 
 	void end(vulkan_context& ctx, CommandBufferVK& cmd) {
@@ -79,15 +74,15 @@ namespace CommandBuffer {
 	void End(lf::view<lf::command_buffer> cmd) {
 		assert_context();
 		assert(cmd);
-		end(get_context(), unhandle(get_context(), cmd));
+		auto& ctx = get_context();
+		end(ctx, ctx.unhandle(cmd));
 	}
 
-	void draw(vulkan_context& ctx, CommandBufferVK& cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance) {
-	}
+	void draw(vulkan_context& ctx, CommandBufferVK& cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance) {}
 	void Draw(lf::view<lf::command_buffer> cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance) {
-		assert_context();
 		assert(cmd);
-		draw(get_context(), unhandle(get_context(), cmd), vertex_count, instance_count, first_vertex, first_instance);
+		auto& ctx = get_context();
+		draw(ctx, ctx.unhandle(cmd), vertex_count, instance_count, first_vertex, first_instance);
 	}
 }
 

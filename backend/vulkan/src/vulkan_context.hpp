@@ -38,6 +38,16 @@ struct vulkan_context {
 	void exit_device();
 	void exit_physical_device();
 	void shutdown();
+
+	template<typename Tag>
+	typename vk_resource_traits<Tag>::resource_type& unhandle(lf::view<Tag> resource_view) {
+		return vk_resource_traits<Tag>::pool(*this).get(resource_view);
+	}
+
+	template<typename Tag>
+	const typename vk_resource_traits<Tag>::resource_type& unhandle(lf::view<const Tag> resource_view) const {
+		return vk_resource_traits<Tag>::pool(*this).get(resource_view);
+	}
 };
 
 template<>
@@ -71,15 +81,7 @@ struct vk_resource_traits<lf::command_buffer> {
 	static auto& pool(vulkan_context& ctx) { return ctx.command_buffers; }
 	static const auto& pool(const vulkan_context& ctx) { return ctx.command_buffers; }
 };
-template<typename Tag>
-typename vk_resource_traits<Tag>::resource_type& unhandle(vulkan_context& ctx, lf::view<Tag> resource_view) {
-	return vk_resource_traits<Tag>::pool(ctx).get(resource_view);
-}
 
-template<typename Tag>
-const typename vk_resource_traits<Tag>::resource_type& unhandle(const vulkan_context& ctx, lf::view<const Tag> resource_view) {
-	return vk_resource_traits<Tag>::pool(ctx).get(resource_view);
-}
 
 
 void assert_context();

@@ -177,20 +177,20 @@ WindowVK::~WindowVK() {
 
 void WindowVK::create_swapchain() {
 	bool present_queue_found = false;
-	for (const lf::handle<lf::queue> queue_handle : ctx.queues) {
-		const QueueVK& queue = unhandle(ctx, lf::view<const lf::queue>(queue_handle));
-		VkBool32 present_supported = VK_FALSE;
-		if (VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(ctx.vk_physical_device, queue.family_index, vk_surface, &present_supported); result != VK_SUCCESS) {
-			throw lf::runtime_exception("failed to query Vulkan present support for the window surface");
-		}
-		if (!present_supported) {
-			continue;
-		}
-		vk_present_queue = queue.vk_queue;
-		present_queue_family_index = queue.family_index;
-		present_queue_found = true;
-		break;
-	}
+	//for (lf::handle<lf::queue> queue_handle : ctx.queues) {
+	//	const QueueVK& queue = ctx.unhandle(queue_handle);
+	//	VkBool32 present_supported = VK_FALSE;
+	//	if (VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(ctx.vk_physical_device, queue.family_index, vk_surface, &present_supported); result != VK_SUCCESS) {
+	//		throw lf::runtime_exception("failed to query Vulkan present support for the window surface");
+	//	}
+	//	if (!present_supported) {
+	//		continue;
+	//	}
+	//	vk_present_queue = queue.vk_queue;
+	//	present_queue_family_index = queue.family_index;
+	//	present_queue_found = true;
+	//	break;
+	//}
 
 	if (!present_queue_found) {
 		throw lf::runtime_exception("failed to find a Vulkan queue family that can present to the window surface");
@@ -299,7 +299,7 @@ namespace Window {
 	}
 	void Show(lf::view<lf::window> wnd) {
 		auto& ctx = get_context();
-		show(ctx, unhandle(ctx, wnd));
+		show(ctx, ctx.unhandle(wnd));
 	}
 
 	void hide(vulkan_context& ctx, WindowVK& wnd) {
@@ -307,7 +307,7 @@ namespace Window {
 	}
 	void Hide(lf::view<lf::window> wnd) {
 		auto& ctx = get_context();
-		hide(ctx, unhandle(ctx, wnd));
+		hide(ctx, ctx.unhandle(wnd));
 	}
 
 	void resize(vulkan_context& ctx, WindowVK& wnd, lf::dim2<i32> extent) {
@@ -315,7 +315,7 @@ namespace Window {
 	}
 	void Resize(lf::view<lf::window> wnd, lf::dim2<i32> extent) {
 		auto& ctx = get_context();
-		resize(ctx, unhandle(ctx, wnd), extent);
+		resize(ctx, ctx.unhandle(wnd), extent);
 	}
 
 	lf::dim2<i32> get_size(vulkan_context& ctx, const WindowVK& wnd) {
@@ -323,7 +323,7 @@ namespace Window {
 	}
 	lf::dim2<i32> GetSize(lf::view<const lf::window> wnd) {
 		auto& ctx = get_context();
-		return get_size(ctx, unhandle(ctx, wnd));
+		return get_size(ctx, ctx.unhandle(wnd));
 	}
 
 	void acquire_image(vulkan_context& ctx, WindowVK& wnd) {
@@ -471,6 +471,6 @@ namespace Window {
 	}
 	bool ShouldClose(lf::view<const lf::window> wnd) {
 		assert_context();
-		return should_close(unhandle(get_context(), wnd));
+		return should_close(get_context().unhandle(wnd));
 	}
 }
