@@ -1,0 +1,13 @@
+#ifndef LEAF_GRAPHICS_TIMEPOINT_HPP
+#define LEAF_GRAPHICS_TIMEPOINT_HPP
+
+#include <leaf/graphics/resource.hpp>
+
+namespace lf {
+	namespace Timepoint {
+		void Wait(timepoint timepoint);
+		bool Reached(timepoint timepoint);
+	} // namespace Timepoint
+} // namespace lf
+
+#endif /* LEAF_GRAPHICS_TIMEPOINT_HPP */
