@@ -8,7 +8,7 @@ add_subdirectory("scene")
 add_subdirectory("system")
 add_subdirectory("window")
 
-add_files("leaf" 
+add_files("leaf-framework" 
 "leaf.cpp"
 "leaf.hpp"
 )

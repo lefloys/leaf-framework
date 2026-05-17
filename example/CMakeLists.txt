@@ -1,6 +1,6 @@
-function(leaf_configure_example target_name)
+function(leaf_framework_configure_example target_name)
     target_compile_features(${target_name} PRIVATE cxx_std_23)
-    target_link_libraries(${target_name} PRIVATE leaf)
+    target_link_libraries(${target_name} PRIVATE leaf-framework)
 
     set_target_properties(${target_name} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -21,8 +21,8 @@ function(leaf_configure_example target_name)
     endif()
 endfunction()
 
-add_executable(leaf-core-example)
-add_files(leaf-core-example
+add_executable(leaf-framework-core-example)
+add_files(leaf-framework-core-example
     "core/main.cpp"
 )
-leaf_configure_example(leaf-core-example)
+leaf_framework_configure_example(leaf-framework-core-example)

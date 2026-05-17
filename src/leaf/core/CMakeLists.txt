@@ -1,4 +1,4 @@
-add_files("leaf" 
+add_files("leaf-framework" 
 "array.hpp" 
 "concepts.hpp"
 "dynamic_object.cpp"

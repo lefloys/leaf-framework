@@ -1,4 +1,4 @@
-add_files("leaf"
+add_files("leaf-framework"
 	"runtime.cpp"
 	"runtime.hpp"
 )

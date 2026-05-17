@@ -1,3 +1,3 @@
-add_files("leaf"
+add_files("leaf-framework"
 "pmg.hpp"
 )

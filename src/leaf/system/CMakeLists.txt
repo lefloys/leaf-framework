@@ -4,6 +4,6 @@ if (WIN32)
 endif()
 
 
-add_files("leaf"
+add_files("leaf-framework"
     "system.hpp"
 )

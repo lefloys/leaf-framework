@@ -1,4 +1,4 @@
-add_files("leaf"
+add_files("leaf-framework"
 	"database.hpp"
 	"lifetime.hpp"
 	"mod_enabled.cpp"

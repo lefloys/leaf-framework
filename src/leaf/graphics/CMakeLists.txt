@@ -1,4 +1,4 @@
-add_files("leaf"
+add_files("leaf-framework"
     "buffer.cpp"
     "buffer.hpp"
     "canvas.hpp"

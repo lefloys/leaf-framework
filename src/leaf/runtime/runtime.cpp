@@ -100,7 +100,6 @@ namespace lf {
 	}
 
 	error RunRuntime(span<string_view> args, const char* entry_rml, const char* entry_lua) {
-		(void)args;
 		Runtime runtime;
 		runtime.services = registered_services;
 		runtime.window = unique(Window::Create());

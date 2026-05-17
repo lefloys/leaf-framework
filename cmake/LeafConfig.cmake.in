@@ -9,6 +9,6 @@ find_dependency(sol2 CONFIG)
 find_dependency(yaml-cpp CONFIG)
 find_dependency(Lua)
 
-include("${CMAKE_CURRENT_LIST_DIR}/LeafTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/leaf-frameworkTargets.cmake")
 
-check_required_components(Leaf)
+check_required_components(leaf-framework)

@@ -1,5 +1,5 @@
 
 add_files(
-    "leaf"
+    "leaf-framework"
     "system.cpp"
 )
