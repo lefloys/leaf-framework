@@ -72,9 +72,6 @@ void main() {
 }
 )";
 
-	std::unique_ptr<RmlRenderInterface> runtime_render_interface;
-	bool runtime_rml_initialized = false;
-
 	struct RmlRenderInterface::Geometry {
 		unique<buffer> vertices;
 		u32 vertex_count = 0;
@@ -85,6 +82,19 @@ void main() {
 		unique<texture_view> view;
 		dim2<u32> size{};
 	};
+
+
+	error init_rml(span<string_view> args) {
+	if (!Rml::Initialise()) {
+		return error(generic_errc::unknown, "Rml::Initialise failed");
+	}
+
+	return error::no_error;
+	}
+
+	void exit_rml() {
+		Rml::Shutdown();
+	}
 
 	RmlRenderInterface::RmlRenderInterface() {
 		upload_queue = Queue::Query(QueueCapability::Graphics);
@@ -107,24 +117,19 @@ void main() {
 		texture_location = GraphicsProgram::UniformLocation(program, "UiTexture");
 		create_white_texture();
 	}
-
 	RmlRenderInterface::~RmlRenderInterface() {
 		collect_garbage();
 		delete white_texture;
 	}
-
 	void RmlRenderInterface::begin(view<command_buffer> command_buffer, dim2<u32> framebuffer_size) {
 		current_command_buffer = command_buffer;
 		current_framebuffer_size = framebuffer_size;
 		uniform_buffer_index = 0;
 	}
-
 	void RmlRenderInterface::end() {
 		current_command_buffer = {};
 	}
-
-	Rml::CompiledGeometryHandle RmlRenderInterface::CompileGeometry(Rml::Span<const Rml::Vertex> vertices,
-																	Rml::Span<const int> indices) {
+	Rml::CompiledGeometryHandle RmlRenderInterface::CompileGeometry(Rml::Span<const Rml::Vertex> vertices, Rml::Span<const int> indices) {
 		auto* geometry = new Geometry;
 		vector<UiVertex> flattened;
 		flattened.reserve(indices.size());
@@ -145,20 +150,15 @@ void main() {
 					 static_cast<u64>(flattened.size() * sizeof(UiVertex)), flattened.data());
 		return reinterpret_cast<Rml::CompiledGeometryHandle>(geometry);
 	}
-
-	void RmlRenderInterface::RenderGeometry(Rml::CompiledGeometryHandle geometry, Rml::Vector2f translation,
-											Rml::TextureHandle texture) {
+	void RmlRenderInterface::RenderGeometry(Rml::CompiledGeometryHandle geometry, Rml::Vector2f translation, Rml::TextureHandle texture) {
 		draw_geometry(reinterpret_cast<Geometry*>(geometry), { translation.x, translation.y }, texture);
 	}
-
 	void RmlRenderInterface::ReleaseGeometry(Rml::CompiledGeometryHandle geometry) {
 		if (geometry) {
 			retired_geometry.push_back(reinterpret_cast<Geometry*>(geometry));
 		}
 	}
-
-	Rml::TextureHandle RmlRenderInterface::LoadTexture(Rml::Vector2i& texture_dimensions,
-													   const Rml::String& source) {
+	Rml::TextureHandle RmlRenderInterface::LoadTexture(Rml::Vector2i& texture_dimensions, const Rml::String& source) {
 		int width = 0;
 		int height = 0;
 		int components = 0;
@@ -170,27 +170,20 @@ void main() {
 		texture_dimensions = { width, height };
 		return create_texture(static_cast<u32>(width), static_cast<u32>(height), pixels.get());
 	}
-
-	Rml::TextureHandle RmlRenderInterface::GenerateTexture(Rml::Span<const Rml::byte> source,
-														   Rml::Vector2i source_dimensions) {
-		return create_texture(static_cast<u32>(source_dimensions.x),
-							  static_cast<u32>(source_dimensions.y), source.data());
+	Rml::TextureHandle RmlRenderInterface::GenerateTexture(Rml::Span<const Rml::byte> source, Rml::Vector2i source_dimensions) {
+		return create_texture(static_cast<u32>(source_dimensions.x), static_cast<u32>(source_dimensions.y), source.data());
 	}
-
 	void RmlRenderInterface::ReleaseTexture(Rml::TextureHandle texture) {
 		if (texture) {
 			retired_textures.push_back(reinterpret_cast<TextureData*>(texture));
 		}
 	}
-
 	void RmlRenderInterface::EnableScissorRegion(bool enable) {
 		scissor_enabled = enable;
 	}
-
 	void RmlRenderInterface::SetScissorRegion(Rml::Rectanglei region) {
 		scissor = region;
 	}
-
 	Rml::TextureHandle RmlRenderInterface::create_texture(u32 width, u32 height, const void* pixels) {
 		auto* texture_data = new TextureData;
 		texture_data->size = { width, height };
@@ -202,14 +195,11 @@ void main() {
 		TextureView::Address(texture_data->view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
 		return reinterpret_cast<Rml::TextureHandle>(texture_data);
 	}
-
 	void RmlRenderInterface::create_white_texture() {
 		u08 pixel[] = { 255, 255, 255, 255 };
 		white_texture = reinterpret_cast<TextureData*>(create_texture(1, 1, pixel));
 	}
-
-	void RmlRenderInterface::draw_geometry(Geometry* geometry, pos2<f32> translation,
-										   Rml::TextureHandle texture) {
+	void RmlRenderInterface::draw_geometry(Geometry* geometry, pos2<f32> translation, Rml::TextureHandle texture) {
 		if (!geometry || geometry->vertex_count == 0 || !current_command_buffer) {
 			return;
 		}
@@ -236,7 +226,6 @@ void main() {
 		CommandBuffer::BindVertexBuffer(current_command_buffer, geometry->vertices, 0);
 		CommandBuffer::Draw(current_command_buffer, geometry->vertex_count, 0);
 	}
-
 	void RmlRenderInterface::apply_scissor() {
 		const int max_x = static_cast<int>(current_framebuffer_size.width);
 		const int max_y = static_cast<int>(current_framebuffer_size.height);
@@ -253,7 +242,6 @@ void main() {
 		CommandBuffer::SetScissor(current_command_buffer, static_cast<u32>(left), static_cast<u32>(top),
 								  static_cast<u32>(right - left), static_cast<u32>(bottom - top));
 	}
-
 	void RmlRenderInterface::collect_garbage() {
 		for (Geometry* geometry : retired_geometry) {
 			delete geometry;
@@ -265,29 +253,4 @@ void main() {
 		retired_textures.clear();
 	}
 
-	error initialize_rml_runtime() {
-		if (runtime_rml_initialized) {
-			return error::no_error;
-		}
-		runtime_render_interface = std::make_unique<RmlRenderInterface>();
-		Rml::SetRenderInterface(runtime_render_interface.get());
-		if (!Rml::Initialise()) {
-			runtime_render_interface.reset();
-			return error(generic_errc::unknown, "Rml::Initialise failed");
-		}
-		runtime_rml_initialized = true;
-		return error::no_error;
-	}
-
-	void shutdown_rml_runtime() {
-		if (runtime_rml_initialized) {
-			Rml::Shutdown();
-			runtime_rml_initialized = false;
-		}
-		runtime_render_interface.reset();
-	}
-
-	RmlRenderInterface& rml_render_interface() {
-		return *runtime_render_interface;
-	}
 } // namespace lf

@@ -1,0 +1,10 @@
+#pragma once
+
+#include "leaf/core/error.hpp"
+#include "leaf/core/span.hpp"
+#include "leaf/core/string.hpp"
+
+namespace lf {
+	error init_graphics(span<string_view> args);
+	void exit_graphics();
+}

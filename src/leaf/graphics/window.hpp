@@ -41,15 +41,6 @@ namespace lf {
 		void SetHeight(view<window> window, u32 height);
 		bool ShouldClose(view<const window> window);
 		void SetShouldClose(view<window> window, bool should_close);
-		bool KeyDown(view<const window> window, Key key);
-		bool KeyPressed(view<const window> window, Key key);
-		bool KeyReleased(view<const window> window, Key key);
-		bool MouseDown(view<const window> window, MouseButton button);
-		bool MousePressed(view<const window> window, MouseButton button);
-		bool MouseReleased(view<const window> window, MouseButton button);
-		pos2<f32> MousePosition(view<const window> window);
-		f32 Scroll(view<const window> window);
-		f32 ConsumeScroll(view<window> window);
 
 		dim2<u32> FramebufferSize(view<const window> window);
 		handle<framebuffer> CurrentFramebuffer(view<const window> window);

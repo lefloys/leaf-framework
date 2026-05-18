@@ -5,13 +5,13 @@
 
 namespace lf {
 	struct SystemData {
-		ch08 appdata_dir[MAX_PATH] = { 0 };
-		ch08 install_dir[MAX_PATH] = { 0 };
+		char appdata_dir[MAX_PATH] = { 0 };
+		char install_dir[MAX_PATH] = { 0 };
 	};
 
 	static SystemData system_data;
 
-	void InitSystem() {
+	error init_system(span<string_view> args) {
 		if (SUCCEEDED(
 				SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, 0, system_data.appdata_dir))) {
 			system_data.appdata_dir[MAX_PATH - 1] = '\0';
@@ -22,7 +22,7 @@ namespace lf {
 		DWORD length = GetModuleFileNameA(nullptr, system_data.install_dir, MAX_PATH);
 		if (length == 0 || length >= MAX_PATH) {
 			system_data.install_dir[0] = '\0';
-			return;
+			return error::unknown_error;
 		}
 		for (DWORD i = length; i > 0; --i) {
 			if (system_data.install_dir[i - 1] == '\\' || system_data.install_dir[i - 1] == '/') {
@@ -30,7 +30,9 @@ namespace lf {
 				break;
 			}
 		}
+		return error::no_error;
 	}
+	void exit_system() {}
 
 	string_view GetAppdataDir() {
 		return system_data.appdata_dir;

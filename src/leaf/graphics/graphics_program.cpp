@@ -64,22 +64,19 @@ namespace lf {
 		detail::check_rutile_error("failed to set graphics program vertex layout");
 	}
 
-	void GraphicsProgram::VertexShader(handle<graphics_program> program, u64 size,
-									   const void* data) {
+	void GraphicsProgram::VertexShader(handle<graphics_program> program, u64 size, const void* data) {
 		rtGraphicsProgramVertexShader(program, size, data);
 		detail::check_rutile_error("failed to set graphics program vertex shader");
 	}
 
-	void GraphicsProgram::FragmentShader(handle<graphics_program> program, u64 size,
-										 const void* data) {
+	void GraphicsProgram::FragmentShader(handle<graphics_program> program, u64 size, const void* data) {
 		rtGraphicsProgramFragmentShader(program, size, data);
 		detail::check_rutile_error("failed to set graphics program fragment shader");
 	}
 
 	void GraphicsProgram::RasterState(handle<graphics_program> program, CullMode cull_mode,
 									  FrontFace front_face, FillMode fill_mode) {
-		rtGraphicsProgramRasterState(program, detail::to_rutile(cull_mode),
-									 detail::to_rutile(front_face), detail::to_rutile(fill_mode));
+		rtGraphicsProgramRasterState(program, detail::to_rutile(cull_mode), detail::to_rutile(front_face), detail::to_rutile(fill_mode));
 		detail::check_rutile_error("failed to set graphics program raster state");
 	}
 

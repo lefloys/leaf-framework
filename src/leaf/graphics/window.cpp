@@ -3,7 +3,7 @@
 #include <leaf/core/exception.hpp>
 #include <leaf/graphics/command_buffer.hpp>
 #include <leaf/graphics/queue.hpp>
-#include <leaf/window/backend.hpp>
+#include <leaf/platform/platform.hpp>
 
 #include <rt_ext_swapchain.h>
 
@@ -87,14 +87,9 @@ namespace lf {
 	}
 
 	void Window::SetWidth(view<window> window, u32 width) {
-		if (!window.value) {
-			return;
-		}
+		if (!window) { return; }
 
 		dim2<u32> size = platform_window_size(window.value->platform);
-		if (size.height == 0) {
-			size.height = detail::default_window_size.height;
-		}
 		size.width = width;
 		platform_window_size(window.value->platform, size);
 	}
@@ -122,50 +117,6 @@ namespace lf {
 		}
 	}
 
-	bool Window::KeyDown(view<const window> window, Key key) {
-		return window.value && platform_window_key_down(window.value->platform, key);
-	}
-
-	bool Window::KeyPressed(view<const window> window, Key key) {
-		return window.value && platform_window_key_pressed(window.value->platform, key);
-	}
-
-	bool Window::KeyReleased(view<const window> window, Key key) {
-		return window.value && platform_window_key_released(window.value->platform, key);
-	}
-
-	bool Window::MouseDown(view<const window> window, MouseButton button) {
-		return window.value && platform_window_mouse_down(window.value->platform, button);
-	}
-
-	bool Window::MousePressed(view<const window> window, MouseButton button) {
-		return window.value && platform_window_mouse_pressed(window.value->platform, button);
-	}
-
-	bool Window::MouseReleased(view<const window> window, MouseButton button) {
-		return window.value && platform_window_mouse_released(window.value->platform, button);
-	}
-
-	pos2<f32> Window::MousePosition(view<const window> window) {
-		if (!window.value) {
-			return {};
-		}
-		return platform_window_mouse_position(window.value->platform);
-	}
-
-	f32 Window::Scroll(view<const window> window) {
-		if (!window.value) {
-			return 0.0f;
-		}
-		return platform_window_scroll(window.value->platform);
-	}
-
-	f32 Window::ConsumeScroll(view<window> window) {
-		if (!window.value) {
-			return 0.0f;
-		}
-		return platform_window_consume_scroll(window.value->platform);
-	}
 
 	dim2<u32> Window::FramebufferSize(view<const window> window) {
 		if (!window.value) {
