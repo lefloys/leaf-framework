@@ -3,6 +3,7 @@
 #include <leaf/core/exception.hpp>
 #include <leaf/core/format.hpp>
 #include <leaf/core/messages.hpp>
+#include <leaf/script/virtual_filesystem.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -24,11 +25,7 @@ namespace lf {
 	};
 
 	fs::path resolve_path(const texture_atlas_options& options, string_view path) {
-		fs::path fs_path = path;
-		if (fs_path.is_absolute()) {
-			return fs_path;
-		}
-		return options.root / fs_path;
+		return ResolveVirtualPath(path, options.root);
 	}
 
 	loaded_atlas_frame make_fallback_frame(u32 texture_index, u32 frame_index) {
@@ -49,7 +46,13 @@ namespace lf {
 			return make_fallback_frame(source.texture_index, source.frame_index);
 		}
 
-		fs::path path = resolve_path(options, source.path);
+		fs::path path;
+		try {
+			path = resolve_path(options, source.path);
+		} catch (const lf::exception& e) {
+			log_warning(format("[textures] failed to resolve texture frame '{}': {}", source.path, e.what()));
+			return make_fallback_frame(source.texture_index, source.frame_index);
+		}
 		int image_width = 0;
 		int image_height = 0;
 		int components = 0;
@@ -140,11 +143,19 @@ namespace lf {
 		}
 	}
 
-	void blit_frame(vector<u08>& atlas_pixels, u32 atlas_width, const loaded_atlas_frame& frame,
+	void blit_frame(vector<u08>& atlas_pixels, u32 atlas_width, u32 atlas_height, const loaded_atlas_frame& frame,
 					u32 padding) {
 		const i32 pad = static_cast<i32>(padding);
 		i32 padded_width = frame.width + pad * 2;
 		i32 padded_height = frame.height + pad * 2;
+		if (frame.rect.x < 0 || frame.rect.y < 0 ||
+			frame.rect.x + padded_width > static_cast<i32>(atlas_width) ||
+			frame.rect.y + padded_height > static_cast<i32>(atlas_height)) {
+			log_warning(format("[textures] packed frame {}:{} is outside atlas bounds; skipping",
+							   frame.texture_index, frame.frame_index));
+			return;
+		}
+
 		for (i32 y = 0; y < padded_height; ++y) {
 			i32 src_y = std::clamp(y - pad, 0, frame.height - 1);
 			for (i32 x = 0; x < padded_width; ++x) {
@@ -189,7 +200,7 @@ namespace lf {
 		pack_frames(loaded_frames, atlas.width, atlas.height, options);
 		atlas.pixels.assign(static_cast<size_t>(atlas.width) * static_cast<size_t>(atlas.height) * 4u, 0);
 		for (const loaded_atlas_frame& frame : loaded_frames) {
-			blit_frame(atlas.pixels, atlas.width, frame, options.padding);
+			blit_frame(atlas.pixels, atlas.width, atlas.height, frame, options.padding);
 			atlas.frames.push_back(packed_frame_from(frame, atlas.width, atlas.height, options.padding));
 		}
 

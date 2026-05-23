@@ -34,10 +34,10 @@ find_package(yaml-cpp CONFIG REQUIRED)
 find_package(Lua REQUIRED)
 
 # Rutile subproject defaults.
-set(RUTILE_BUILD_VULKAN "${LEAF_BUILD_RUTILE_VULKAN}" CACHE BOOL "Build the Vulkan Rutile runtime.")
-set(RUTILE_BUILD_DX12 "${LEAF_BUILD_RUTILE_DX12}" CACHE BOOL "Build the DirectX 12 Rutile runtime on Windows.")
-set(RUTILE_BUILD_VALIDATION_LAYER "${LEAF_BUILD_RUTILE_VALIDATION_LAYER}" CACHE BOOL "Build the Rutile validation layer.")
-set(RUTILE_BUILD_LOGGING_LAYER "${LEAF_BUILD_RUTILE_LOGGING_LAYER}" CACHE BOOL "Build the Rutile logging layer.")
+set(RUTILE_BUILD_VULKAN "${LEAF_BUILD_RUTILE_VULKAN}" CACHE BOOL "Build the Vulkan Rutile runtime." FORCE)
+set(RUTILE_BUILD_DX12 "${LEAF_BUILD_RUTILE_DX12}" CACHE BOOL "Build the DirectX 12 Rutile runtime on Windows." FORCE)
+set(RUTILE_BUILD_VALIDATION_LAYER "${LEAF_BUILD_RUTILE_VALIDATION_LAYER}" CACHE BOOL "Build the Rutile validation layer." FORCE)
+set(RUTILE_BUILD_LOGGING_LAYER "${LEAF_BUILD_RUTILE_LOGGING_LAYER}" CACHE BOOL "Build the Rutile logging layer." FORCE)
 add_subdirectory("Rutile")
 
 # Framework target.
@@ -58,6 +58,9 @@ target_link_libraries(${PROJECT_NAME}
         yaml-cpp::yaml-cpp
         ${LUA_LIBRARIES}
 )
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PUBLIC winmm)
+endif()
 
 add_subdirectory(src)
 

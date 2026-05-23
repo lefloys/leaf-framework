@@ -1,11 +1,11 @@
 #pragma once
 
-#pragma once
-
 #include "leaf/core/error.hpp"
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
-#include "leaf/graphics/window.hpp"
+#include "leaf/core/types.hpp"
+#include "leaf/math/dim.hpp"
+#include "leaf/math/pos.hpp"
 
 #include <rt_ext_swapchain.h>
 
@@ -13,7 +13,10 @@
 
 
 namespace lf {
+	enum input_key : u08;
+
 	struct PlatformWindow;
+	struct window_t;
 
 	struct PlatformWindowCreateInfo {
 		string_view title;
@@ -27,21 +30,20 @@ namespace lf {
 	PlatformWindow* create_platform_window(const PlatformWindowCreateInfo& info);
 	void destroy_platform_window(PlatformWindow* window);
 	void bind_platform_window_swapchain(PlatformWindow* window, rt_swapchain swapchain);
+	void platform_window_owner(PlatformWindow* window, window_t* owner);
+	void platform_window_clear_owner(PlatformWindow* window);
 	void platform_window_title(PlatformWindow* window, string_view title);
+	void platform_window_show(PlatformWindow* window);
 	void platform_window_size(PlatformWindow* window, dim2<u32> size);
 	dim2<u32> platform_window_size(PlatformWindow* window);
+	bool platform_window_drawable(PlatformWindow* window);
+	void platform_window_position(PlatformWindow* window, pos2<i32> position);
+	pos2<i32> platform_window_position(PlatformWindow* window);
+	void platform_window_fullscreen(PlatformWindow* window, bool fullscreen, pos2<i32> windowed_position, dim2<u32> windowed_size);
 	bool platform_window_should_close(PlatformWindow* window);
 	void platform_window_should_close(PlatformWindow* window, bool should_close);
-	bool platform_window_key_down(PlatformWindow* window, Key key);
-	bool platform_window_key_pressed(PlatformWindow* window, Key key);
-	bool platform_window_key_released(PlatformWindow* window, Key key);
-	bool platform_window_mouse_down(PlatformWindow* window, MouseButton button);
-	bool platform_window_mouse_pressed(PlatformWindow* window, MouseButton button);
-	bool platform_window_mouse_released(PlatformWindow* window, MouseButton button);
-	pos2<f32> platform_window_mouse_position(PlatformWindow* window);
-	f32 platform_window_scroll(PlatformWindow* window);
-	f32 platform_window_consume_scroll(PlatformWindow* window);
-	dim2<u32> platform_window_framebuffer_size(PlatformWindow* window);
+	void platform_clipboard_text(string_view text);
+	string platform_clipboard_text();
 	bool update_platform();
 
 } // namespace lf

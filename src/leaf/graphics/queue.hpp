@@ -3,6 +3,8 @@
 
 #include <leaf/graphics/resource.hpp>
 
+#include <mutex>
+
 namespace lf {
 	enum class QueueCapability {
 		Transfer,
@@ -16,6 +18,10 @@ namespace lf {
 		timepoint Submit(view<queue> queue, view<command_buffer> command_buffer);
 		timepoint Flush(view<queue> queue);
 	} // namespace Queue
+
+	namespace detail {
+		std::unique_lock<std::mutex> lock_queue(view<queue> queue);
+	}
 } // namespace lf
 
 #endif /* LEAF_GRAPHICS_QUEUE_HPP */

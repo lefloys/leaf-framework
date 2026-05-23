@@ -29,6 +29,7 @@ namespace lf {
 		it.name = name;
 		identifier<T, u16, void> idx(static_cast<u16>(prototypes.size() - 1));
 		it.id = idx;
+		it.finalize_localization();
 		return idx;
 	}
 	template <typename T>

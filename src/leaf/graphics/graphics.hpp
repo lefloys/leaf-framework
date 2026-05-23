@@ -7,4 +7,5 @@
 namespace lf {
 	error init_graphics(span<string_view> args);
 	void exit_graphics();
+	string_view graphics_backend_name();
 }

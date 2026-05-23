@@ -29,4 +29,5 @@ add_files("leaf-framework"
     "uniform_location.hpp"
     "window.cpp"
     "window.hpp"
+    "window_private.hpp"
 )

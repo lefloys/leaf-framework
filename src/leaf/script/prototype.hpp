@@ -5,6 +5,7 @@
 #include <leaf/core/identifier.hpp>
 #include <leaf/core/string.hpp>
 #include <leaf/script/database.hpp>
+#include <leaf/script/local_string.hpp>
 
 #include <optional>
 
@@ -13,11 +14,29 @@ namespace lf {
 	using PrototypeID = identifier<T, u16, void>;
 
 	struct PrototypeBase {
-		PrototypeBase(const dict&) {}
+		PrototypeBase(const dict& data) {
+			if (has_field(data, "local_name")) {
+				load_field(data, "local_name", local_name);
+			}
+			if (has_field(data, "local_description")) {
+				load_field(data, "local_description", local_description);
+			}
+		}
 		virtual ~PrototypeBase() = default;
 		virtual void resolve_connectors() {}
 
 		string name = "null";
+		local_string local_name;
+		local_string local_description;
+
+		void finalize_localization() {
+			if (local_name.key.empty()) {
+				local_name.key = name;
+			}
+			if (local_description.key.empty()) {
+				local_description.key = local_name.key;
+			}
+		}
 
 	  protected:
 		bool has_field(const dict& data, string_view field_name) {

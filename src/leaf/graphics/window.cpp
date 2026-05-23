@@ -1,40 +1,143 @@
 #include "window.hpp"
+#include "window_private.hpp"
 
 #include <leaf/core/exception.hpp>
-#include <leaf/graphics/command_buffer.hpp>
-#include <leaf/graphics/queue.hpp>
-#include <leaf/platform/platform.hpp>
-
-#include <rt_ext_swapchain.h>
+#include <leaf/core/profiler.hpp>
 
 #include <memory>
+#include <utility>
 
 namespace lf {
-
-	struct window_t {
-		PlatformWindow* platform = nullptr;
-		rt_swapchain swapchain = RT_NULL_HANDLE;
-		handle<command_buffer> command_buffer;
-		handle<framebuffer> current_framebuffer;
-		view<queue> current_queue;
-	};
-
 	namespace detail {
-
 		static constexpr dim2<u32> default_window_size = { 1280, 720 };
 		static constexpr string_view default_window_title = "leaf-framework";
+	} // namespace detail
 
-		void resize_swapchain_to_window(window_t* window) {
-			dim2<u32> framebuffer_size = platform_window_framebuffer_size(window->platform);
-			if (framebuffer_size.width == 0 || framebuffer_size.height == 0) {
-				return;
-			}
+	size_t window_t::control_index(input_control control) {
+		switch (control.type) {
+		case INPUT_CONTROL_KEY:
+			return control.value < KEY_ENUM_MAX ? control.value : control_count;
+		case INPUT_CONTROL_BUTTON:
+			return control.value < BUTTON_ENUM_MAX ? KEY_ENUM_MAX + control.value : control_count;
+		default:
+			return control_count;
+		}
+	}
 
-			rtSwapchainResize(window->swapchain, framebuffer_size.width, framebuffer_size.height);
-			check_rutile_error("failed to resize swapchain");
+	void window_t::control(input_control control, bool down, input_modifiers modifiers) {
+		size_t index = control_index(control);
+		if (index >= controls.size()) {
+			return;
 		}
 
-	} // namespace detail
+		std::lock_guard guard(input_mutex);
+		this->modifiers = modifiers;
+		input_state& state = controls[index];
+		if (down && (state == input_state::Up || state == input_state::Released)) {
+			state = input_state::Pressed;
+			events.push_back({
+				.type = INPUT_EVENT_CONTROL,
+				.control = control,
+				.state = state,
+				.modifiers = modifiers,
+				.position = pointer_position,
+			});
+		} else if (!down && (state == input_state::Down || state == input_state::Pressed)) {
+			if (state == input_state::Pressed) {
+				deferred_releases[index] = true;
+				return;
+			}
+			state = input_state::Released;
+			events.push_back({
+				.type = INPUT_EVENT_CONTROL,
+				.control = control,
+				.state = state,
+				.modifiers = modifiers,
+				.position = pointer_position,
+			});
+		}
+	}
+
+	void window_t::text(u32 character) {
+		std::lock_guard guard(input_mutex);
+		events.push_back({
+			.type = INPUT_EVENT_TEXT,
+			.modifiers = modifiers,
+			.position = pointer_position,
+			.character = character,
+		});
+	}
+
+	void window_t::pointer(pos2<f32> position) {
+		std::lock_guard guard(input_mutex);
+		pointer_position = position;
+		events.push_back({
+			.type = INPUT_EVENT_POINTER_MOVE,
+			.modifiers = modifiers,
+			.position = pointer_position,
+		});
+	}
+
+	void window_t::pointer_enter(bool entered) {
+		std::lock_guard guard(input_mutex);
+		pointer_inside = entered;
+		events.push_back({
+			.type = INPUT_EVENT_POINTER_ENTER,
+			.state = entered ? input_state::Down : input_state::Up,
+			.modifiers = modifiers,
+			.position = pointer_position,
+		});
+	}
+
+	void window_t::scroll(pos2<f32> delta) {
+		std::lock_guard guard(input_mutex);
+		events.push_back({
+			.type = INPUT_EVENT_SCROLL,
+			.modifiers = modifiers,
+			.position = pointer_position,
+			.delta = delta,
+		});
+	}
+
+	void window_t::focus(bool focused) {
+		std::lock_guard guard(input_mutex);
+		events.push_back({
+			.type = INPUT_EVENT_FOCUS,
+			.state = focused ? input_state::Down : input_state::Up,
+			.modifiers = modifiers,
+			.position = pointer_position,
+		});
+		if (!focused) {
+			controls.fill(input_state::Up);
+			deferred_releases.fill(false);
+			modifiers = {};
+		}
+	}
+
+	void window_t::drop(string path) {
+		std::lock_guard guard(input_mutex);
+		events.push_back({
+			.type = INPUT_EVENT_DROP,
+			.modifiers = modifiers,
+			.position = pointer_position,
+			.text = std::move(path),
+		});
+	}
+
+	void window_t::resize(dim2<u32> new_size) {
+		if (new_size.width == 0 || new_size.height == 0) {
+			return;
+		}
+		std::lock_guard guard(input_mutex);
+		size = new_size;
+		pending_resize = new_size;
+	}
+
+	window_t::~window_t() {
+		platform_window_clear_owner(platform);
+		rtSwapchainDestroy(swapchain);
+		destroy_platform_window(platform);
+	}
 
 	void resource_traits<window>::destroy(native_handle handle) {
 		Window::Destroy({ handle });
@@ -42,128 +145,254 @@ namespace lf {
 
 	handle<window> Window::Create() {
 		std::unique_ptr<window_t> window = std::make_unique<window_t>();
-		try {
-			window->swapchain = rtSwapchainCreate();
-			detail::check_rutile_error("failed to create swapchain");
-			if (!window->swapchain) {
-				throw runtime_exception("failed to create swapchain");
-			}
+		window->swapchain = rtSwapchainCreate();
+		detail::check_rutile_error("failed to create swapchain");
 
-			window->command_buffer = CommandBuffer::Create();
-			window->platform = create_platform_window({
-				detail::default_window_title,
-				detail::default_window_size.width,
-				detail::default_window_size.height,
-			});
+		window->command_buffer = unique<command_buffer>(CommandBuffer::Create());
+		window->platform = create_platform_window({
+			detail::default_window_title,
+			detail::default_window_size.width,
+			detail::default_window_size.height,
+		});
+		window->size = detail::default_window_size;
+		window->windowed_position = platform_window_position(window->platform);
+		window->windowed_size = detail::default_window_size;
+		platform_window_owner(window->platform, window.get());
 
-			bind_platform_window_swapchain(window->platform, window->swapchain);
-			detail::resize_swapchain_to_window(window.get());
-			return { window.release() };
-		} catch (...) {
-			CommandBuffer::Destroy(window->command_buffer);
-			rtSwapchainDestroy(window->swapchain);
-			destroy_platform_window(window->platform);
-			throw;
-		}
+		bind_platform_window_swapchain(window->platform, window->swapchain);
+		return { window.release() };
 	}
 
 	void Window::Destroy(handle<window> window) {
-		if (!window.value) {
-			return;
-		}
-
-		CommandBuffer::Destroy(window.value->command_buffer);
-		rtSwapchainDestroy(window.value->swapchain);
 		window.value->current_framebuffer = {};
 		window.value->current_queue = {};
-		destroy_platform_window(window.value->platform);
 		delete window.value;
 	}
 
 	void Window::SetTitle(view<window> window, string_view title) {
-		if (window.value) {
-			platform_window_title(window.value->platform, title);
-		}
+		platform_window_title(window.value->platform, title);
+	}
+
+	void Window::Show(view<window> window) {
+		platform_window_show(window.value->platform);
 	}
 
 	void Window::SetWidth(view<window> window, u32 width) {
-		if (!window) { return; }
-
-		dim2<u32> size = platform_window_size(window.value->platform);
+		dim2<u32> size = Size(window);
 		size.width = width;
+		if (!window.value->fullscreen) {
+			window.value->windowed_size = size;
+		}
+		window.value->resize(size);
 		platform_window_size(window.value->platform, size);
 	}
 
 	void Window::SetHeight(view<window> window, u32 height) {
-		if (!window.value) {
-			return;
-		}
-
-		dim2<u32> size = platform_window_size(window.value->platform);
+		dim2<u32> size = Size(window);
 		if (size.width == 0) {
 			size.width = detail::default_window_size.width;
 		}
 		size.height = height;
+		if (!window.value->fullscreen) {
+			window.value->windowed_size = size;
+		}
+		window.value->resize(size);
 		platform_window_size(window.value->platform, size);
 	}
 
+	void Window::SetFullscreen(view<window> window, bool fullscreen) {
+		if (window.value->fullscreen == fullscreen) {
+			return;
+		}
+		if (fullscreen) {
+			window.value->windowed_position = platform_window_position(window.value->platform);
+			window.value->windowed_size = platform_window_size(window.value->platform);
+		}
+		platform_window_fullscreen(
+			window.value->platform,
+			fullscreen,
+			window.value->windowed_position,
+			window.value->windowed_size);
+		window.value->resize(platform_window_size(window.value->platform));
+		window.value->fullscreen = fullscreen;
+	}
+
+	void Window::RequestFullscreen(view<window> window, bool fullscreen) {
+		std::lock_guard lock(window.value->input_mutex);
+		window.value->requested_fullscreen = fullscreen;
+		window.value->fullscreen_change_requested = true;
+	}
+
+	bool Window::FullscreenRequestPending(view<window> window) {
+		std::lock_guard lock(window.value->input_mutex);
+		return window.value->fullscreen_change_requested;
+	}
+
+	bool Window::ApplyFullscreenRequest(view<window> window) {
+		bool requested = false;
+		{
+			std::lock_guard lock(window.value->input_mutex);
+			if (!window.value->fullscreen_change_requested) {
+				return false;
+			}
+			requested = window.value->requested_fullscreen;
+			window.value->fullscreen_change_requested = false;
+		}
+		SetFullscreen(window, requested);
+		return true;
+	}
+
+	bool Window::Fullscreen(view<const window> window) {
+		return window.value->fullscreen;
+	}
+
+	bool Window::Drawable(view<const window> window) {
+		return platform_window_drawable(window.value->platform);
+	}
+
 	bool Window::ShouldClose(view<const window> window) {
-		return window.value && platform_window_should_close(window.value->platform);
+		return platform_window_should_close(window.value->platform);
 	}
 
 	void Window::SetShouldClose(view<window> window, bool should_close) {
-		if (window.value) {
-			platform_window_should_close(window.value->platform, should_close);
+		platform_window_should_close(window.value->platform, should_close);
+	}
+
+	dim2<u32> Window::Size(view<const window> window) {
+		std::lock_guard lock(window.value->input_mutex);
+		return window.value->size;
+	}
+
+	std::vector<input_event> Window::InputEvents(view<window> window) {
+		std::vector<input_event> events;
+		std::lock_guard lock(window.value->input_mutex);
+		events.swap(window.value->events);
+		return events;
+	}
+
+	input_state Window::InputState(view<const window> window, input_control control) {
+		size_t index = window_t::control_index(control);
+		if (index >= window.value->controls.size()) {
+			return input_state::Up;
+		}
+
+		std::lock_guard lock(window.value->input_mutex);
+		return window.value->controls[index];
+	}
+
+	void Window::UpdateInput(view<window> window) {
+		std::lock_guard lock(window.value->input_mutex);
+		for (size_t index = 0; index < window.value->controls.size(); ++index) {
+			input_state& state = window.value->controls[index];
+			if (state == input_state::Pressed) {
+				if (window.value->deferred_releases[index]) {
+					state = input_state::Released;
+					window.value->events.push_back({
+						.type = INPUT_EVENT_CONTROL,
+						.control = index < KEY_ENUM_MAX
+							? input_control{ INPUT_CONTROL_KEY, static_cast<u16>(index) }
+							: input_control{ INPUT_CONTROL_BUTTON, static_cast<u16>(index - KEY_ENUM_MAX) },
+						.state = state,
+						.modifiers = window.value->modifiers,
+						.position = window.value->pointer_position,
+					});
+					window.value->deferred_releases[index] = false;
+				} else {
+					state = input_state::Down;
+				}
+			} else if (state == input_state::Released) {
+				state = input_state::Up;
+			}
 		}
 	}
 
-
-	dim2<u32> Window::FramebufferSize(view<const window> window) {
-		if (!window.value) {
-			return {};
-		}
-		return platform_window_framebuffer_size(window.value->platform);
+	bool Window::MouseDown(view<const window> window, input_button button) {
+		input_state state = InputState(window, { INPUT_CONTROL_BUTTON, static_cast<u16>(button) });
+		return state == input_state::Down || state == input_state::Pressed;
 	}
 
-	handle<framebuffer> Window::CurrentFramebuffer(view<const window> window) {
-		if (!window.value) {
-			return {};
-		}
+	bool Window::MousePressed(view<const window> window, input_button button) {
+		return InputState(window, { INPUT_CONTROL_BUTTON, static_cast<u16>(button) }) == input_state::Pressed;
+	}
+
+	bool Window::MouseReleased(view<const window> window, input_button button) {
+		return InputState(window, { INPUT_CONTROL_BUTTON, static_cast<u16>(button) }) == input_state::Released;
+	}
+
+	bool Window::KeyDown(view<const window> window, input_key key) {
+		input_state state = InputState(window, { INPUT_CONTROL_KEY, static_cast<u16>(key) });
+		return state == input_state::Down || state == input_state::Pressed;
+	}
+
+	bool Window::KeyPressed(view<const window> window, input_key key) {
+		return InputState(window, { INPUT_CONTROL_KEY, static_cast<u16>(key) }) == input_state::Pressed;
+	}
+
+	bool Window::KeyReleased(view<const window> window, input_key key) {
+		return InputState(window, { INPUT_CONTROL_KEY, static_cast<u16>(key) }) == input_state::Released;
+	}
+
+	view<framebuffer> Window::CurrentFramebuffer(view<window> window) {
+		return window.value->current_framebuffer;
+	}
+
+	view<const framebuffer> Window::CurrentFramebuffer(view<const window> window) {
 		return window.value->current_framebuffer;
 	}
 
 	view<command_buffer> Window::BeginFrame(view<window> window, view<queue> queue) {
-		if (!window.value) {
-			return {};
+		LF_PROFILE_SCOPE("Window::BeginFrame");
+		dim2<u32> resize = {};
+		{
+			std::lock_guard lock(window.value->input_mutex);
+			resize = window.value->pending_resize;
+			window.value->pending_resize = {};
+		}
+		if (resize.width != 0 && resize.height != 0) {
+			LF_PROFILE_SCOPE("Window::ResizeSwapchain");
+			rtSwapchainResize(window.value->swapchain, resize.width, resize.height);
+			detail::check_rutile_error("failed to resize swapchain");
 		}
 
-		detail::resize_swapchain_to_window(window.value);
-		rt_swapchain_acquire_result acquired = rtSwapchainAcquire(window.value->swapchain);
+		rt_swapchain_acquire_result acquired = {};
+		{
+			LF_PROFILE_SCOPE("Window::AcquireSwapchain");
+			acquired = rtSwapchainAcquire(window.value->swapchain);
+		}
 		detail::check_rutile_error("failed to acquire swapchain framebuffer");
-		window.value->current_framebuffer = { acquired.framebuffer };
+		window.value->current_framebuffer.value = acquired.framebuffer;
 		if (!window.value->current_framebuffer) {
 			return {};
 		}
 		window.value->current_queue = queue;
 
 		timepoint ready = acquired.timepoint;
-		Queue::Wait(queue, ready);
-		CommandBuffer::Begin(window.value->command_buffer, queue);
-		CommandBuffer::BeginRendering(window.value->command_buffer,
-									  window.value->current_framebuffer);
+		{
+			LF_PROFILE_SCOPE("Window::WaitForAcquire");
+			Queue::Wait(queue, ready);
+		}
+		{
+			LF_PROFILE_SCOPE("Window::BeginCommandBuffer");
+			CommandBuffer::Begin(window.value->command_buffer, queue);
+			CommandBuffer::BeginRendering(window.value->command_buffer,
+										  window.value->current_framebuffer);
+		}
 		return window.value->command_buffer;
 	}
 
 	void Window::EndFrame(view<window> window) {
-		if (!window.value) {
-			return;
+		LF_PROFILE_SCOPE("Window::EndFrame");
+		timepoint rendered;
+		{
+			LF_PROFILE_SCOPE("Window::SubmitFrame");
+			CommandBuffer::EndRendering(window.value->command_buffer);
+			CommandBuffer::End(window.value->command_buffer);
+			rendered = Queue::Submit(window.value->current_queue, window.value->command_buffer);
 		}
-
-		CommandBuffer::EndRendering(window.value->command_buffer);
-		CommandBuffer::End(window.value->command_buffer);
-		timepoint rendered =
-			Queue::Submit(window.value->current_queue, window.value->command_buffer);
-		rtSwapchainPresent(window.value->swapchain, rendered);
+		{
+			LF_PROFILE_SCOPE("Window::PresentSwapchain");
+			rtSwapchainPresent(window.value->swapchain, rendered);
+		}
 		detail::check_rutile_error("failed to present swapchain");
 		window.value->current_framebuffer = {};
 		window.value->current_queue = {};

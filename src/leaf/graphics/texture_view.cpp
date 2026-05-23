@@ -1,5 +1,7 @@
 #include "texture_view.hpp"
 
+#include "queue.hpp"
+
 namespace lf {
 	handle<texture_view> TextureView::Create() {
 		return {};
@@ -39,6 +41,7 @@ namespace lf {
 
 	timepoint TextureView::CopyToBuffer(view<queue> queue, view<texture_view> texture_view,
 										view<buffer> buffer) {
+		auto lock = detail::lock_queue(queue);
 		rt_timepoint timepoint = rtTextureViewCopyToBuffer(queue, texture_view, buffer);
 		detail::check_rutile_error("failed to copy texture view to buffer");
 		return timepoint;

@@ -1,6 +1,7 @@
 add_executable(leaf-framework-tests
     dynamic_object_tests.cpp
     pmg_tests.cpp
+    rml_window_tests.cpp
 )
 
 target_compile_features(leaf-framework-tests PRIVATE cxx_std_23)

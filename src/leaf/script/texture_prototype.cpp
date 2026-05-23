@@ -1,6 +1,10 @@
 #include "texture_prototype.hpp"
 
 #include <leaf/core/exception.hpp>
+#include <leaf/core/filesystem.hpp>
+#include <leaf/core/messages.hpp>
+#include <leaf/graphics/queue.hpp>
+#include <leaf/script/database.hpp>
 
 #include <algorithm>
 
@@ -76,6 +80,49 @@ namespace lf {
 			TextureSourceFrame frame;
 			frame.path = path;
 			frames.push_back(frame);
+		}
+	}
+
+	error TexturePrototype::BuildAtlas(view<queue> queue) {
+		vector<atlas_source_frame> source_frames;
+		const auto& textures = Database<TexturePrototype>::prototypes;
+		for (size_t texture_index = 0; texture_index < textures.size(); ++texture_index) {
+			const TexturePrototype& texture = textures[texture_index];
+			for (size_t frame_index = 0; frame_index < texture.frames.size(); ++frame_index) {
+				const TextureSourceFrame& frame = texture.frames[frame_index];
+				atlas_source_frame source;
+				source.texture_index = static_cast<u32>(texture_index);
+				source.frame_index = static_cast<u32>(frame_index);
+				source.path = frame.path;
+				if (frame.has_rect) {
+					source.rect = {
+						frame.x,
+						frame.y,
+						frame.width,
+						frame.height,
+						true,
+					};
+				}
+				source_frames.push_back(source);
+			}
+		}
+
+		atlas = build_texture_atlas(queue, source_frames);
+		for (TexturePrototype& texture : Database<TexturePrototype>::prototypes) {
+			texture.atlas_frames.clear();
+		}
+		for (const packed_atlas_frame& frame : atlas.frames) {
+			if (frame.texture_index < Database<TexturePrototype>::prototypes.size()) {
+				Database<TexturePrototype>::prototypes[frame.texture_index].atlas_frames.push_back(frame.rect);
+			}
+		}
+		return error::no_error;
+	}
+
+	void TexturePrototype::ClearAtlas() {
+		atlas = {};
+		for (TexturePrototype& texture : Database<TexturePrototype>::prototypes) {
+			texture.atlas_frames.clear();
 		}
 	}
 } // namespace lf

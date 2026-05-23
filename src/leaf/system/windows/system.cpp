@@ -1,6 +1,10 @@
 #include "leaf/system/system.hpp"
+#include "leaf/core/format.hpp"
+
 #include <Shlobj.h>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <windows.h>
 
 namespace lf {
@@ -46,5 +50,24 @@ namespace lf {
 		size_t len = (new_path.size() < MAX_PATH - 1) ? new_path.size() : (MAX_PATH - 1);
 		memcpy(system_data.appdata_dir, new_path.data(), len);
 		system_data.appdata_dir[len] = '\0';
+	}
+
+	report<string> ReadTextFile(string_view path) {
+		std::ifstream file(string(path), std::ios::binary);
+		if (!file) {
+			return unexpected(error(
+				generic_errc::input_error,
+				format("failed to open '{}'", path)));
+		}
+
+		string text(
+			(std::istreambuf_iterator<char>(file)),
+			std::istreambuf_iterator<char>());
+		if (!file.eof() && file.fail()) {
+			return unexpected(error(
+				generic_errc::input_error,
+				format("failed to read '{}'", path)));
+		}
+		return text;
 	}
 } // namespace lf

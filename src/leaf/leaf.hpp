@@ -3,6 +3,7 @@
 #include "core/error.hpp"
 #include "core/span.hpp"
 
+#include <leaf/application/application.hpp>
 #include <leaf/graphics/buffer.hpp>
 #include <leaf/graphics/canvas.hpp>
 #include <leaf/graphics/command_buffer.hpp>

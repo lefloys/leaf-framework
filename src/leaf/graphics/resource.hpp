@@ -80,17 +80,11 @@ namespace lf {
 		view(handle<base_resource> handle) : value(handle.value) {}
 
 		template <typename OtherResource>
-		view(view<OtherResource> view)
-			requires(std::is_const_v<Resource> && std::is_same_v<OtherResource, base_resource>)
-			: value(view.value) {}
+		view(view<OtherResource> view) requires(std::is_const_v<Resource> && std::is_same_v<OtherResource, base_resource>) : value(view.value) {}
 
-		explicit operator bool() const {
-			return value != detail::null_handle<native_handle>();
-		}
+		explicit operator bool() const { return value != detail::null_handle<native_handle>(); }
 
-		operator native_handle() const {
-			return value;
-		}
+		operator native_handle() const { return value; }
 	};
 
 	template <typename Resource>

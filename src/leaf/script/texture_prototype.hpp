@@ -1,6 +1,7 @@
-#pragma once
+ #pragma once
 
 #include <leaf/core/vector.hpp>
+#include <leaf/core/error.hpp>
 #include <leaf/graphics/texture_atlas.hpp>
 #include <leaf/script/prototype.hpp>
 
@@ -25,6 +26,10 @@ namespace lf {
 		vector<TextureSourceFrame> frames;
 		vector<TextureAtlasFrame> atlas_frames;
 
+		inline static texture_atlas atlas;
+
 		static constexpr string_view type() noexcept { return "texture"; }
+		static error BuildAtlas(view<queue> queue);
+		static void ClearAtlas();
 	};
 } // namespace lf
