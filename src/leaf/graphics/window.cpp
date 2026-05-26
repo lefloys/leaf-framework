@@ -135,6 +135,10 @@ namespace lf {
 
 	window_t::~window_t() {
 		platform_window_clear_owner(platform);
+		if (cursor) {
+			destroy_platform_cursor(cursor);
+			cursor = nullptr;
+		}
 		rtSwapchainDestroy(swapchain);
 		destroy_platform_window(platform);
 	}
@@ -148,7 +152,7 @@ namespace lf {
 		window->swapchain = rtSwapchainCreate();
 		detail::check_rutile_error("failed to create swapchain");
 
-		window->command_buffer = unique<command_buffer>(CommandBuffer::Create());
+		window->frame_command_buffer = unique<command_buffer>(CommandBuffer::Create());
 		window->platform = create_platform_window({
 			detail::default_window_title,
 			detail::default_window_size.width,
@@ -217,6 +221,17 @@ namespace lf {
 		window.value->fullscreen = fullscreen;
 	}
 
+	void Window::SetVsync(view<window> window, bool enabled) {
+		if (!window || window.value->vsync == enabled) {
+			return;
+		}
+		window.value->vsync = enabled;
+		if (rt_rtSwapchainSetVsync) {
+			rtSwapchainSetVsync(window.value->swapchain, enabled);
+			detail::check_rutile_error("failed to set swapchain vsync");
+		}
+	}
+
 	void Window::RequestFullscreen(view<window> window, bool fullscreen) {
 		std::lock_guard lock(window.value->input_mutex);
 		window.value->requested_fullscreen = fullscreen;
@@ -244,6 +259,25 @@ namespace lf {
 
 	bool Window::Fullscreen(view<const window> window) {
 		return window.value->fullscreen;
+	}
+
+	void Window::SetCursor(view<window> window, const u08* rgba, u32 width, u32 height, u32 hotspot_x, u32 hotspot_y) {
+		PlatformCursor* cursor = create_platform_cursor(rgba, width, height, hotspot_x, hotspot_y);
+		PlatformCursor* old_cursor = window.value->cursor;
+		window.value->cursor = cursor;
+		platform_window_cursor(window.value->platform, cursor);
+		if (old_cursor) {
+			destroy_platform_cursor(old_cursor);
+		}
+	}
+
+	void Window::ResetCursor(view<window> window) {
+		PlatformCursor* old_cursor = window.value->cursor;
+		window.value->cursor = nullptr;
+		platform_window_cursor(window.value->platform, nullptr);
+		if (old_cursor) {
+			destroy_platform_cursor(old_cursor);
+		}
 	}
 
 	bool Window::Drawable(view<const window> window) {
@@ -373,11 +407,11 @@ namespace lf {
 		}
 		{
 			LF_PROFILE_SCOPE("Window::BeginCommandBuffer");
-			CommandBuffer::Begin(window.value->command_buffer, queue);
-			CommandBuffer::BeginRendering(window.value->command_buffer,
+			CommandBuffer::Begin(window.value->frame_command_buffer, queue);
+			CommandBuffer::BeginRendering(window.value->frame_command_buffer,
 										  window.value->current_framebuffer);
 		}
-		return window.value->command_buffer;
+		return window.value->frame_command_buffer;
 	}
 
 	void Window::EndFrame(view<window> window) {
@@ -385,9 +419,9 @@ namespace lf {
 		timepoint rendered;
 		{
 			LF_PROFILE_SCOPE("Window::SubmitFrame");
-			CommandBuffer::EndRendering(window.value->command_buffer);
-			CommandBuffer::End(window.value->command_buffer);
-			rendered = Queue::Submit(window.value->current_queue, window.value->command_buffer);
+			CommandBuffer::EndRendering(window.value->frame_command_buffer);
+			CommandBuffer::End(window.value->frame_command_buffer);
+			rendered = Queue::Submit(window.value->current_queue, window.value->frame_command_buffer);
 		}
 		{
 			LF_PROFILE_SCOPE("Window::PresentSwapchain");

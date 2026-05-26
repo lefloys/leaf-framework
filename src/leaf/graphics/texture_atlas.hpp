@@ -45,7 +45,7 @@ namespace lf {
 	};
 
 	struct texture_atlas {
-		unique<texture> texture;
+		unique<texture> atlas_texture;
 		unique<texture_view> view;
 		vector<u08> pixels;
 		vector<packed_atlas_frame> frames;

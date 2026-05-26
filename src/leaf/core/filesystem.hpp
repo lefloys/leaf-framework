@@ -9,8 +9,11 @@ namespace lf::fs {
 	};
 
 	using path = std::filesystem::path;
+	using directory_entry = std::filesystem::directory_entry;
+	using directory_iterator = std::filesystem::directory_iterator;
+
+	using std::filesystem::create_directories;
+	using std::filesystem::exists;
 
 	path operator/(folder folder, const path& other);
-
-	using namespace std::filesystem;
 } // namespace lf::fs

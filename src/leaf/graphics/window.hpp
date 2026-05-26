@@ -256,10 +256,13 @@ namespace lf {
 		void SetWidth(view<window> window, u32 width);
 		void SetHeight(view<window> window, u32 height);
 		void SetFullscreen(view<window> window, bool fullscreen);
+		void SetVsync(view<window> window, bool enabled);
 		void RequestFullscreen(view<window> window, bool fullscreen);
 		bool FullscreenRequestPending(view<window> window);
 		bool ApplyFullscreenRequest(view<window> window);
 		bool Fullscreen(view<const window> window);
+		void SetCursor(view<window> window, const u08* rgba, u32 width, u32 height, u32 hotspot_x, u32 hotspot_y);
+		void ResetCursor(view<window> window);
 		bool Drawable(view<const window> window);
 		bool ShouldClose(view<const window> window);
 		void SetShouldClose(view<window> window, bool should_close);

@@ -81,7 +81,12 @@ namespace lf {
 
 	void CommandBuffer::StorageBuffer(view<command_buffer> command_buffer, u32 binding,
 									  view<buffer> buffer, u64 offset, u64 size) {
-		RequireCommandBufferComputeExtension();
+		if (!rt_rtCmdStorageBuffer) {
+			rt_rtCmdStorageBuffer = (PFN_rtCmdStorageBuffer)rtGetProc("rtCmdStorageBuffer");
+		}
+		if (!rt_rtCmdStorageBuffer) {
+			throw runtime_exception("Rutile storage buffer binding is not available");
+		}
 		rtCmdStorageBuffer(command_buffer, binding, buffer, offset, size);
 		detail::check_rutile_error("failed to bind storage buffer");
 	}

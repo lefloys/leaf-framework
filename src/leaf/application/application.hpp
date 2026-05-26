@@ -9,6 +9,7 @@
 #include <leaf/graphics/window.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <thread>
 
@@ -17,16 +18,20 @@ namespace Rml {
 }
 
 namespace lf {
+	constexpr u32 DefaultApplicationUpdatesPerSecond = 60;
+
 	struct ApplicationCreateInfo {
 		string_view title = "leaf-framework";
 		u32 width = 1280;
 		u32 height = 720;
+		u32 updates_per_second = DefaultApplicationUpdatesPerSecond;
 	};
 
 	struct Application {
 		Application();
 		explicit Application(const ApplicationCreateInfo& create_info);
 		explicit Application(handle<lf::window> display);
+		Application(handle<lf::window> display, const ApplicationCreateInfo& create_info);
 		Application(const Application&) = delete;
 		Application& operator=(const Application&) = delete;
 		Application(Application&&) = delete;
@@ -44,6 +49,7 @@ namespace lf {
 		void run_script(string_view script);
 
 		void load_scene(string_view scene_source);
+		void load_scene(string_view scene_source, string_view args_yaml);
 		Scene* scene();
 		const Scene* scene() const;
 		Rml::Context* rml_context();
@@ -56,7 +62,7 @@ namespace lf {
 
 		static void render_thread_main(std::stop_token stop, Application& app);
 		static void update_thread_main(std::stop_token stop, Application& app);
-		static void fixed_update_thread_main(std::stop_token stop, Application& app);
+		static std::chrono::steady_clock::duration update_interval_for(u32 updates_per_second);
 
 		unique<lf::window> display;
 		string context_name;
@@ -65,11 +71,11 @@ namespace lf {
 		unique_ptr<Scene> loaded_scene;
 		std::mutex rml_mutex;
 		std::mutex window_mutex;
+		std::chrono::steady_clock::duration update_interval = update_interval_for(DefaultApplicationUpdatesPerSecond);
 		bool render_frame_active = false;
 		std::atomic<bool> running = false;
 
 		std::jthread render_thread;
 		std::jthread update_thread;
-		std::jthread fixed_update_thread;
 	};
 } // namespace lf

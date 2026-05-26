@@ -18,15 +18,28 @@
 
 #include <RmlUi/Core/RenderInterface.h>
 
+#include <functional>
+
 namespace lf {
 	class RmlRenderInterface : public Rml::RenderInterface {
-	  public:
+	public:
+		struct CustomDrawContext {
+			view<command_buffer> commands;
+			dim2<u32> viewport_size{};
+			int left = 0;
+			int top = 0;
+			int right = 0;
+			int bottom = 0;
+		};
+		using CustomDraw = std::function<void(const CustomDrawContext&)>;
+
 		RmlRenderInterface();
 		~RmlRenderInterface() override;
 
 		void begin(view<command_buffer> command_buffer, dim2<u32> viewport_size);
 		void end();
 		void flush_released_resources();
+		void QueueCustomDraw(CustomDraw draw);
 
 		Rml::CompiledGeometryHandle CompileGeometry(Rml::Span<const Rml::Vertex> vertices, Rml::Span<const int> indices) override;
 		void RenderGeometry(Rml::CompiledGeometryHandle geometry, Rml::Vector2f translation, Rml::TextureHandle texture) override;

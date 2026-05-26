@@ -21,7 +21,7 @@ static_assert(sizeof(f64) == 8, "f64 must be 8 bytes");
 
 using ch08 = char;
 static_assert(sizeof(ch08) == 1, "ch08 must be 1 byte");
-using wchar = wchar_t;
+using wchar = char16_t;
 static_assert(sizeof(wchar) == 2, "ch16 must be 2 bytes");
 
 template <>

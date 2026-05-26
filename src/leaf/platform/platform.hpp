@@ -16,6 +16,7 @@ namespace lf {
 	enum input_key : u08;
 
 	struct PlatformWindow;
+	struct PlatformCursor;
 	struct window_t;
 
 	struct PlatformWindowCreateInfo {
@@ -42,6 +43,9 @@ namespace lf {
 	void platform_window_fullscreen(PlatformWindow* window, bool fullscreen, pos2<i32> windowed_position, dim2<u32> windowed_size);
 	bool platform_window_should_close(PlatformWindow* window);
 	void platform_window_should_close(PlatformWindow* window, bool should_close);
+	PlatformCursor* create_platform_cursor(const u08* rgba, u32 width, u32 height, u32 hotspot_x, u32 hotspot_y);
+	void destroy_platform_cursor(PlatformCursor* cursor);
+	void platform_window_cursor(PlatformWindow* window, PlatformCursor* cursor);
 	void platform_clipboard_text(string_view text);
 	string platform_clipboard_text();
 	bool update_platform();

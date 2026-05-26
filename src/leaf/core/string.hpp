@@ -12,25 +12,25 @@ namespace lf {
 	using wstring_view = std::basic_string_view<wchar>;
 
 	template <>
-	struct lf::type_name_trait<string> {
+	struct type_name_trait<string> {
 		static constexpr const char* get() {
 			return "string";
 		}
 	};
 	template <>
-	struct lf::type_name_trait<wstring> {
+	struct type_name_trait<wstring> {
 		static constexpr const char* get() {
 			return "wstring";
 		}
 	};
 	template <>
-	struct lf::type_name_trait<string_view> {
+	struct type_name_trait<string_view> {
 		static constexpr const char* get() {
 			return "string_view";
 		}
 	};
 	template <>
-	struct lf::type_name_trait<wstring_view> {
+	struct type_name_trait<wstring_view> {
 		static constexpr const char* get() {
 			return "wstring_view";
 		}

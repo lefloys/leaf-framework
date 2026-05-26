@@ -16,8 +16,9 @@ namespace lf {
 		static constexpr size_t control_count = KEY_ENUM_MAX + BUTTON_ENUM_MAX;
 
 		PlatformWindow* platform = nullptr;
+		PlatformCursor* cursor = nullptr;
 		rt_swapchain swapchain = RT_NULL_HANDLE;
-		unique<command_buffer> command_buffer;
+		unique<command_buffer> frame_command_buffer;
 		view<framebuffer> current_framebuffer;
 		view<queue> current_queue;
 		dim2<u32> size = { 1280, 720 };
@@ -32,6 +33,7 @@ namespace lf {
 		bool fullscreen = false;
 		bool fullscreen_change_requested = false;
 		bool requested_fullscreen = false;
+		bool vsync = true;
 		input_modifiers modifiers;
 		mutable std::mutex input_mutex;
 

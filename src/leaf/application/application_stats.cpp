@@ -7,6 +7,7 @@
 namespace lf {
 	namespace {
 		std::atomic<f32> max_fps_value = default_max_fps;
+		std::atomic<u32> updates_per_second_value = 60;
 		std::atomic<f32> current_fps_value = 0.0f;
 		std::atomic<f32> current_ups_value = 0.0f;
 		std::atomic<bool> render_profile_enabled = false;
@@ -16,7 +17,7 @@ namespace lf {
 		if (!std::isfinite(value)) {
 			return default_max_fps;
 		}
-		return std::max(value, 0.0f);
+		return std::clamp(value, min_max_fps, max_max_fps);
 	}
 
 	void SetApplicationMaxFps(f32 value) {
@@ -25,6 +26,14 @@ namespace lf {
 
 	f32 ApplicationMaxFps() {
 		return ClampMaxFps(max_fps_value.load(std::memory_order_relaxed));
+	}
+
+	void SetApplicationUpdatesPerSecond(u32 value) {
+		updates_per_second_value.store(value ? value : 60, std::memory_order_relaxed);
+	}
+
+	u32 ApplicationUpdatesPerSecond() {
+		return updates_per_second_value.load(std::memory_order_relaxed);
 	}
 
 	void RecordApplicationFps(f32 value) {

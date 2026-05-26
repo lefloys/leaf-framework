@@ -1,6 +1,8 @@
 #include "scene.hpp"
+#include "cursor.hpp"
 #include "rml_window.hpp"
 
+#include <leaf/application/sound.hpp>
 #include <leaf/application/application_stats.hpp>
 #include <leaf/core/exception.hpp>
 #include <leaf/core/format.hpp>
@@ -10,6 +12,7 @@
 #include <leaf/graphics/graphics.hpp>
 #include <leaf/graphics/window.hpp>
 #include <leaf/script/localization.hpp>
+#include <leaf/script/prototype_inspector_script.hpp>
 #include <leaf/script/settings.hpp>
 #include <leaf/script/virtual_filesystem.hpp>
 
@@ -240,6 +243,11 @@ namespace lf {
 			return installers;
 		}
 
+		std::vector<Scene::FixedUpdater>& fixed_updaters() {
+			static std::vector<Scene::FixedUpdater> updaters;
+			return updaters;
+		}
+
 		string strip_inline_scripts(string_view source) {
 			constexpr string_view open = "<script type=\"text/lua\"";
 			constexpr string_view close = "</script>";
@@ -325,6 +333,20 @@ namespace lf {
 				return;
 			}
 
+			scene.last_mouse_position = {
+				event.GetParameter<f32>("mouse_x", 0.0f),
+				event.GetParameter<f32>("mouse_y", 0.0f),
+			};
+			scene.has_mouse_position = true;
+
+			if (attribute == "mousedown") {
+				scene.update_cursor(event.GetTargetElement(), true);
+			} else if (attribute == "mouseup") {
+				scene.update_cursor(event.GetTargetElement(), false, true);
+			} else if (attribute == "mousemove") {
+				scene.update_cursor(event.GetTargetElement(), false);
+			}
+
 			for (Rml::Element* element = event.GetTargetElement(); element; element = element->GetParentNode()) {
 				string script = element->GetAttribute<Rml::String>(attribute, "");
 				if (script.empty()) {
@@ -346,8 +368,11 @@ namespace lf {
 		Scene& scene;
 	};
 
-	Scene::Scene(Rml::Context& context, view<window> display, string_view initial) : display(display) {
+	Scene::Scene(Rml::Context& context, view<window> display, string_view initial, string_view args_yaml)
+		: display(display),
+		  scene_args_yaml(args_yaml) {
 		lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
+		lua["scene_args_yaml"] = string(this->scene_args_yaml);
 
 		lua.set_function("print", [](sol::variadic_args args) {
 			string message;
@@ -596,6 +621,11 @@ namespace lf {
 			}
 		});
 
+		lua.set_function("load_scene", [this](string_view path, sol::optional<string_view> args_yaml) -> bool {
+			pending_load_request = LoadRequest{ string(path), string(args_yaml.value_or("")) };
+			return true;
+		});
+
 		lua.set_function("rml_escape", [](string_view value) {
 			return rml_escape(value);
 		});
@@ -606,6 +636,9 @@ namespace lf {
 		sound_type["music"] = lua.create_table_with("id", "music");
 		sound_type["master"] = lua.create_table_with("id", "master");
 		lua["sound_type"] = sound_type;
+		InstallSoundScript(lua);
+		InstallCursorScript(lua, display);
+		InstallPrototypeInspectorScript(lua);
 
 		lua.set_function("localize", [](string_view section, string_view key, sol::variadic_args args) {
 			vector<string> parameters;
@@ -766,6 +799,9 @@ namespace lf {
 				return false;
 			}
 			SetApplicationMaxFps(max_fps);
+			if (this->display) {
+				Window::SetVsync(this->display, vsync);
+			}
 			if (fullscreen_changed && this->display) {
 				Window::RequestFullscreen(this->display, fullscreen);
 			}
@@ -774,13 +810,19 @@ namespace lf {
 
 		lua.set_function("set_rml", [this](string_view id, string_view rml) {
 			if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
-				element->SetInnerRML(Rml::String(rml));
+				Rml::String next(rml);
+				if (element->GetInnerRML() != next) {
+					element->SetInnerRML(next);
+				}
 			}
 		});
 
 		lua.set_function("set_text", [this](string_view id, string_view text) {
 			if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
-				element->SetInnerRML(Rml::String(rml_escape(text)));
+				Rml::String next(rml_escape(text));
+				if (element->GetInnerRML() != next) {
+					element->SetInnerRML(next);
+				}
 			}
 		});
 
@@ -790,8 +832,15 @@ namespace lf {
 			}
 		});
 
-		lua.set_function("element_exists", [this](string_view id) -> bool {
-			return document->GetElementById(Rml::String(id)) != nullptr;
+		lua.set_function("element_exists", [this](string_view tag_or_id, sol::optional<string_view> maybe_id) -> bool {
+			Rml::Element* element = document->GetElementById(Rml::String(maybe_id.value_or(tag_or_id)));
+			if (!element) {
+				return false;
+			}
+			if (!maybe_id) {
+				return true;
+			}
+			return element->GetTagName() == Rml::String(tag_or_id);
 		});
 
 		lua.set_function("remove_element", [this](string_view id) {
@@ -866,6 +915,7 @@ namespace lf {
 	}
 
 	Scene::~Scene() {
+		SetCursorPrototype(display, {});
 		if (document) {
 			Rml::Context* context = document->GetContext();
 			clear_script_events();
@@ -1103,6 +1153,53 @@ end
 		}
 	}
 
+	void Scene::update_cursor(Rml::Element* start, bool pressed, bool released) {
+		if (released) {
+			active_pressed_cursor.clear();
+		} else if (!active_pressed_cursor.empty()) {
+			SetCursorPrototype(display, active_pressed_cursor);
+			return;
+		}
+
+		for (Rml::Element* element = start; element; element = element->GetParentNode()) {
+			string cursor;
+			if (pressed) {
+				cursor = element->GetAttribute<Rml::String>("pressed-cursor", "");
+				if (cursor.empty()) {
+					cursor = element->GetAttribute<Rml::String>("click-cursor", "");
+				}
+			}
+			if (cursor.empty()) {
+				cursor = element->GetAttribute<Rml::String>("hover-cursor", "");
+			}
+			if (cursor.empty()) {
+				cursor = element->GetAttribute<Rml::String>("cursor", "");
+			}
+			if (!cursor.empty()) {
+				if (pressed) {
+					active_pressed_cursor = cursor;
+				}
+				SetCursorPrototype(display, cursor);
+				return;
+			}
+		}
+		if (pressed) {
+			active_pressed_cursor.clear();
+		}
+		SetCursorPrototype(display, {});
+	}
+
+	void Scene::update_cursor_at_last_mouse() {
+		if (!document || !has_mouse_position) {
+			return;
+		}
+		Rml::Context* context = document->GetContext();
+		if (!context) {
+			return;
+		}
+		update_cursor(context->GetElementAtPoint(last_mouse_position), false);
+	}
+
 	Rml::Element* Scene::find_element(string_view id) const {
 		return document ? document->GetElementById(Rml::String(id)) : nullptr;
 	}
@@ -1172,16 +1269,13 @@ end
 			}
 		}
 		if (ran_scripts) {
+			update_cursor_at_last_mouse();
+		}
+		if (ran_scripts && pending_load_request) {
 			return;
 		}
 
-		using namespace std::chrono_literals;
 		auto now = std::chrono::steady_clock::now();
-		if (now - last_update_callback < 16ms) {
-			return;
-		}
-		last_update_callback = now;
-
 		f64 elapsed = std::chrono::duration<f64>(now - start_time).count();
 		update_ui_automation(elapsed);
 
@@ -1201,6 +1295,40 @@ end
 	void Scene::input(const input_event& event) {
 		if (!document) {
 			return;
+		}
+
+		if (event.type == INPUT_EVENT_SCROLL) {
+			last_mouse_position = { event.position.x, event.position.y };
+			has_mouse_position = true;
+			Rml::Context* context = document->GetContext();
+			if (!context) {
+				return;
+			}
+
+			Rml::Element* start = context->GetElementAtPoint({ event.position.x, event.position.y });
+			update_cursor(start, false);
+			for (Rml::Element* element = start; element; element = element->GetParentNode()) {
+				string script = element->GetAttribute<Rml::String>("mousescroll", "");
+				if (script.empty()) {
+					continue;
+				}
+
+				string event_script = format(
+					"event_mouse_x={};event_mouse_y={};event_scroll_x={};event_scroll_y={};",
+					event.position.x,
+					event.position.y,
+					event.delta.x,
+					event.delta.y);
+				event_script += script;
+				pending_scripts.push_back({ "input-scroll", std::move(event_script) });
+				return;
+			}
+			return;
+		}
+
+		if (event.type == INPUT_EVENT_POINTER_MOVE || event.type == INPUT_EVENT_CONTROL) {
+			last_mouse_position = { event.position.x, event.position.y };
+			has_mouse_position = true;
 		}
 
 		string attribute;
@@ -1258,18 +1386,32 @@ end
 		}
 	}
 
-	void Scene::fixed_update() {}
+	void Scene::fixed_update() {
+		if (!document) {
+			return;
+		}
+		for (const FixedUpdater& updater : fixed_updaters()) {
+			updater(*document);
+		}
+	}
 
 	void Scene::set_rml(string_view id, string_view rml) {
 		if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
-			element->SetInnerRML(Rml::String(rml));
+			Rml::String next(rml);
+			if (element->GetInnerRML() != next) {
+				element->SetInnerRML(next);
+			}
 		}
 	}
 
 
 	void Scene::set_attribute(string_view id, string_view name, string_view value) {
 		if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
-			element->SetAttribute(Rml::String(name), Rml::String(value));
+			Rml::String attribute_name(name);
+			Rml::String next(value);
+			if (element->GetAttribute<Rml::String>(attribute_name, "") != next) {
+				element->SetAttribute(attribute_name, next);
+			}
 		}
 	}
 
@@ -1281,6 +1423,12 @@ end
 
 	void Scene::queue_script(string script, string source_name) {
 		pending_scripts.push_back({ std::move(source_name), std::move(script) });
+	}
+
+	std::optional<Scene::LoadRequest> Scene::take_load_request() {
+		std::optional<LoadRequest> request = std::move(pending_load_request);
+		pending_load_request.reset();
+		return request;
 	}
 
 	bool Scene::accepts_text_input(u32 character) const {
@@ -1330,7 +1478,11 @@ end
 		script_installers().push_back(std::move(installer));
 	}
 
-	unique_ptr<Scene> make_scene(Rml::Context& context, view<window> display, string_view initial) {
-		return make_unique<Scene>(context, display, initial);
+	void Scene::RegisterFixedUpdater(FixedUpdater updater) {
+		fixed_updaters().push_back(std::move(updater));
+	}
+
+	unique_ptr<Scene> make_scene(Rml::Context& context, view<window> display, string_view initial, string_view args_yaml) {
+		return make_unique<Scene>(context, display, initial, args_yaml);
 	}
 } // namespace lf

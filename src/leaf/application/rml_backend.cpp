@@ -200,6 +200,41 @@ void main() {
 		LF_PROFILE_SCOPE("RmlRenderer::FlushReleasedResources");
 		collect_garbage();
 	}
+	void RmlRenderInterface::QueueCustomDraw(CustomDraw draw) {
+		LF_PROFILE_SCOPE("RmlRenderer::CustomDraw");
+		if (!current_command_buffer || !draw) {
+			return;
+		}
+
+		const int max_x = static_cast<int>(current_framebuffer_size.width);
+		const int max_y = static_cast<int>(current_framebuffer_size.height);
+		int left = 0;
+		int top = 0;
+		int right = max_x;
+		int bottom = max_y;
+		if (scissor_enabled && scissor.Valid()) {
+			left = std::clamp(scissor.Left(), 0, max_x);
+			top = std::clamp(scissor.Top(), 0, max_y);
+			right = std::clamp(scissor.Right(), left, max_x);
+			bottom = std::clamp(scissor.Bottom(), top, max_y);
+		}
+		if (right <= left || bottom <= top) {
+			return;
+		}
+
+		flush_queued_geometry();
+		draw(CustomDrawContext{
+			.commands = current_command_buffer,
+			.viewport_size = current_framebuffer_size,
+			.left = left,
+			.top = top,
+			.right = right,
+			.bottom = bottom,
+		});
+		program_bound = false;
+		bound_texture = RT_NULL_HANDLE;
+		detail::check_rutile_error("failed to record custom RmlUi draw");
+	}
 	Rml::CompiledGeometryHandle RmlRenderInterface::CompileGeometry(Rml::Span<const Rml::Vertex> vertices, Rml::Span<const int> indices) {
 		LF_PROFILE_SCOPE("RmlRenderer::CompileGeometry");
 		auto* geometry = new Geometry;

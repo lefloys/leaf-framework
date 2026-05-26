@@ -1,4 +1,5 @@
 add_executable(leaf-framework-tests
+    binary_tests.cpp
     dynamic_object_tests.cpp
     pmg_tests.cpp
     rml_window_tests.cpp

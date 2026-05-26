@@ -16,6 +16,7 @@ namespace lf {
 	static SystemData system_data;
 
 	error init_system(span<string_view> args) {
+		install_crash_handler();
 		if (SUCCEEDED(
 				SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, 0, system_data.appdata_dir))) {
 			system_data.appdata_dir[MAX_PATH - 1] = '\0';

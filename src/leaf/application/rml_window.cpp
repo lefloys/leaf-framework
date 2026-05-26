@@ -240,6 +240,10 @@ namespace lf {
 				Operation operation;
 				ResizeEdge resize_edge = ResizeEdge::None;
 				pos2<f32> grab{};
+				f32 start_left = 0.0f;
+				f32 start_top = 0.0f;
+				f32 start_width = 0.0f;
+				f32 start_height = 0.0f;
 			};
 
 			struct ExpandedLayout {
@@ -490,28 +494,39 @@ namespace lf {
 
 		void ElementWindow::begin_drag_or_resize(Rml::Element& target, pos2<f32> mouse) {
 			ResizeEdge target_resize_edge = ResizeEdge::None;
+			auto begin_interaction = [&](Operation operation, ResizeEdge resize_edge) {
+				interaction = Interaction{
+					operation,
+					resize_edge,
+					mouse,
+					GetOffsetLeft(),
+					GetOffsetTop(),
+					GetOffsetWidth(),
+					GetOffsetHeight(),
+				};
+			};
 
 			if (IsClassSet("window-collapsed")) {
 				if (!false_attribute(*this, "resizable") && !has_interactive_ancestor(target)) {
 					target_resize_edge = hit_collapsed_resize_edge(*this, mouse);
 				}
 				if (target_resize_edge != ResizeEdge::None) {
-					interaction = Interaction{ Operation::Resize, target_resize_edge, mouse };
+					begin_interaction(Operation::Resize, target_resize_edge);
 				} else if (is_title_drag_target(target)) {
-					interaction = Interaction{ Operation::Drag, ResizeEdge::None, mouse };
+					begin_interaction(Operation::Drag, ResizeEdge::None);
 				}
 			} else if (!false_attribute(*this, "resizable")) {
 				if (Rml::Element* resize = find_ancestor(&target, "window-resize")) {
 					target_resize_edge = rml_window_detail::resize_edge_from_string(
 						resize->GetAttribute<Rml::String>("direction", ""));
 					if (target_resize_edge != ResizeEdge::None) {
-						interaction = Interaction{ Operation::Resize, target_resize_edge, mouse };
+						begin_interaction(Operation::Resize, target_resize_edge);
 					}
 				}
 			}
 
 			if (!interaction && is_title_drag_target(target)) {
-				interaction = Interaction{ Operation::Drag, ResizeEdge::None, mouse };
+				begin_interaction(Operation::Drag, ResizeEdge::None);
 			}
 
 			if (interaction) {
@@ -585,12 +600,11 @@ namespace lf {
 				apply_resize(mouse);
 			}
 
-			interaction->grab = mouse;
 			event.StopImmediatePropagation();
 		}
 
 		void ElementWindow::apply_drag(pos2<f32> mouse) {
-			set_window_position(GetOffsetLeft() + mouse.x - interaction->grab.x, GetOffsetTop() + mouse.y - interaction->grab.y);
+			set_window_position(interaction->start_left + mouse.x - interaction->grab.x, interaction->start_top + mouse.y - interaction->grab.y);
 		}
 
 		void ElementWindow::apply_resize(pos2<f32> mouse) {
@@ -600,22 +614,22 @@ namespace lf {
 			const f32 height_extra = height_outside_content(*this);
 			const ResizeLimits limits = resize_limits(*this);
 
-			f32 left = GetOffsetLeft();
-			f32 top = GetOffsetTop();
-			f32 right = left + GetOffsetWidth();
-			f32 bottom = top + GetOffsetHeight();
+			f32 left = interaction->start_left;
+			f32 top = interaction->start_top;
+			f32 right = left + interaction->start_width;
+			f32 bottom = top + interaction->start_height;
 
 			if (rml_window_detail::has_resize_edge(interaction->resize_edge, ResizeEdge::West)) {
-				left = right - clamp_range(GetOffsetWidth() - delta_x, limits.min_width, limits.max_width);
+				left = right - clamp_range(interaction->start_width - delta_x, limits.min_width, limits.max_width);
 			}
 			if (rml_window_detail::has_resize_edge(interaction->resize_edge, ResizeEdge::East)) {
-				right = left + clamp_range(GetOffsetWidth() + delta_x, limits.min_width, limits.max_width);
+				right = left + clamp_range(interaction->start_width + delta_x, limits.min_width, limits.max_width);
 			}
 			if (rml_window_detail::has_resize_edge(interaction->resize_edge, ResizeEdge::North)) {
-				top = bottom - clamp_range(GetOffsetHeight() - delta_y, limits.min_height, limits.max_height);
+				top = bottom - clamp_range(interaction->start_height - delta_y, limits.min_height, limits.max_height);
 			}
 			if (rml_window_detail::has_resize_edge(interaction->resize_edge, ResizeEdge::South)) {
-				bottom = top + clamp_range(GetOffsetHeight() + delta_y, limits.min_height, limits.max_height);
+				bottom = top + clamp_range(interaction->start_height + delta_y, limits.min_height, limits.max_height);
 			}
 
 			set_window_position(left, top);

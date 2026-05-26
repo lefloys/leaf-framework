@@ -56,7 +56,7 @@ namespace lf {
 		}
 #endif
 		if (rtLoad(backend_name, layers, layer_count) != RT_SUCCESS) {
-			return error(generic_errc::unknown, rtErrorMessage());
+			return error(generic_errc::unknown, "rtLoad failed");
 		}
 		if (!rtLoad_RT_EXT_SWAPCHAIN() || !rtLoad_RT_EXT_GLFW()) {
 			rtUnload();
@@ -65,8 +65,32 @@ namespace lf {
 
 		const char* features[] = { RT_FEATURE_PRESENTATION };
 		rtInit(features, 1);
-		if (rtError() != RT_SUCCESS) {
-			return error(generic_errc::unknown, "rtInit failed");
+		enum rt_error init_error = rtError();
+		if (init_error != RT_SUCCESS) {
+			const char* message = rtErrorMessage();
+			if (message && message[0]) {
+				return error(generic_errc::unknown, format("rtInit failed: {}", message));
+			}
+			string error_name = "unknown error";
+			switch (init_error) {
+			case RT_OUT_OF_HOST_MEMORY: error_name = "out of host memory"; break;
+			case RT_OUT_OF_DEVICE_MEMORY: error_name = "out of device memory"; break;
+			case RT_IMPROPER_USAGE: error_name = "improper usage"; break;
+			case RT_PLATFORM_FAILURE: error_name = "platform failure"; break;
+			case RT_DEVICE_LOST: error_name = "device lost"; break;
+			case RT_ALREADY_INITIALIZED: error_name = "already initialized"; break;
+			case RT_UNSUPPORTED_PLATFORM: error_name = "unsupported platform"; break;
+			case RT_NO_BACKEND: error_name = "no backend"; break;
+			case RT_UNSUPPORTED_FEATURE: error_name = "unsupported feature"; break;
+			case RT_INITIALIZATION_FAILED: error_name = "initialization failed"; break;
+			case RT_LAYER_NOT_PRESENT: error_name = "layer not present"; break;
+			case RT_EXTENSION_NOT_PRESENT: error_name = "extension not present"; break;
+			case RT_INCOMPATIBLE_DRIVER: error_name = "incompatible driver"; break;
+			case RT_SHADER_COMPILATION_FAILED: error_name = "shader compilation failed"; break;
+			case RT_SHADER_LINK_FAILED: error_name = "shader link failed"; break;
+			default: break;
+			}
+			return error(generic_errc::unknown, format("rtInit failed: {} ({})", error_name, static_cast<int>(init_error)));
 		}
 		return error::no_error;
 

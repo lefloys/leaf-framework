@@ -10,8 +10,8 @@ TEST_CASE("RML window defaults are injected into document head", "[rml-window]")
 
 	string result = install_rml_window_defaults(source);
 
-	REQUIRE(result.find("leaf-rml-window-defaults") != string::npos);
-	REQUIRE(result.find("<head>\n<style id=\"leaf-rml-window-defaults\">") != string::npos);
+	REQUIRE(result.find("rml-window-defaults") != string::npos);
+	REQUIRE(result.find("<head>\n<style id=\"rml-window-defaults\">") != string::npos);
 }
 
 TEST_CASE("RML window defaults are not injected twice", "[rml-window]") {

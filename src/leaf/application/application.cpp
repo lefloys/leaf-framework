@@ -8,6 +8,7 @@
 #include <leaf/core/profiler.hpp>
 #include <leaf/leaf.hpp>
 #include <leaf/platform/platform.hpp>
+#include <leaf/script/virtual_filesystem.hpp>
 
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/Context.h>
@@ -17,7 +18,9 @@
 #include <chrono>
 #include <condition_variable>
 #include <fstream>
+#include <filesystem>
 #include <cstdlib>
+#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -52,6 +55,33 @@ namespace lf {
 				file << message << '\n';
 				file.flush();
 			}
+		}
+
+		string lua_quote(string_view value) {
+			string quoted = "\"";
+			for (char c : value) {
+				switch (c) {
+				case '\\': quoted += "\\\\"; break;
+				case '"': quoted += "\\\""; break;
+				case '\n': quoted += "\\n"; break;
+				case '\r': quoted += "\\r"; break;
+				case '\t': quoted += "\\t"; break;
+				default: quoted += c; break;
+				}
+			}
+			quoted += '"';
+			return quoted;
+		}
+
+		string inject_scene_args(string scene_source, string_view args_yaml) {
+			string script = format("<script type=\"text/lua\">scene_args_yaml={}</script>", lua_quote(args_yaml));
+			size_t head = scene_source.find("<head>");
+			if (head != string::npos) {
+				scene_source.insert(head + 6, script);
+				return scene_source;
+			}
+			scene_source.insert(0, script);
+			return scene_source;
 		}
 
 	}
@@ -176,7 +206,10 @@ namespace lf {
 
 	Application::Application() : Application(ApplicationCreateInfo{}) {}
 
-	Application::Application(const ApplicationCreateInfo& create_info) : display(Window::Create()) {
+	Application::Application(const ApplicationCreateInfo& create_info)
+		: display(Window::Create()),
+		  update_interval(update_interval_for(create_info.updates_per_second)) {
+		SetApplicationUpdatesPerSecond(create_info.updates_per_second);
 		Window::SetTitle(display, create_info.title);
 		window_title = string(create_info.title);
 		Window::SetWidth(display, create_info.width);
@@ -191,11 +224,18 @@ namespace lf {
 		}
 	}
 
-	Application::Application(handle<lf::window> display) : display(display) {
+	Application::Application(handle<lf::window> display)
+		: Application(display, ApplicationCreateInfo{}) {}
+
+	Application::Application(handle<lf::window> display, const ApplicationCreateInfo& create_info)
+		: display(display),
+		  update_interval(update_interval_for(create_info.updates_per_second)) {
+		SetApplicationUpdatesPerSecond(create_info.updates_per_second);
 		Window::SetShouldClose(this->display, false);
+		Window::SetTitle(this->display, create_info.title);
 		dim2<u32> size = Window::Size(this->display);
 		context_name = "leaf-application";
-		window_title = "leaf-application";
+		window_title = string(create_info.title);
 		context = Rml::CreateContext(
 			context_name,
 			Rml::Vector2i(static_cast<int>(size.width), static_cast<int>(size.height)));
@@ -229,7 +269,6 @@ namespace lf {
 		running = true;
 		render_thread = std::jthread(&Application::render_thread_main, std::ref(*this));
 		update_thread = std::jthread(&Application::update_thread_main, std::ref(*this));
-		fixed_update_thread = std::jthread(&Application::fixed_update_thread_main, std::ref(*this));
 		return error::no_error;
 	}
 
@@ -240,12 +279,10 @@ namespace lf {
 	void Application::stop_threads() {
 		render_thread.request_stop();
 		update_thread.request_stop();
-		fixed_update_thread.request_stop();
 		running = false;
 
 		render_thread = {};
 		update_thread = {};
-		fixed_update_thread = {};
 	}
 
 
@@ -292,10 +329,20 @@ namespace lf {
 
 	bool Application::update() {
 		string title;
-		if (loaded_scene && context) {
+		if (context) {
 			std::lock_guard lock(rml_mutex);
-			loaded_scene->refresh_title();
-			title = string(loaded_scene->title());
+			if (loaded_scene) {
+				if (std::optional<Scene::LoadRequest> request = loaded_scene->take_load_request()) {
+					report<string> scene_source = ReadVirtualTextFile(request->path);
+					if (!scene_source) {
+						log_error(format("[scene] {}: {}", request->path, scene_source.error().message));
+					} else {
+						load_scene(inject_scene_args(std::move(*scene_source), request->args_yaml), request->args_yaml);
+					}
+				}
+				loaded_scene->refresh_title();
+				title = string(loaded_scene->title());
+			}
 		}
 		bool should_run = running;
 		{
@@ -317,7 +364,11 @@ namespace lf {
 	}
 
 	void Application::load_scene(string_view scene_source) {
-		loaded_scene = make_scene(*context, display, scene_source);
+		load_scene(scene_source, {});
+	}
+
+	void Application::load_scene(string_view scene_source, string_view args_yaml) {
+		loaded_scene = make_scene(*context, display, scene_source, args_yaml);
 		window_title = string(loaded_scene->title());
 		Window::SetTitle(display, window_title);
 	}
@@ -366,7 +417,7 @@ namespace lf {
 			auto frame_start = std::chrono::steady_clock::now();
 			bool rendered_frame = false;
 			Rml::Context* context = app.rml_context();
-			if (Scene* scene = app.scene(); scene && context) {
+			if (context) {
 				LF_PROFILE_SCOPE("Application::RenderFrame");
 				dim2<u32> window_size{};
 				view<command_buffer> cmd;
@@ -424,6 +475,16 @@ namespace lf {
 				std::unique_lock lock(app.rml_mutex);
 				auto lock_wait_end = std::chrono::steady_clock::now();
 				profile.record(profile.rml_lock_wait, lock_wait_start, lock_wait_end);
+				Scene* scene = app.scene();
+				if (!scene) {
+					lock.unlock();
+					Window::EndFrame(app.window());
+					{
+						std::lock_guard window_lock(app.window_mutex);
+						app.render_frame_active = false;
+					}
+					continue;
+				}
 				auto input_start = std::chrono::steady_clock::now();
 				for (const input_event& event : input) {
 					switch (event.type) {
@@ -593,16 +654,41 @@ namespace lf {
 
 	void Application::update_thread_main(std::stop_token stop, Application& app) {
 		using namespace std::chrono_literals;
+		auto next_update = std::chrono::steady_clock::now();
 		auto ups_sample_start = std::chrono::steady_clock::now();
 		u32 ups_sample_updates = 0;
 		while (!stop.stop_requested()) {
 			bool updated = false;
 			Rml::Context* context = app.rml_context();
-			if (Scene* scene = app.scene(); scene && context) {
+			if (context) {
 				std::lock_guard lock(app.rml_mutex);
-				LF_PROFILE_SCOPE("Scene::Update");
-				scene->update();
-				updated = true;
+				Scene* scene = app.scene();
+				if (!scene) {
+					updated = false;
+				} else {
+					fs::path lua_console_path = fs::folder::appdata / "lua_console.in";
+					if (std::filesystem::exists(lua_console_path)) {
+						std::ifstream file(lua_console_path, std::ios::binary);
+						if (file) {
+							string script(
+								(std::istreambuf_iterator<char>(file)),
+								std::istreambuf_iterator<char>());
+							file.close();
+							std::filesystem::remove(lua_console_path);
+							if (!script.empty()) {
+								log_info(format("[lua-console] executing {}", lua_console_path.string()));
+								scene->queue_script(std::move(script), "lua-console");
+							}
+						}
+					}
+					LF_PROFILE_SCOPE("Scene::Update");
+					scene->update();
+					{
+						LF_PROFILE_SCOPE("Scene::FixedUpdate");
+						scene->fixed_update();
+					}
+					updated = true;
+				}
 			}
 			if (updated) {
 				++ups_sample_updates;
@@ -614,21 +700,22 @@ namespace lf {
 					ups_sample_updates = 0;
 				}
 			}
-			std::this_thread::sleep_for(16ms);
+			next_update += app.update_interval;
+			auto now = std::chrono::steady_clock::now();
+			if (next_update > now) {
+				std::this_thread::sleep_until(next_update);
+			} else {
+				next_update = now;
+				std::this_thread::yield();
+			}
 		}
 	}
 
-	void Application::fixed_update_thread_main(std::stop_token stop, Application& app) {
-		using namespace std::chrono_literals;
-		std::mutex mutex;
-		std::condition_variable_any wake;
-		std::unique_lock lock(mutex);
-		while (!stop.stop_requested()) {
-			if (Scene* scene = app.scene()) {
-				LF_PROFILE_SCOPE("Scene::FixedUpdate");
-				scene->fixed_update();
-			}
-			wake.wait_for(lock, stop, 16ms, [] { return false; });
+	std::chrono::steady_clock::duration Application::update_interval_for(u32 updates_per_second) {
+		if (updates_per_second == 0) {
+			updates_per_second = DefaultApplicationUpdatesPerSecond;
 		}
+		return std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+			std::chrono::duration<f64>(1.0 / static_cast<f64>(updates_per_second)));
 	}
 } // namespace lf

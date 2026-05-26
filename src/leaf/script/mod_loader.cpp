@@ -387,7 +387,7 @@ namespace lf {
 		loaded_options() = {};
 
 		// Collect all mods
-		report_mod_progress(progress, "collecting + sorting mods", mod_stage_progress(0), "scanning mod directories", 0.0f);
+		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "scanning-mod-directories", 0.0f);
 		vector<ModInfo> mods;
 		auto add_mods_from_dir = [&](const fs::path& dir, bool privileged) {
 			if (!fs::exists(dir)) {
@@ -410,7 +410,7 @@ namespace lf {
 		}
 
 		// Sync enabled mods file
-		report_mod_progress(progress, "collecting + sorting mods", mod_stage_progress(0), "reading enabled_mods.yaml", 0.35f);
+		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "reading-enabled-mods", 0.35f);
 		fs::path enabled_mods_path = fs::folder::appdata / "enabled_mods.yaml";
 		sync_enabled_mods(enabled_mods_path, mods);
 		auto enabled_mods = load_enabled_mods(enabled_mods_path);
@@ -425,12 +425,12 @@ namespace lf {
 		}
 
 		// Sort mods by dependency into a load order
-		report_mod_progress(progress, "collecting + sorting mods", mod_stage_progress(0), "resolving dependencies", 0.7f);
+		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "resolving-dependencies", 0.7f);
 		error sort_result = sort_mods_by_dependency(enabled_mod_list);
 		if (sort_result) {
 			return sort_result;
 		}
-		report_mod_progress(progress, "collecting + sorting mods", mod_stage_progress(1), "load order ready", 1.0f);
+		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(1), "load-order-ready", 1.0f);
 
 		log_info("[mod-loader] load order:");
 		for (const auto& mod : enabled_mod_list) {
@@ -444,7 +444,7 @@ namespace lf {
 			return language_result.error().add_context("loading settings.yaml");
 		}
 		string selected_language = *language_result;
-		report_mod_progress(progress, "loading localization", mod_stage_progress(0), selected_language, 0.0f);
+		report_mod_progress(progress, "loading-localization", mod_stage_progress(0), selected_language, 0.0f);
 		error locale_error = LoadLocaleFiles(span<const ModInfo>(enabled_mod_list.data(), enabled_mod_list.size()), selected_language);
 		if (locale_error) {
 			return locale_error.add_context("loading locale files");
@@ -461,7 +461,7 @@ option["scene"] = {}
 		// Load null prototypes
 		{
 			log_info("[mod-loader] loading unknown prototypes");
-			report_mod_progress(progress, "loading mod prototypes", mod_stage_progress(1), "core/null.lua", 0.0f);
+			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "core/null.lua", 0.0f);
 			sol::state lua_unknown_loader;
 			lua_unknown_loader.script(init_script);
 			for (auto& type : PrototypeTypeRegistry::functions) {
@@ -475,7 +475,7 @@ option["scene"] = {}
 					try {
 						lua_unknown_loader.script_file((mod.location / "null.lua").string());
 						log_info(format("[mod-loader] loaded: {}/null.lua", mod.name));
-						report_mod_progress(progress, "loading mod prototypes", mod_stage_progress(1), mod.name + "/null.lua", 0.2f);
+						report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), mod.name + "/null.lua", 0.2f);
 					} catch (const lf::exception& e) {
 						log_error(format("[mod-loader] error: {}/null.lua: {}", mod.name, e.what()));
 						return error(generic_errc::parse_error,
@@ -491,7 +491,7 @@ option["scene"] = {}
 			if (err) {
 				return err.add_context("loading null prototypes from core/null.lua");
 			}
-			report_mod_progress(progress, "loading mod prototypes", mod_stage_progress(1), "registered null prototypes", 0.35f);
+			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "registered-null-prototypes", 0.35f);
 		}
 
 		sol::state lua;
@@ -509,7 +509,7 @@ option["scene"] = {}
 			if (fs::exists(data_lua)) {
 				try {
 					f32 progress_base = enabled_mod_list.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(enabled_mod_list.size());
-					report_mod_progress(progress, "loading mod prototypes", mod_stage_progress(1), mod.name + "/data.lua", 0.35f + progress_base * 0.45f);
+					report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), mod.name + "/data.lua", 0.35f + progress_base * 0.45f);
 					lua.script_file(data_lua.string());
 					log_info(format("[mod-loader] loaded: {}/data.lua", mod.name));
 				} catch (const lf::exception& e) {
@@ -520,37 +520,37 @@ option["scene"] = {}
 			}
 		}
 
-		report_mod_progress(progress, "loading mod prototypes", mod_stage_progress(1), "data.lua files loaded", 0.8f);
-		report_mod_progress(progress, "loading mod prototypes", mod_stage_progress(1), "loading options", 0.85f);
+		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "data-lua-files-loaded", 0.8f);
+		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "loading-options", 0.85f);
 		auto option_err = LoadOptions(lua);
 		if (option_err) {
 			return option_err.add_context("loading options from mods' data.lua");
 		}
 		loaded_options().language = selected_language;
 
-		report_mod_progress(progress, "loading mod prototypes", mod_stage_progress(1), "creating prototypes", 0.9f);
+		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "creating-prototypes", 0.9f);
 		auto err = LoadDataRaw(lua);
 		if (err) {
 			return err.add_context("loading prototypes from mods' data.lua");
 		}
-		report_mod_progress(progress, "loading mod prototypes", mod_stage_progress(2), "prototypes loaded", 1.0f);
+		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "prototypes-loaded", 1.0f);
 
 		for (size_t i = 0; i < PrototypeTypeRegistry::functions.size(); ++i) {
 			const auto& fn = PrototypeTypeRegistry::functions[i];
 			try {
 				f32 process_progress = PrototypeTypeRegistry::functions.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(PrototypeTypeRegistry::functions.size());
-				report_mod_progress(progress, "linking prototypes", mod_stage_progress(2), string(fn.type()), process_progress);
+				report_mod_progress(progress, "linking-prototypes", mod_stage_progress(2), string(fn.type()), process_progress);
 				fn.resolve();
 			} catch (const lf::exception& e) {
 				return error(generic_errc::parse_error, e.what()).add_context("linking prototypes");
 			}
 		}
 
-		report_mod_progress(progress, "linking prototypes", mod_stage_progress(3), "prototype references linked", 1.0f);
-		report_mod_progress(progress, "loading assets", mod_stage_progress(3), "checking asset work", 0.0f);
-		report_mod_progress(progress, "loading assets", mod_stage_progress(4), "assets loaded", 1.0f);
-		report_mod_progress(progress, "finish", mod_stage_progress(4), "finalizing startup", 0.0f);
-		report_mod_progress(progress, "finish", mod_stage_progress(5), "mods loaded", 1.0f);
+		report_mod_progress(progress, "linking-prototypes", mod_stage_progress(3), "prototype-references-linked", 1.0f);
+		report_mod_progress(progress, "loading-assets", mod_stage_progress(3), "checking-asset-work", 0.0f);
+		report_mod_progress(progress, "loading-assets", mod_stage_progress(4), "assets-loaded", 1.0f);
+		report_mod_progress(progress, "finish", mod_stage_progress(4), "finalizing-startup", 0.0f);
+		report_mod_progress(progress, "finish", mod_stage_progress(5), "mods-loaded", 1.0f);
 		return error::no_error;
 	}
 

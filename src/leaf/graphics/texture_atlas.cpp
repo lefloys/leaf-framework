@@ -204,10 +204,10 @@ namespace lf {
 			atlas.frames.push_back(packed_frame_from(frame, atlas.width, atlas.height, options.padding));
 		}
 
-		atlas.texture = unique(Texture::Create());
-		Texture::Data(queue, atlas.texture, RT_TEXTURE_2D, 0, atlas.width, atlas.height, 1, RT_RGBA8_UNORM,
+		atlas.atlas_texture = unique(Texture::Create());
+		Texture::Data(queue, atlas.atlas_texture, RT_TEXTURE_2D, 0, atlas.width, atlas.height, 1, RT_RGBA8_UNORM,
 					  atlas.pixels.data());
-		atlas.view.reset(TextureView::CreateFromTexture(atlas.texture));
+		atlas.view.reset(TextureView::CreateFromTexture(atlas.atlas_texture));
 		TextureView::Filter(atlas.view, RT_FILTER_NEAREST, RT_FILTER_NEAREST, RT_MIP_FILTER_NONE);
 		TextureView::Address(atlas.view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
 		log_info(format("[textures] atlas {}x{} with {} frames", atlas.width, atlas.height,

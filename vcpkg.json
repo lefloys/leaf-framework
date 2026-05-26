@@ -1,0 +1,20 @@
+{
+  "name": "leaf-framework",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "catch2",
+    "glfw3",
+    "glm",
+    "glslang",
+    "lua",
+    "miniaudio",
+    "rmlui",
+    "sol2",
+    "spirv-cross",
+    "stb",
+    "vulkan-headers",
+    "vulkan-loader",
+    "vulkan-memory-allocator",
+    "yaml-cpp"
+  ]
+}

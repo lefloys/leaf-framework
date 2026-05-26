@@ -4,6 +4,7 @@
 #include <leaf/graphics/resource.hpp>
 #include <leaf/graphics/window_private.hpp>
 
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #if defined(_WIN32)
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -332,12 +333,12 @@ namespace lf {
 			glfwGetMonitorPos(monitor, &monitor_x, &monitor_y);
 			glfwSetWindowAttrib(glfw_window, GLFW_DECORATED, GLFW_FALSE);
 			glfwSetWindowAttrib(glfw_window, GLFW_RESIZABLE, GLFW_FALSE);
-			glfwSetWindowAttrib(glfw_window, GLFW_FLOATING, GLFW_TRUE);
+			glfwSetWindowAttrib(glfw_window, GLFW_FLOATING, GLFW_FALSE);
 			glfwSetWindowMonitor(glfw_window, nullptr, monitor_x, monitor_y, mode->width, mode->height, GLFW_DONT_CARE);
 #if defined(_WIN32)
 			SetWindowPos(
 				glfwGetWin32Window(glfw_window),
-				HWND_TOPMOST,
+				HWND_NOTOPMOST,
 				monitor_x,
 				monitor_y,
 				mode->width,
@@ -379,9 +380,26 @@ namespace lf {
 		glfwSetWindowShouldClose(to_glfw(wnd), should_close ? GLFW_TRUE : GLFW_FALSE);
 	}
 
+	PlatformCursor* create_platform_cursor(const u08* rgba, u32 width, u32 height, u32 hotspot_x, u32 hotspot_y) {
+		GLFWimage image;
+		image.width = static_cast<int>(width);
+		image.height = static_cast<int>(height);
+		image.pixels = const_cast<unsigned char*>(rgba);
+		return reinterpret_cast<PlatformCursor*>(glfwCreateCursor(&image, static_cast<int>(hotspot_x), static_cast<int>(hotspot_y)));
+	}
+
+	void destroy_platform_cursor(PlatformCursor* cursor) {
+		if (cursor) {
+			glfwDestroyCursor(reinterpret_cast<GLFWcursor*>(cursor));
+		}
+	}
+
+	void platform_window_cursor(PlatformWindow* wnd, PlatformCursor* cursor) {
+		glfwSetCursor(to_glfw(wnd), reinterpret_cast<GLFWcursor*>(cursor));
+	}
 
 	bool update_platform() {
-		glfwPollEvents();
+		glfwWaitEventsTimeout(1.0 / 120.0);
 		return true;
 	}
 	void platform_clipboard_text(string_view text) {

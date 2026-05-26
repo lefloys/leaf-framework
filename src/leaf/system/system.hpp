@@ -6,6 +6,7 @@
 
 
 namespace lf {
+	void install_crash_handler();
 	error init_system(span<string_view> args);
 	void exit_system();
 	void OverwriteAppdataDir(string_view new_path);
