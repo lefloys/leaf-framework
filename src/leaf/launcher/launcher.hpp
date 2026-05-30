@@ -4,6 +4,7 @@
 #include <leaf/core/filesystem.hpp>
 #include <leaf/core/span.hpp>
 #include <leaf/core/string.hpp>
+#include <leaf/core/types.hpp>
 
 namespace lf {
 	error init_launcher(span<string_view> args);

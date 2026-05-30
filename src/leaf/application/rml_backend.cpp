@@ -4,6 +4,7 @@
 #include <leaf/core/messages.hpp>
 #include <leaf/core/profiler.hpp>
 #include <leaf/platform/platform.hpp>
+#include <leaf/graphics/timepoint.hpp>
 #include <leaf/script/virtual_filesystem.hpp>
 
 #include <embed/font.h>
@@ -307,8 +308,8 @@ void main() {
 		auto* texture_data = new TextureData;
 		texture_data->size = { width, height };
 		texture_data->image = unique(Texture::Create());
-		Queue::Wait(upload_queue, Texture::Data(upload_queue, texture_data->image, RT_TEXTURE_2D, 0,
-												width, height, 1, RT_RGBA8_UNORM, pixels));
+		Timepoint::Wait(Texture::Data(upload_queue, texture_data->image, RT_TEXTURE_2D, 0,
+									  width, height, 1, RT_RGBA8_UNORM, pixels));
 		texture_data->view = unique(TextureView::CreateFromTexture(texture_data->image));
 		TextureView::Filter(texture_data->view, RT_FILTER_LINEAR, RT_FILTER_LINEAR, RT_MIP_FILTER_NONE);
 		TextureView::Address(texture_data->view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);

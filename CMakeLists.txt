@@ -14,16 +14,24 @@ option(LEAF_BUILD_RUTILE_LOGGING_LAYER "Build the Rutile logging layer." ON)
 set(LEAF_SUPPORTED_WINDOW_BACKENDS "glfw")
 set(LEAF_WINDOW_BACKEND "glfw" CACHE STRING "Window backend for leaf-framework.")
 set_property(CACHE LEAF_WINDOW_BACKEND PROPERTY STRINGS ${LEAF_SUPPORTED_WINDOW_BACKENDS})
+set(LEAF_SUPPORTED_LAUNCHERS "none" "steam")
+set(launcher_kind "none" CACHE STRING "Launcher backend for leaf-framework.")
+set_property(CACHE launcher_kind PROPERTY STRINGS ${LEAF_SUPPORTED_LAUNCHERS})
 
 if(NOT "${LEAF_WINDOW_BACKEND}" IN_LIST LEAF_SUPPORTED_WINDOW_BACKENDS)
     list(JOIN LEAF_SUPPORTED_WINDOW_BACKENDS ", " LEAF_SUPPORTED_WINDOW_BACKENDS_TEXT)
     message(FATAL_ERROR "Unsupported LEAF_WINDOW_BACKEND '${LEAF_WINDOW_BACKEND}'. Supported values: ${LEAF_SUPPORTED_WINDOW_BACKENDS_TEXT}.")
+endif()
+if(NOT "${launcher_kind}" IN_LIST LEAF_SUPPORTED_LAUNCHERS)
+    list(JOIN LEAF_SUPPORTED_LAUNCHERS ", " LEAF_SUPPORTED_LAUNCHERS_TEXT)
+    message(FATAL_ERROR "Unsupported launcher_kind '${launcher_kind}'. Supported values: ${LEAF_SUPPORTED_LAUNCHERS_TEXT}.")
 endif()
 
 # Shared project helpers.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include("AddFiles")
 set(LEAF_STEAMWORKS_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/steam-sdk" CACHE PATH "Local Steamworks SDK directory")
+set(LEAF_STEAM_APP_ID "480" CACHE STRING "Steam app id used by the Steam launcher.")
 
 # Third-party dependencies.
 find_package("glfw3" CONFIG REQUIRED)
@@ -46,6 +54,7 @@ endif()
 
 # Framework target.
 add_library("${PROJECT_NAME}" STATIC)
+set(LEAF_TARGET_NAME "${PROJECT_NAME}")
 
 target_compile_features("${PROJECT_NAME}" PUBLIC "cxx_std_23")
 target_compile_definitions("${PROJECT_NAME}" PRIVATE LEAF_WINDOW_BACKEND_GLFW)
@@ -100,29 +109,8 @@ function(leaf_export_glfw_symbols target_name)
     endif()
 endfunction()
 
-function(leaf_configure_executable target_name launcher_kind steam_app_id)
-    set(leaf_launcher_source_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/src/leaf/launcher")
-    if("${launcher_kind}" STREQUAL "none")
-        target_sources("${target_name}" PRIVATE "${leaf_launcher_source_dir}/none/launcher.cpp")
-    elseif("${launcher_kind}" STREQUAL "steam")
-        include("Steamworks")
-        target_sources("${target_name}" PRIVATE "${leaf_launcher_source_dir}/steam/launcher.cpp")
-        target_link_libraries("${target_name}" PRIVATE "Steamworks::Steamworks")
-        file(GENERATE
-            OUTPUT "$<TARGET_FILE_DIR:${target_name}>/steam_appid.txt"
-            CONTENT "${steam_app_id}\n"
-        )
-        add_custom_target("${target_name}-steam-runtime"
-            COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:${target_name}>"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${LEAF_STEAMWORKS_RUNTIME_LIBRARY}"
-                "$<TARGET_FILE_DIR:${target_name}>"
-        )
-        add_dependencies("${target_name}" "${target_name}-steam-runtime")
-    else()
-        message(FATAL_ERROR "Unsupported launcher kind '${launcher_kind}'. Expected 'none' or 'steam'.")
-    endif()
+function(leaf_configure_executable target_name)
+    leaf_configure_launcher_executable("${target_name}")
     leaf_export_glfw_symbols("${target_name}")
     leaf_copy_rutile_backends("${target_name}")
 endfunction()

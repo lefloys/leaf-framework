@@ -5,11 +5,12 @@
 
 #include <steam/steam_api.h>
 
-
 namespace lf {
 	namespace {
+		bool steam_ready = false;
+
 		void steam_warning_message_hook(int severity, const char* message) {
-			log_info(format("[steam:{}] {}", severity, message));
+			log_info(format("steam[{}]: {}", severity, message));
 		}
 	}
 
@@ -17,17 +18,22 @@ namespace lf {
 		if (!SteamAPI_Init()) {
 			return error("failed to initialize Steamworks");
 		}
+
+		steam_ready = true;
 		SteamUtils()->SetWarningMessageHook(steam_warning_message_hook);
 		return error::no_error;
 	}
 
-
-
 	void update_launcher() {
-		SteamAPI_RunCallbacks();
+		if (steam_ready) {
+			SteamAPI_RunCallbacks();
+		}
 	}
 
 	void exit_launcher() {
-		SteamAPI_Shutdown();
+		if (steam_ready) {
+			SteamAPI_Shutdown();
+			steam_ready = false;
+		}
 	}
 } // namespace lf
