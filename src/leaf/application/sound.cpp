@@ -127,7 +127,7 @@ static f32 clamp_volume(f32 value) {
 }
 
 static f32 settings_volume_for_sound_type(lf::string_view type) {
-	auto settings = lf::LoadAppSettings(lf::fs::folder::appdata / "settings.yaml");
+	auto settings = lf::LoadAppSettings(lf::AppSettingsPath());
 	if (!settings) {
 		return 1.0f;
 	}

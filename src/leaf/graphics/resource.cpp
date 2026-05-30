@@ -2,6 +2,7 @@
 
 #include <leaf/core/exception.hpp>
 
+#include <iostream>
 namespace lf {
 
 	void detail::check_rutile_error(string_view context) {
@@ -15,6 +16,7 @@ namespace lf {
 			message += ": ";
 			message += rutile_message;
 		}
+		std::cout << rtError() << " " << rutile_message << "\n";
 		rtClearError();
 		throw runtime_exception(message);
 	}

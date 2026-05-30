@@ -5,31 +5,31 @@
 #include "leaf/core/vector.hpp"
 #include "prototype_inspection.hpp"
 
-#include <functional>
-
 namespace lf {
 	struct PrototypeTypeFunctions {
-		std::function<void()> clear;
-		std::function<void(string_view, const dict&)> create;
-		std::function<string_view()> type;
-		std::function<void()> resolve;
-		std::function<size_t()> count;
-		std::function<string_view(size_t)> name;
-		std::function<PrototypeFieldList(size_t)> runtime_fields;
+		void (*clear)() = nullptr;
+		void (*create)(string_view, const dict&) = nullptr;
+		string_view (*type)() = nullptr;
+		void (*resolve)() = nullptr;
+		void (*reserve)(size_t) = nullptr;
+		size_t (*count)() = nullptr;
+		string_view (*name)(size_t) = nullptr;
+		PrototypeFieldList (*runtime_fields)(size_t) = nullptr;
 	};
 
-	template <typename T>
+	template<typename T>
 	PrototypeFieldList inspect_runtime_fields(const T&);
 
 	struct PrototypeTypeRegistry {
-		template <typename T>
+		template<typename T>
 		static void RegisterType() {
 			auto& funcs = functions.emplace_back();
 			using db = Database<T>;
 			funcs.type = db::type;
 			funcs.clear = []() { db::prototypes.clear(); };
-			funcs.create = db::create;
+			funcs.create = [](string_view name, const dict& data) { db::create(name, data); };
 			funcs.resolve = []() { db::resolve_connectors(); };
+			funcs.reserve = [](size_t count) { db::prototypes.reserve(db::prototypes.size() + count); };
 			funcs.count = []() { return db::prototypes.size(); };
 			funcs.name = [](size_t index) -> string_view { return db::prototypes[index].name; };
 			funcs.runtime_fields = [](size_t index) { return inspect_runtime_fields(db::prototypes[index]); };

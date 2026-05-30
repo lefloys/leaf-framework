@@ -20,14 +20,18 @@ namespace lf {
 
 	struct AppSettings {
 		string language = "en-US";
+		string last_saved_world;
 		SoundSettings sound;
 		GraphicsSettings graphics;
 	};
 
 	AppSettings DefaultAppSettings();
 
+	fs::path AppSettingsPath();
 	report<AppSettings> LoadAppSettings(const fs::path& path);
 	error SaveAppSettings(const fs::path& path, const AppSettings& settings);
 	report<string> LoadSelectedLanguageSetting(const fs::path& path);
 	error SaveSelectedLanguageSetting(const fs::path& path, string_view language);
+	report<string> LoadLastSavedWorldSetting(const fs::path& path);
+	error SaveLastSavedWorldSetting(const fs::path& path, string_view save_name);
 }

@@ -9,8 +9,10 @@ namespace lf {
 		u16 patch;
 		u16 snapshot;
 
-		version(u16 maj = 0, u16 min = 0, u16 pat = 0, u16 snap = 0)
+		constexpr version(u16 maj = 0, u16 min = 0, u16 pat = 0, u16 snap = 0)
 			: major(maj), minor(min), patch(pat), snapshot(snap) {}
+
+		constexpr bool operator==(const version&) const = default;
 
 		static version from_string(string_view str) {
 			version ver;

@@ -14,6 +14,7 @@ namespace lf {
 	struct ModOptions {
 		SceneOption main_scene;
 		string language = string(default_language);
+		vector<ModInfo> mods;
 	};
 
 	struct ModLoadProgress {
@@ -23,6 +24,7 @@ namespace lf {
 	// Loads all mods within the mod tree returning any error that occurs.
 	error LoadMods(ModCollection& mod_tree, ModLoadProgress* progress = nullptr);
 	const ModOptions& LoadedModOptions();
+	const vector<ModInfo>& LoadedMods();
 	// Clears all prototypes
 	void UnloadMods();
 } // namespace lf

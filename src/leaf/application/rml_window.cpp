@@ -225,6 +225,7 @@ namespace lf {
 			~ElementWindow() override;
 
 			void ProcessEvent(Rml::Event& event) override;
+			void cancel_document_interaction();
 
 		protected:
 			void OnChildAdd(Rml::Element* child) override;
@@ -645,6 +646,10 @@ namespace lf {
 			unbind_document_events();
 		}
 
+		void ElementWindow::cancel_document_interaction() {
+			end();
+		}
+
 		void ElementWindow::clear_pressed_buttons() {
 			Rml::ElementList buttons;
 			GetElementsByClassName(buttons, "window-button-pressed");
@@ -673,5 +678,15 @@ namespace lf {
 		std::call_once(registered, [] {
 			Rml::Factory::RegisterElementInstancer("window", &instancer);
 		});
+	}
+
+	void ReleaseRmlWindowDocumentEvents(Rml::ElementDocument& document) {
+		Rml::ElementList windows;
+		document.GetElementsByTagName(windows, "window");
+		for (Rml::Element* element : windows) {
+			if (auto* window = rmlui_dynamic_cast<ElementWindow*>(element)) {
+				window->cancel_document_interaction();
+			}
+		}
 	}
 }

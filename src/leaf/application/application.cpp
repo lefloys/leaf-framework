@@ -2,10 +2,11 @@
 
 #include "application_stats.hpp"
 
-#include <leaf/core/format.hpp>
 #include <leaf/core/filesystem.hpp>
+#include <leaf/core/format.hpp>
 #include <leaf/core/messages.hpp>
 #include <leaf/core/profiler.hpp>
+#include <leaf/graphics/timepoint.hpp>
 #include <leaf/leaf.hpp>
 #include <leaf/platform/platform.hpp>
 #include <leaf/script/virtual_filesystem.hpp>
@@ -17,9 +18,9 @@
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
-#include <fstream>
-#include <filesystem>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <utility>
 #include <vector>
@@ -84,7 +85,7 @@ namespace lf {
 			return scene_source;
 		}
 
-	}
+	} // namespace
 
 	static Rml::Input::KeyIdentifier rml_key(input_key key) {
 		if (key >= KEY_A && key <= KEY_Z) {
@@ -183,6 +184,44 @@ namespace lf {
 		return rml;
 	}
 
+	static bool key_generates_text(input_key key) {
+		if ((key >= KEY_A && key <= KEY_Z) ||
+			(key >= KEY_0 && key <= KEY_9) ||
+			(key >= KEY_NUMPAD_0 && key <= KEY_NUMPAD_9)) {
+			return true;
+		}
+
+		switch (key) {
+		case KEY_BACKQUOTE:
+		case KEY_BACKSLASH:
+		case KEY_BRACKET_LEFT:
+		case KEY_BRACKET_RIGHT:
+		case KEY_COMMA:
+		case KEY_EQUAL:
+		case KEY_MINUS:
+		case KEY_NUMPAD_ADD:
+		case KEY_NUMPAD_DECIMAL:
+		case KEY_NUMPAD_DIVIDE:
+		case KEY_NUMPAD_MULTIPLY:
+		case KEY_NUMPAD_SUBTRACT:
+		case KEY_PERIOD:
+		case KEY_QUOTE:
+		case KEY_SEMICOLON:
+		case KEY_SLASH:
+		case KEY_SPACE:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	static bool text_key_should_skip_control_event(input_key key, input_modifiers modifiers) {
+		if (modifiers.has(INPUT_MODIFIER_CTRL) || modifiers.has(INPUT_MODIFIER_ALT) || modifiers.has(INPUT_MODIFIER_SUPER)) {
+			return false;
+		}
+		return key_generates_text(key);
+	}
+
 	static int rml_button(input_button button) {
 		switch (button) {
 		case BUTTON_LEFT: return 0;
@@ -209,7 +248,7 @@ namespace lf {
 	Application::Application(const ApplicationCreateInfo& create_info)
 		: display(Window::Create()),
 		  update_interval(update_interval_for(create_info.updates_per_second)) {
-		SetApplicationUpdatesPerSecond(create_info.updates_per_second);
+		set_updates_per_second(create_info.updates_per_second);
 		Window::SetTitle(display, create_info.title);
 		window_title = string(create_info.title);
 		Window::SetWidth(display, create_info.width);
@@ -230,7 +269,7 @@ namespace lf {
 	Application::Application(handle<lf::window> display, const ApplicationCreateInfo& create_info)
 		: display(display),
 		  update_interval(update_interval_for(create_info.updates_per_second)) {
-		SetApplicationUpdatesPerSecond(create_info.updates_per_second);
+		set_updates_per_second(create_info.updates_per_second);
 		Window::SetShouldClose(this->display, false);
 		Window::SetTitle(this->display, create_info.title);
 		dim2<u32> size = Window::Size(this->display);
@@ -246,10 +285,10 @@ namespace lf {
 
 	Application::~Application() {
 		stop_threads();
+		wait_for_render_idle();
 		if (context) {
 			std::lock_guard lock(rml_mutex);
 			loaded_scene.reset();
-			context->Update();
 			Rml::RemoveContext(context->GetName());
 			context = nullptr;
 		}
@@ -274,6 +313,7 @@ namespace lf {
 
 	void Application::close() {
 		stop_threads();
+		wait_for_render_idle();
 	}
 
 	void Application::stop_threads() {
@@ -285,14 +325,17 @@ namespace lf {
 		update_thread = {};
 	}
 
-
+	void Application::wait_for_render_idle() {
+		handle<queue> graphics_queue = Queue::Query(QueueCapability::Graphics);
+		Timepoint::Wait(Queue::Flush(graphics_queue));
+	}
 
 	handle<lf::window> Application::release_window() {
 		stop_threads();
+		wait_for_render_idle();
 		if (context) {
 			std::lock_guard lock(rml_mutex);
 			loaded_scene.reset();
-			context->Update();
 			Rml::RemoveContext(context_name);
 			context = nullptr;
 		}
@@ -325,6 +368,40 @@ namespace lf {
 		if (loaded_scene) {
 			loaded_scene->queue_script(string(script), "lua-console");
 		}
+	}
+
+	void Application::set_max_fps(f32 value) {
+		stats.max_fps.store(value, std::memory_order_relaxed);
+	}
+
+	f32 Application::max_fps() const {
+		return stats.max_fps.load(std::memory_order_relaxed);
+	}
+
+	void Application::set_updates_per_second(u32 value) {
+		u32 next = value ? value : DefaultApplicationUpdatesPerSecond;
+		stats.updates_per_second.store(next, std::memory_order_relaxed);
+		update_interval = update_interval_for(next);
+	}
+
+	u32 Application::updates_per_second() const {
+		return stats.updates_per_second.load(std::memory_order_relaxed);
+	}
+
+	f32 Application::current_fps() const {
+		return stats.current_fps.load(std::memory_order_relaxed);
+	}
+
+	f32 Application::current_ups() const {
+		return stats.current_ups.load(std::memory_order_relaxed);
+	}
+
+	void Application::set_render_profile_enabled(bool enabled) {
+		stats.render_profile_enabled.store(enabled, std::memory_order_relaxed);
+	}
+
+	bool Application::render_profile_enabled() const {
+		return stats.render_profile_enabled.load(std::memory_order_relaxed);
 	}
 
 	bool Application::update() {
@@ -368,7 +445,13 @@ namespace lf {
 	}
 
 	void Application::load_scene(string_view scene_source, string_view args_yaml) {
-		loaded_scene = make_scene(*context, display, scene_source, args_yaml);
+		wait_for_render_idle();
+		std::vector<Scene::PersistentElement> persistent_elements;
+		if (loaded_scene) {
+			persistent_elements = loaded_scene->release_persistent_elements();
+			loaded_scene.reset();
+		}
+		loaded_scene = make_scene(*context, display, stats, scene_source, args_yaml, std::move(persistent_elements));
 		window_title = string(loaded_scene->title());
 		Window::SetTitle(display, window_title);
 	}
@@ -401,7 +484,7 @@ namespace lf {
 		using namespace std::chrono_literals;
 		handle<queue> graphics_queue = Queue::Query(QueueCapability::Graphics);
 		if (std::getenv("LEAF_RENDER_PROFILE")) {
-			SetRenderProfileEnabled(true);
+			app.set_render_profile_enabled(true);
 		}
 		if (std::getenv("LEAF_PROFILE")) {
 			SetProfilerEnabled(true);
@@ -450,7 +533,7 @@ namespace lf {
 					profile.record(profile.begin_frame, begin_start, begin_end);
 				}
 				if (!drawable) {
-					if (RenderProfileEnabled()) {
+					if (app.render_profile_enabled()) {
 						auto now = std::chrono::steady_clock::now();
 						if (now - not_drawable_log >= 1s) {
 							log_render_profile("[profile] skipped render: window is not drawable");
@@ -513,12 +596,18 @@ namespace lf {
 										break;
 									}
 								}
-								context->ProcessKeyDown(key, rml_modifiers(event.modifiers));
+								const bool text_only_key = scene->has_text_input_focus() && text_key_should_skip_control_event(input, event.modifiers);
+								if (!text_only_key) {
+									context->ProcessKeyDown(key, rml_modifiers(event.modifiers));
+								}
 								if ((input == KEY_ENTER || input == KEY_NUMPAD_ENTER) && scene->accepts_text_input('\n')) {
 									context->ProcessTextInput('\n');
 								}
 							} else if (event.state == input_state::Released) {
-								context->ProcessKeyUp(key, rml_modifiers(event.modifiers));
+								const bool text_only_key = scene->has_text_input_focus() && text_key_should_skip_control_event(input, event.modifiers);
+								if (!text_only_key) {
+									context->ProcessKeyUp(key, rml_modifiers(event.modifiers));
+								}
 							}
 						}
 						break;
@@ -609,12 +698,12 @@ namespace lf {
 				++fps_sample_frames;
 				f64 elapsed = std::chrono::duration<f64>(now - fps_sample_start).count();
 				if (elapsed >= 0.25) {
-					RecordApplicationFps(static_cast<f32>(static_cast<f64>(fps_sample_frames) / elapsed));
+					app.stats.current_fps.store(static_cast<f32>(static_cast<f64>(fps_sample_frames) / elapsed), std::memory_order_relaxed);
 					fps_sample_start = now;
 					fps_sample_frames = 0;
 				}
 				f64 profile_elapsed = std::chrono::duration<f64>(now - profile_start).count();
-				if (RenderProfileEnabled() && profile_elapsed >= 1.0 && profile.frames > 0) {
+				if (app.render_profile_enabled() && profile_elapsed >= 1.0 && profile.frames > 0) {
 					const f64 inv = 1.0 / static_cast<f64>(profile.frames);
 					log_render_profile(format(
 						"[profile] fps={:.1f} frame={:.3f} max={:.3f} begin={:.3f} rml-lock={:.3f} input={:.3f} update={:.3f} rb={:.3f} render={:.3f} re={:.3f} present={:.3f}",
@@ -634,7 +723,7 @@ namespace lf {
 				}
 			}
 
-			const f64 max_fps = static_cast<f64>(ApplicationMaxFps());
+			const f64 max_fps = static_cast<f64>(app.max_fps());
 			if (max_fps > 0.0 && max_fps < 1000.0) {
 				const auto frame_duration = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
 					std::chrono::duration<f64>(1.0 / max_fps));
@@ -695,7 +784,7 @@ namespace lf {
 				auto now = std::chrono::steady_clock::now();
 				f64 elapsed = std::chrono::duration<f64>(now - ups_sample_start).count();
 				if (elapsed >= 0.25) {
-					RecordApplicationUps(static_cast<f32>(static_cast<f64>(ups_sample_updates) / elapsed));
+					app.stats.current_ups.store(static_cast<f32>(static_cast<f64>(ups_sample_updates) / elapsed), std::memory_order_relaxed);
 					ups_sample_start = now;
 					ups_sample_updates = 0;
 				}

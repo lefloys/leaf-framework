@@ -78,7 +78,6 @@ namespace lf {
 			settings.sound.master = std::clamp(settings.sound.master, 0.0f, 1.0f);
 			settings.sound.music = std::clamp(settings.sound.music, 0.0f, 1.0f);
 			settings.sound.effects = std::clamp(settings.sound.effects, 0.0f, 1.0f);
-			settings.graphics.max_fps = ClampMaxFps(settings.graphics.max_fps);
 			return settings;
 		}
 
@@ -96,6 +95,7 @@ namespace lf {
 			}
 
 			file << "language: " << normalized.language << "\n";
+			file << "last_saved_world: \"" << normalized.last_saved_world << "\"\n";
 			file << "sound:\n";
 			file << "  master: " << normalized.sound.master << "\n";
 			file << "  music: " << normalized.sound.music << "\n";
@@ -144,6 +144,8 @@ namespace lf {
 				if (section.empty()) {
 					if (key == "language") {
 						settings.language = unquote_setting_value(value);
+					} else if (key == "last_saved_world") {
+						settings.last_saved_world = unquote_setting_value(value);
 					}
 					continue;
 				}
@@ -192,6 +194,10 @@ namespace lf {
 		return settings;
 	}
 
+	fs::path AppSettingsPath() {
+		return fs::folder::appdata / "settings.yaml";
+	}
+
 	report<AppSettings> LoadAppSettings(const fs::path& path) {
 		if (!fs::exists(path)) {
 			AppSettings settings = DefaultAppSettings();
@@ -202,15 +208,17 @@ namespace lf {
 		}
 
 		auto text = ReadTextFile(path.string());
-		if (!text) {
-			return unexpected(text.error().add_context(format("loading '{}'", path.string())));
+		if (!text.has_value()) {
+			error err = text.error();
+			return unexpected(err.add_context(format("loading '{}'", path.string())));
 		}
 
 		auto settings = parse_settings(*text, path);
-		if (!settings) {
-			return unexpected(settings.error().add_context(format("loading '{}'", path.string())));
+		if (!settings.has_value()) {
+			error err = settings.error();
+			return unexpected(err.add_context(format("loading '{}'", path.string())));
 		}
-		if (text->find("sound:") == string::npos || text->find("graphics:") == string::npos || text->find("max_fps:") == string::npos) {
+		if (text->find("sound:") == string::npos || text->find("graphics:") == string::npos || text->find("max_fps:") == string::npos || text->find("last_saved_world:") == string::npos) {
 			if (error err = write_settings_file(path, *settings)) {
 				return unexpected(err.add_context(format("updating '{}'", path.string())));
 			}
@@ -224,7 +232,7 @@ namespace lf {
 
 	report<string> LoadSelectedLanguageSetting(const fs::path& path) {
 		auto settings = LoadAppSettings(path);
-		if (!settings) {
+		if (!settings.has_value()) {
 			return unexpected(settings.error());
 		}
 		return settings->language.empty() ? string(default_language) : settings->language;
@@ -232,10 +240,27 @@ namespace lf {
 
 	error SaveSelectedLanguageSetting(const fs::path& path, string_view language) {
 		auto settings = LoadAppSettings(path);
-		if (!settings) {
+		if (!settings.has_value()) {
 			return settings.error();
 		}
 		settings->language = language.empty() ? string(default_language) : string(language);
+		return SaveAppSettings(path, *settings);
+	}
+
+	report<string> LoadLastSavedWorldSetting(const fs::path& path) {
+		auto settings = LoadAppSettings(path);
+		if (!settings.has_value()) {
+			return unexpected(settings.error());
+		}
+		return settings->last_saved_world;
+	}
+
+	error SaveLastSavedWorldSetting(const fs::path& path, string_view save_name) {
+		auto settings = LoadAppSettings(path);
+		if (!settings.has_value()) {
+			return settings.error();
+		}
+		settings->last_saved_world = string(save_name);
 		return SaveAppSettings(path, *settings);
 	}
 } // namespace lf

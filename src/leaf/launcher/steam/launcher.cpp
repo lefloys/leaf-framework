@@ -1,17 +1,23 @@
 #include "leaf/launcher/launcher.hpp"
 
+#include <leaf/core/format.hpp>
+#include <leaf/core/messages.hpp>
+
 #include <steam/steam_api.h>
 
 
-#include <iostream>
-
-
 namespace lf {
+	namespace {
+		void steam_warning_message_hook(int severity, const char* message) {
+			log_info(format("[steam:{}] {}", severity, message));
+		}
+	}
+
 	error init_launcher(span<string_view>) {
 		if (!SteamAPI_Init()) {
 			return error("failed to initialize Steamworks");
 		}
-		std::cout << "launcher : steam\n";
+		SteamUtils()->SetWarningMessageHook(steam_warning_message_hook);
 		return error::no_error;
 	}
 

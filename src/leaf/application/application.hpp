@@ -1,10 +1,11 @@
 #pragma once
 
+#include <leaf/application/application_stats.hpp>
+#include <leaf/application/rml_backend.hpp>
+#include <leaf/application/scene.hpp>
 #include <leaf/core/error.hpp>
 #include <leaf/core/memory.hpp>
 #include <leaf/core/string.hpp>
-#include <leaf/application/scene.hpp>
-#include <leaf/application/rml_backend.hpp>
 #include <leaf/graphics/queue.hpp>
 #include <leaf/graphics/window.hpp>
 
@@ -47,6 +48,14 @@ namespace lf {
 		void set_attribute(string_view id, string_view name, string_view value);
 		void set_attribute(string_view id, string_view name, f32 value);
 		void run_script(string_view script);
+		void set_max_fps(f32 value);
+		f32 max_fps() const;
+		void set_updates_per_second(u32 value);
+		u32 updates_per_second() const;
+		f32 current_fps() const;
+		f32 current_ups() const;
+		void set_render_profile_enabled(bool enabled);
+		bool render_profile_enabled() const;
 
 		void load_scene(string_view scene_source);
 		void load_scene(string_view scene_source, string_view args_yaml);
@@ -57,8 +66,9 @@ namespace lf {
 		view<lf::window> window();
 		view<const lf::window> window() const;
 
-	private:
+	  private:
 		void stop_threads();
+		void wait_for_render_idle();
 
 		static void render_thread_main(std::stop_token stop, Application& app);
 		static void update_thread_main(std::stop_token stop, Application& app);
@@ -72,6 +82,7 @@ namespace lf {
 		std::mutex rml_mutex;
 		std::mutex window_mutex;
 		std::chrono::steady_clock::duration update_interval = update_interval_for(DefaultApplicationUpdatesPerSecond);
+		ApplicationStats stats;
 		bool render_frame_active = false;
 		std::atomic<bool> running = false;
 

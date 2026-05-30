@@ -27,6 +27,7 @@ namespace lf {
 	identifier<T, u16, void> Database<T>::create(string_view name, const dict& data) {
 		T& it = prototypes.emplace_back(data);
 		it.name = name;
+		it.finalize_base_fields(data);
 		identifier<T, u16, void> idx(static_cast<u16>(prototypes.size() - 1));
 		it.id = idx;
 		it.finalize_localization();

@@ -226,7 +226,7 @@ namespace lf {
 
 	error SetLanguage(string_view language) {
 		string selected = language.empty() ? string(default_language) : string(language);
-		if (error err = SaveSelectedLanguageSetting(fs::folder::appdata / "settings.yaml", selected)) {
+		if (error err = SaveSelectedLanguageSetting(AppSettingsPath(), selected)) {
 			return err;
 		}
 		return ReloadLocaleFiles(selected);

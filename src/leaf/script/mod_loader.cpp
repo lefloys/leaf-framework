@@ -6,12 +6,13 @@
 #include "virtual_filesystem.hpp"
 
 #include <leaf/core/messages.hpp>
+#include <leaf/system/system.hpp>
 
 #include <sol/sol.hpp>
 
 #include <cmath>
+#include <functional>
 #include <limits>
-#include <optional>
 #include <unordered_map>
 #include <utility>
 
@@ -22,6 +23,137 @@ namespace lf {
 			return options;
 		}
 	}
+
+	class DataScriptRunner {
+	  public:
+		explicit DataScriptRunner(sol::state& lua) : lua(lua) {}
+
+		void run_file(string logical_path, fs::path absolute_path, fs::path relative_root) {
+			absolute_path = absolute_path.lexically_normal();
+			relative_root = relative_root.lexically_normal();
+			report<string> source = expanded_source(std::move(logical_path), absolute_path, relative_root);
+			if (!source) {
+				throw runtime_exception(source.error().message);
+			}
+
+			sol::protected_function_result result = lua.safe_script(*source, sol::script_pass_on_error);
+			if (!result.valid()) {
+				sol::error script_error = result;
+				throw runtime_exception(script_error.what());
+			}
+		}
+
+	  private:
+		sol::state& lua;
+
+		static bool include_line(string_view line, string& path) {
+			size_t cursor = 0;
+			while (cursor < line.size() && (line[cursor] == ' ' || line[cursor] == '\t')) {
+				++cursor;
+			}
+			constexpr string_view prefix = "include";
+			if (line.substr(cursor, prefix.size()) != prefix) {
+				return false;
+			}
+			cursor += prefix.size();
+			while (cursor < line.size() && (line[cursor] == ' ' || line[cursor] == '\t')) {
+				++cursor;
+			}
+			if (cursor >= line.size() || line[cursor++] != '(') {
+				return false;
+			}
+			while (cursor < line.size() && (line[cursor] == ' ' || line[cursor] == '\t')) {
+				++cursor;
+			}
+			if (cursor >= line.size() || (line[cursor] != '"' && line[cursor] != '\'')) {
+				return false;
+			}
+			char quote = line[cursor++];
+			size_t end = line.find(quote, cursor);
+			if (end == string_view::npos) {
+				return false;
+			}
+			path = string(line.substr(cursor, end - cursor));
+			return true;
+		}
+
+		static report<string> expanded_source(string logical_path, fs::path absolute_path, fs::path relative_root) {
+			report<string> source = ReadTextFile(absolute_path.string());
+			if (!source) {
+				return unexpected(source.error());
+			}
+
+			string expanded;
+			size_t line_begin = 0;
+			while (line_begin <= source->size()) {
+				size_t line_end = source->find('\n', line_begin);
+				if (line_end == string::npos) {
+					line_end = source->size();
+				}
+				string_view line = string_view(*source).substr(line_begin, line_end - line_begin);
+				string include_path;
+				if (include_line(line, include_path)) {
+					report<fs::path> absolute_include = ResolveVirtualPathReport(include_path, absolute_path.parent_path());
+					if (!absolute_include) {
+						return unexpected(absolute_include.error());
+					}
+
+					fs::path target_root = relative_root;
+					fs::path logical_root;
+					for (const fs::path& part : fs::path(logical_path)) {
+						logical_root = part;
+						break;
+					}
+					if (IsVirtualPath(include_path)) {
+						size_t end = include_path.find("__", 2);
+						if (end == string::npos || end == 2) {
+							return unexpected(error(generic_errc::parse_error, format("invalid virtual path '{}'", include_path)));
+						}
+						string mod_name(include_path.substr(2, end - 2));
+						report<fs::path> virtual_root = ResolveVirtualPathReport(string("__") + mod_name + "__/");
+						if (!virtual_root) {
+							return unexpected(virtual_root.error());
+						}
+						target_root = *virtual_root;
+						logical_root = mod_name;
+					}
+
+					fs::path normalized_include = absolute_include->lexically_normal();
+					fs::path normalized_root = target_root.lexically_normal();
+					fs::path relative_include = normalized_include.lexically_relative(normalized_root);
+					bool escapes_root = relative_include.empty();
+					for (const fs::path& part : relative_include) {
+						if (part == "..") {
+							escapes_root = true;
+							break;
+						}
+					}
+					if (escapes_root) {
+						return unexpected(error(generic_errc::parse_error, format("include '{}' escapes its mod root", include_path)));
+					}
+
+					report<string> included = expanded_source((logical_root / relative_include).generic_string(), normalized_include, normalized_root);
+					if (!included) {
+						return unexpected(included.error());
+					}
+					expanded += *included;
+					if (!expanded.empty() && expanded.back() != '\n') {
+						expanded += '\n';
+					}
+				} else {
+					expanded += line;
+					if (line_end < source->size()) {
+						expanded += '\n';
+					}
+				}
+				if (line_end == source->size()) {
+					break;
+				}
+				line_begin = line_end + 1;
+			}
+			return expanded;
+		}
+	};
 
 	string operator_to_string(ModDependency::Operator op) {
 		switch (op) {
@@ -96,14 +228,10 @@ namespace lf {
 				} else if (kt == type::number) {
 					seen_number_keys = true;
 				} else {
-					throw runtime_exception(
-						format("invalid table key type '{}' when converting lua table to object",
-							   sol_type_name(kt)));
+					throw runtime_exception(format("invalid table key type '{}' when converting lua table to object", sol_type_name(kt)));
 				}
 				if (seen_string_keys && seen_number_keys) {
-					throw runtime_exception(
-						"mixed string and numeric keys in lua table are not supported: " +
-						sol_object_to_string(t));
+					throw runtime_exception("mixed string and numeric keys in lua table are not supported: " + sol_object_to_string(t));
 				}
 			}
 			if (seen_number_keys) {
@@ -145,8 +273,7 @@ namespace lf {
 			return object(d);
 		}
 		default:
-			throw runtime_exception(format("unsupported lua type '{}' when converting to object",
-										   sol_type_name(v.get_type())));
+			throw runtime_exception(format("unsupported lua type '{}' when converting to object", sol_type_name(v.get_type())));
 		}
 	}
 	string version_to_string(const version& v) {
@@ -166,6 +293,62 @@ namespace lf {
 		constexpr f32 stage_count = 5.0f;
 		return static_cast<f32>(completed_stages) / stage_count;
 	}
+
+	void initialize_prototype_lua(sol::state& lua) {
+		lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
+		lua.script(R"(
+data = {}
+data["raw"] = {}
+function data:extend(prototypes)
+	for i = 1, #prototypes do
+		local prototype = prototypes[i]
+		local type_table = self.raw[prototype.type]
+		if type_table == nil then
+			error("data.raw[" .. tostring(prototype.type) .. "] does not exist")
+		end
+		if type_table[prototype.name] ~= nil then
+			error("duplicate prototype '" .. tostring(prototype.type) .. "/" .. tostring(prototype.name) .. "'")
+		end
+		type_table[prototype.name] = prototype
+	end
+end
+option = {}
+option["scene"] = {}
+)");
+		for (auto& type : PrototypeTypeRegistry::functions) {
+			lua["data"]["raw"][type.type()] = lua.create_table();
+		}
+	}
+
+	const ModInfo* find_mod(span<const ModInfo> mods, string_view name) {
+		for (const ModInfo& mod : mods) {
+			if (mod.name == name) {
+				return &mod;
+			}
+		}
+		return nullptr;
+	}
+
+	error load_prototype_script(sol::state& lua, const ModInfo& mod, string_view file_name, bool required = false) {
+		fs::path path = mod.location / string(file_name);
+		if (!fs::exists(path)) {
+			if (required) {
+				return error(generic_errc::input_error, "Missing required prototype script " + mod.name + "/" + string(file_name));
+			}
+			return error::no_error;
+		}
+
+		try {
+			DataScriptRunner runner(lua);
+			runner.run_file(mod.name + "/" + string(file_name), path, mod.location);
+			log_info(format("[mod-loader] loaded: {}/{}", mod.name, file_name));
+			return error::no_error;
+		} catch (const lf::exception& e) {
+			log_error(format("[mod-loader] error: {}/{}: {}", mod.name, file_name, e.what()));
+			return error(generic_errc::parse_error, "Failed to execute " + mod.name + "/" + string(file_name) + ": " + e.what());
+		}
+	}
+
 	bool version_compare(const version& a, const version& b, ModDependency::Operator op) {
 		auto cmp = [](const version& lhs, const version& rhs) {
 			if (lhs.major != rhs.major) {
@@ -305,8 +488,7 @@ namespace lf {
 		return error::no_error;
 	}
 
-	error LoadDataRaw(const sol::state& lua) { // Convert each data.raw[type] to lf::dict once so we
-											   // iterate lf objects, not sol tables.
+	error LoadDataRaw(const sol::state& lua) {
 		object data_raw_obj = sol_to_object(lua["data"]["raw"]);
 		if (!data_raw_obj.is<dict>()) {
 			return error(generic_errc::type_mismatch, "data.raw must be a table/dict");
@@ -317,25 +499,18 @@ namespace lf {
 			auto it = data_raw.find(fn.type());
 			if (it != data_raw.end()) {
 				if (!it->second.is<dict>()) {
-					return error(generic_errc::type_mismatch,
-								 "data.raw." + string(fn.type()) + " must be a table/dict");
+					return error(generic_errc::type_mismatch, "data.raw." + string(fn.type()) + " must be a table/dict");
 				}
 				dict& type_table = it->second.get<dict>();
-				// For each prototype type and prototype entry, construct and initialize the
-				// prototype in-place by calling the registry's create function that takes
-				// the name and the prototype table.
+				fn.reserve(type_table.size());
 				for (const auto& [name, data] : type_table) {
 					if (!data.is<dict>()) {
-						return error(
-							generic_errc::type_mismatch,
-							lf::format("data.raw[{}][{}] must be a table/dict", fn.type(), name));
+						return error(generic_errc::type_mismatch, lf::format("data.raw[{}][{}] must be a table/dict", fn.type(), name));
 					}
 					try {
 						fn.create(name, data.get<dict>());
 					} catch (const lf::exception& e) {
-						return error(generic_errc::parse_error, e.what())
-							.add_context(
-								lf::format("creating prototype '{}' (type:{})", name, fn.type()));
+						return error(generic_errc::parse_error, e.what()).add_context(lf::format("creating prototype '{}' (type:{})", name, fn.type()));
 					}
 				}
 			}
@@ -386,7 +561,6 @@ namespace lf {
 		ClearLocalization();
 		loaded_options() = {};
 
-		// Collect all mods
 		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "scanning-mod-directories", 0.0f);
 		vector<ModInfo> mods;
 		auto add_mods_from_dir = [&](const fs::path& dir, bool privileged) {
@@ -409,13 +583,11 @@ namespace lf {
 			add_mods_from_dir(dir, false);
 		}
 
-		// Sync enabled mods file
 		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "reading-enabled-mods", 0.35f);
 		fs::path enabled_mods_path = fs::folder::appdata / "enabled_mods.yaml";
 		sync_enabled_mods(enabled_mods_path, mods);
 		auto enabled_mods = load_enabled_mods(enabled_mods_path);
 
-		// Filter mods to only enabled
 		vector<ModInfo> enabled_mod_list;
 		for (const auto& mod : mods) {
 			auto it = enabled_mods.find(mod.name);
@@ -424,7 +596,6 @@ namespace lf {
 			}
 		}
 
-		// Sort mods by dependency into a load order
 		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "resolving-dependencies", 0.7f);
 		error sort_result = sort_mods_by_dependency(enabled_mod_list);
 		if (sort_result) {
@@ -439,7 +610,7 @@ namespace lf {
 							version_to_string(mod.mod_version)));
 		}
 
-		auto language_result = LoadSelectedLanguageSetting(fs::folder::appdata / "settings.yaml");
+		auto language_result = LoadSelectedLanguageSetting(AppSettingsPath());
 		if (!language_result) {
 			return language_result.error().add_context("loading settings.yaml");
 		}
@@ -450,44 +621,21 @@ namespace lf {
 			return locale_error.add_context("loading locale files");
 		}
 
-		// For each mod in load order, run its data.lua on a single lua state
-		auto init_script = R"(
-data = {}
-data["raw"] = {}
-option = {}
-option["scene"] = {}
-)";
-
-		// Load null prototypes
 		{
 			log_info("[mod-loader] loading unknown prototypes");
 			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "core/null.lua", 0.0f);
-			sol::state lua_unknown_loader;
-			lua_unknown_loader.script(init_script);
-			for (auto& type : PrototypeTypeRegistry::functions) {
-				lua_unknown_loader["data"]["raw"][type.type()] = lua_unknown_loader.create_table();
+			sol::state lua;
+			initialize_prototype_lua(lua);
+
+			const ModInfo* core = find_mod(span<const ModInfo>(enabled_mod_list.data(), enabled_mod_list.size()), "core");
+			if (!core) {
+				return error(generic_errc::input_error, "required core mod was not found");
 			}
-			// find "core"
-			bool core_found = false;
-			for (auto& mod : enabled_mod_list) {
-				if (mod.name == "core") {
-					core_found = true;
-					try {
-						lua_unknown_loader.script_file((mod.location / "null.lua").string());
-						log_info(format("[mod-loader] loaded: {}/null.lua", mod.name));
-						report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), mod.name + "/null.lua", 0.2f);
-					} catch (const lf::exception& e) {
-						log_error(format("[mod-loader] error: {}/null.lua: {}", mod.name, e.what()));
-						return error(generic_errc::parse_error,
-									 "Failed to execute " + mod.name + "/null.lua: " + e.what());
-					}
-					break;
-				}
+			if (error err = load_prototype_script(lua, *core, "null.lua", true)) {
+				return err;
 			}
-			if (!core_found) {
-				throw lf::runtime_exception("required core mod was not found");
-			}
-			auto err = LoadDataRaw(lua_unknown_loader);
+			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "core/null.lua", 0.2f);
+			auto err = LoadDataRaw(lua);
 			if (err) {
 				return err.add_context("loading null prototypes from core/null.lua");
 			}
@@ -495,28 +643,15 @@ option["scene"] = {}
 		}
 
 		sol::state lua;
-		lua.script(init_script);
-		// Initialize the data.raw.[type] table
-		for (auto& type : PrototypeTypeRegistry::functions) {
-			lua["data"]["raw"][type.type()] = lua.create_table();
-		}
+		initialize_prototype_lua(lua);
 
-		// Run data.lua for each enabled mod
 		log_info("[mod-loader] loading mods");
 		for (size_t i = 0; i < enabled_mod_list.size(); ++i) {
 			const auto& mod = enabled_mod_list[i];
-			fs::path data_lua = mod.location / "data.lua";
-			if (fs::exists(data_lua)) {
-				try {
-					f32 progress_base = enabled_mod_list.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(enabled_mod_list.size());
-					report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), mod.name + "/data.lua", 0.35f + progress_base * 0.45f);
-					lua.script_file(data_lua.string());
-					log_info(format("[mod-loader] loaded: {}/data.lua", mod.name));
-				} catch (const lf::exception& e) {
-					log_error(format("[mod-loader] error: {}/data.lua: {}", mod.name, e.what()));
-					return error(generic_errc::parse_error,
-								 "Failed to execute " + mod.name + "/data.lua: " + e.what());
-				}
+			f32 progress_base = enabled_mod_list.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(enabled_mod_list.size());
+			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), mod.name + "/data.lua", 0.35f + progress_base * 0.45f);
+			if (error err = load_prototype_script(lua, mod, "data.lua")) {
+				return err;
 			}
 		}
 
@@ -527,6 +662,7 @@ option["scene"] = {}
 			return option_err.add_context("loading options from mods' data.lua");
 		}
 		loaded_options().language = selected_language;
+		loaded_options().mods = enabled_mod_list;
 
 		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "creating-prototypes", 0.9f);
 		auto err = LoadDataRaw(lua);
@@ -556,6 +692,10 @@ option["scene"] = {}
 
 	const ModOptions& LoadedModOptions() {
 		return loaded_options();
+	}
+
+	const vector<ModInfo>& LoadedMods() {
+		return loaded_options().mods;
 	}
 
 	void UnloadMods() {

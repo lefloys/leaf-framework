@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.0.0)
+cmake_minimum_required(VERSION 3.28.0)
 
 project(leaf-framework VERSION 0.1.0 LANGUAGES C CXX)
 
@@ -81,6 +81,25 @@ function(leaf_copy_rutile_backends target_name)
     endforeach()
 endfunction()
 
+function(leaf_export_glfw_symbols target_name)
+    if(WIN32)
+        target_link_options("${target_name}" PRIVATE
+            "$<$<CXX_COMPILER_ID:MSVC>:/INCLUDE:glfwCreateWindowSurface>"
+            "$<$<CXX_COMPILER_ID:MSVC>:/INCLUDE:glfwGetFramebufferSize>"
+            "$<$<CXX_COMPILER_ID:MSVC>:/INCLUDE:glfwGetWin32Window>"
+            "$<$<CXX_COMPILER_ID:MSVC>:/EXPORT:glfwCreateWindowSurface>"
+            "$<$<CXX_COMPILER_ID:MSVC>:/EXPORT:glfwGetFramebufferSize>"
+            "$<$<CXX_COMPILER_ID:MSVC>:/EXPORT:glfwGetWin32Window>"
+        )
+    else()
+        target_link_options("${target_name}" PRIVATE
+            "$<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:-Wl,--undefined=glfwCreateWindowSurface>"
+            "$<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:-Wl,--undefined=glfwGetFramebufferSize>"
+            "$<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:-Wl,--export-dynamic>"
+        )
+    endif()
+endfunction()
+
 function(leaf_configure_executable target_name launcher_kind steam_app_id)
     set(leaf_launcher_source_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/src/leaf/launcher")
     if("${launcher_kind}" STREQUAL "none")
@@ -104,6 +123,7 @@ function(leaf_configure_executable target_name launcher_kind steam_app_id)
     else()
         message(FATAL_ERROR "Unsupported launcher kind '${launcher_kind}'. Expected 'none' or 'steam'.")
     endif()
+    leaf_export_glfw_symbols("${target_name}")
     leaf_copy_rutile_backends("${target_name}")
 endfunction()
 

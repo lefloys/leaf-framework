@@ -26,6 +26,7 @@ namespace lf {
 		virtual void resolve_connectors() {}
 
 		string name = "null";
+		string order = "1";
 		local_string local_name;
 		local_string local_description;
 
@@ -35,6 +36,12 @@ namespace lf {
 			}
 			if (local_description.key.empty()) {
 				local_description.key = local_name.key;
+			}
+		}
+
+		void finalize_base_fields(const dict& data) {
+			if (has_field(data, "order")) {
+				load_field(data, "order", order);
 			}
 		}
 
