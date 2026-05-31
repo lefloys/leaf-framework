@@ -12,5 +12,4 @@ namespace lf {
 	void OverwriteAppdataDir(string_view new_path);
 	string_view GetAppdataDir();
 	string_view GetInstallDir();
-	report<string> ReadTextFile(string_view path);
 } // namespace lf

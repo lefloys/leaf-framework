@@ -3,7 +3,6 @@
 #include <leaf/application/application_stats.hpp>
 #include <leaf/core/format.hpp>
 #include <leaf/script/localization.hpp>
-#include <leaf/system/system.hpp>
 
 #include <algorithm>
 #include <charconv>
@@ -207,7 +206,7 @@ namespace lf {
 			return settings;
 		}
 
-		auto text = ReadTextFile(path.string());
+		auto text = fs::ReadTextFile(path.string());
 		if (!text.has_value()) {
 			error err = text.error();
 			return unexpected(err.add_context(format("loading '{}'", path.string())));

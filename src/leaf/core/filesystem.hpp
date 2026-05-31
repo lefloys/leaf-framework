@@ -1,4 +1,7 @@
 #pragma once
+#include "leaf/core/error.hpp"
+#include "leaf/core/string.hpp"
+
 #include <filesystem>
 
 namespace lf::fs {
@@ -16,4 +19,5 @@ namespace lf::fs {
 	using std::filesystem::exists;
 
 	path operator/(folder folder, const path& other);
+	report<string> ReadTextFile(string_view path);
 } // namespace lf::fs

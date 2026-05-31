@@ -1,6 +1,10 @@
 #include "filesystem.hpp"
 
+#include "leaf/core/format.hpp"
 #include "leaf/system/system.hpp"
+
+#include <fstream>
+#include <iterator>
 
 namespace lf::fs {
 	path operator/(folder folder, const path& other) {
@@ -11,5 +15,22 @@ namespace lf::fs {
 		case folder::current: return std::filesystem::current_path() / other;
 		}
 		return base_path;
+	}
+
+	report<string> ReadTextFile(string_view path) {
+		std::ifstream file(string(path), std::ios::binary);
+		if (!file) {
+			return unexpected(error(generic_errc::input_error, format("failed to open '{}'", path)));
+		}
+
+		string text(
+			(std::istreambuf_iterator<char>(file)),
+			std::istreambuf_iterator<char>());
+		if (!file.eof() && file.fail()) {
+			return unexpected(error(
+				generic_errc::input_error,
+				format("failed to read '{}'", path)));
+		}
+		return text;
 	}
 } // namespace lf::fs

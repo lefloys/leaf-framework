@@ -92,6 +92,9 @@ namespace lf::bin {
 	template<typename T>
 	constexpr bool trivially_binary_serializable_v = false;
 
+	template<>
+	inline constexpr bool trivially_binary_serializable_v<lf::byte> = true;
+
 	template<typename T>
 	concept binary_field = is_field_ref<std::remove_cvref_t<T>>::value;
 

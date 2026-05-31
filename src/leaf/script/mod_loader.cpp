@@ -6,7 +6,6 @@
 #include "virtual_filesystem.hpp"
 
 #include <leaf/core/messages.hpp>
-#include <leaf/system/system.hpp>
 
 #include <sol/sol.hpp>
 
@@ -78,7 +77,7 @@ namespace lf {
 		}
 
 		static report<string> expanded_source(string logical_path, fs::path absolute_path, fs::path relative_root) {
-			report<string> source = ReadTextFile(absolute_path.string());
+			report<string> source = fs::ReadTextFile(absolute_path.string());
 			if (!source) {
 				return unexpected(source.error());
 			}

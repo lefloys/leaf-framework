@@ -1,6 +1,14 @@
 #include "time.hpp"
 
+#include <chrono>
+
 namespace lf {
+	instant now() {
+		const std::chrono::steady_clock::duration duration = std::chrono::steady_clock::now().time_since_epoch();
+		const i64 nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+		return instant::from_quantum(nanoseconds);
+	}
+
 	string pretty_string_trait<timespan>::to_string(const timespan& value) {
 		i64 rem = value.value;
 		string result;

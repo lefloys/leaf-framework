@@ -1,11 +1,8 @@
 #include "leaf/system/system.hpp"
-#include "leaf/core/format.hpp"
-
+#include "leaf/system/socket.hpp"
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <limits.h>
 #include <unistd.h>
 
@@ -38,10 +35,12 @@ namespace lf {
 		} else {
 			system_data.install_dir = std::filesystem::current_path().string();
 		}
-		return error::no_error;
+		return sys::init_udp_sockets();
 	}
 
-	void exit_system() {}
+	void exit_system() {
+		sys::exit_udp_sockets();
+	}
 
 	string_view GetAppdataDir() {
 		return system_data.appdata_dir;
@@ -53,24 +52,5 @@ namespace lf {
 
 	void OverwriteAppdataDir(string_view new_path) {
 		system_data.appdata_dir = new_path;
-	}
-
-	report<string> ReadTextFile(string_view path) {
-		std::ifstream file(string(path), std::ios::binary);
-		if (!file) {
-			return unexpected(error(
-				generic_errc::input_error,
-				format("failed to open '{}'", path)));
-		}
-
-		string text(
-			(std::istreambuf_iterator<char>(file)),
-			std::istreambuf_iterator<char>());
-		if (!file.eof() && file.fail()) {
-			return unexpected(error(
-				generic_errc::input_error,
-				format("failed to read '{}'", path)));
-		}
-		return text;
 	}
 } // namespace lf

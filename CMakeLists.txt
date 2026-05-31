@@ -1,6 +1,20 @@
 cmake_minimum_required(VERSION 3.28.0)
 
+if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET AND NOT DEFINED CMAKE_VCPKG_TARGET_TRIPLET)
+    set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg target triplet")
+endif()
+if(CMAKE_HOST_WIN32 AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "MSVC runtime library")
+endif()
+
 project(leaf-framework VERSION 0.1.0 LANGUAGES C CXX)
+
+if(WIN32 AND DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET STREQUAL "x64-windows")
+    message(FATAL_ERROR "leaf-framework uses statically linked vcpkg dependencies on Windows. Configure with -DVCPKG_TARGET_TRIPLET=x64-windows-static, or clear the existing build directory if it cached x64-windows.")
+endif()
+if(WIN32 AND DEFINED CMAKE_VCPKG_TARGET_TRIPLET AND CMAKE_VCPKG_TARGET_TRIPLET STREQUAL "x64-windows")
+    message(FATAL_ERROR "leaf-framework uses statically linked vcpkg dependencies on Windows. Configure with -DCMAKE_VCPKG_TARGET_TRIPLET=x64-windows-static, or clear the existing build directory if it cached x64-windows.")
+endif()
 
 # Build options.
 option(LEAF_BUILD_EXAMPLES "Build leaf-framework examples." ${PROJECT_IS_TOP_LEVEL})
@@ -14,24 +28,24 @@ option(LEAF_BUILD_RUTILE_LOGGING_LAYER "Build the Rutile logging layer." ON)
 set(LEAF_SUPPORTED_WINDOW_BACKENDS "glfw")
 set(LEAF_WINDOW_BACKEND "glfw" CACHE STRING "Window backend for leaf-framework.")
 set_property(CACHE LEAF_WINDOW_BACKEND PROPERTY STRINGS ${LEAF_SUPPORTED_WINDOW_BACKENDS})
-set(LEAF_SUPPORTED_LAUNCHERS "none" "steam")
-set(launcher_kind "none" CACHE STRING "Launcher backend for leaf-framework.")
-set_property(CACHE launcher_kind PROPERTY STRINGS ${LEAF_SUPPORTED_LAUNCHERS})
+set(LEAF_SUPPORTED_STORES "none" "steam")
+set(store "none" CACHE STRING "Store backend for leaf-framework.")
+set_property(CACHE store PROPERTY STRINGS ${LEAF_SUPPORTED_STORES})
 
 if(NOT "${LEAF_WINDOW_BACKEND}" IN_LIST LEAF_SUPPORTED_WINDOW_BACKENDS)
     list(JOIN LEAF_SUPPORTED_WINDOW_BACKENDS ", " LEAF_SUPPORTED_WINDOW_BACKENDS_TEXT)
     message(FATAL_ERROR "Unsupported LEAF_WINDOW_BACKEND '${LEAF_WINDOW_BACKEND}'. Supported values: ${LEAF_SUPPORTED_WINDOW_BACKENDS_TEXT}.")
 endif()
-if(NOT "${launcher_kind}" IN_LIST LEAF_SUPPORTED_LAUNCHERS)
-    list(JOIN LEAF_SUPPORTED_LAUNCHERS ", " LEAF_SUPPORTED_LAUNCHERS_TEXT)
-    message(FATAL_ERROR "Unsupported launcher_kind '${launcher_kind}'. Supported values: ${LEAF_SUPPORTED_LAUNCHERS_TEXT}.")
+if(NOT "${store}" IN_LIST LEAF_SUPPORTED_STORES)
+    list(JOIN LEAF_SUPPORTED_STORES ", " LEAF_SUPPORTED_STORES_TEXT)
+    message(FATAL_ERROR "Unsupported store '${store}'. Supported values: ${LEAF_SUPPORTED_STORES_TEXT}.")
 endif()
 
 # Shared project helpers.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include("AddFiles")
 set(LEAF_STEAMWORKS_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/steam-sdk" CACHE PATH "Local Steamworks SDK directory")
-set(LEAF_STEAM_APP_ID "480" CACHE STRING "Steam app id used by the Steam launcher.")
+set(LEAF_STEAM_APP_ID "480" CACHE STRING "Steam app id used by the Steam store.")
 
 # Third-party dependencies.
 find_package("glfw3" CONFIG REQUIRED)
@@ -72,6 +86,9 @@ target_link_libraries("${PROJECT_NAME}"
         yaml-cpp::yaml-cpp
         ${LUA_LIBRARIES}
 )
+if(WIN32)
+    target_link_libraries("${PROJECT_NAME}" PUBLIC ws2_32)
+endif()
 add_subdirectory(src)
 
 function(leaf_copy_rutile_backends target_name)
@@ -110,7 +127,7 @@ function(leaf_export_glfw_symbols target_name)
 endfunction()
 
 function(leaf_configure_executable target_name)
-    leaf_configure_launcher_executable("${target_name}")
+    leaf_configure_store_executable("${target_name}")
     leaf_export_glfw_symbols("${target_name}")
     leaf_copy_rutile_backends("${target_name}")
 endfunction()

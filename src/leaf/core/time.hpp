@@ -5,7 +5,24 @@
 #include "leaf/core/unit.hpp"
 
 namespace lf {
-	using timespan = unit<struct timespan_tag>;
+	using duration = unit<struct duration_tag>;
+	using instant = unit<struct instant_tag>;
+	using timespan = duration;
+
+	instant now();
+
+	constexpr instant operator+(instant lhs, duration rhs) {
+		return instant::from_quantum(lhs.quantum_count() + rhs.quantum_count());
+	}
+
+	constexpr instant operator-(instant lhs, duration rhs) {
+		return instant::from_quantum(lhs.quantum_count() - rhs.quantum_count());
+	}
+
+	constexpr duration operator-(instant lhs, instant rhs) {
+		return duration::from_quantum(lhs.quantum_count() - rhs.quantum_count());
+	}
+
 	template <>
 	struct unit_trait<timespan> {
 		static constexpr array<std::pair<i64, string_view>, 4> units = {

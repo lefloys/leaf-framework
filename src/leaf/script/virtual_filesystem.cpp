@@ -2,7 +2,6 @@
 
 #include <leaf/core/exception.hpp>
 #include <leaf/core/format.hpp>
-#include <leaf/system/system.hpp>
 
 #include <mutex>
 #include <unordered_map>
@@ -150,7 +149,7 @@ namespace lf {
 			return unexpected(resolved_path.error().add_context(format("resolving text file '{}'", path)));
 		}
 
-		auto text = ReadTextFile(resolved_path->string());
+		auto text = fs::ReadTextFile(resolved_path->string());
 		if (!text) {
 			return unexpected(text.error().add_context(format("reading text file '{}'", path)));
 		}

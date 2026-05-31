@@ -2,7 +2,6 @@
 
 #include <leaf/core/messages.hpp>
 #include <leaf/script/settings.hpp>
-#include <leaf/system/system.hpp>
 
 #include <cctype>
 #include <sstream>
@@ -54,7 +53,7 @@ namespace lf {
 		}
 
 		error load_locale_file(const fs::path& path, section_map& entries) {
-			auto file_text = ReadTextFile(path.string());
+			auto file_text = fs::ReadTextFile(path.string());
 			if (!file_text) {
 				return file_text.error();
 			}

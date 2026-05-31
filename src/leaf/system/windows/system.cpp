@@ -1,10 +1,7 @@
 #include "leaf/system/system.hpp"
-#include "leaf/core/format.hpp"
-
+#include "leaf/system/socket.hpp"
 #include <Shlobj.h>
 #include <cstring>
-#include <fstream>
-#include <iterator>
 #include <windows.h>
 
 namespace lf {
@@ -17,8 +14,7 @@ namespace lf {
 
 	error init_system(span<string_view> args) {
 		install_crash_handler();
-		if (SUCCEEDED(
-				SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, 0, system_data.appdata_dir))) {
+		if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, 0, system_data.appdata_dir))) {
 			system_data.appdata_dir[MAX_PATH - 1] = '\0';
 		} else {
 			system_data.appdata_dir[0] = '\0';
@@ -35,9 +31,11 @@ namespace lf {
 				break;
 			}
 		}
-		return error::no_error;
+		return sys::init_udp_sockets();
 	}
-	void exit_system() {}
+	void exit_system() {
+		sys::exit_udp_sockets();
+	}
 
 	string_view GetAppdataDir() {
 		return system_data.appdata_dir;
@@ -51,24 +49,5 @@ namespace lf {
 		size_t len = (new_path.size() < MAX_PATH - 1) ? new_path.size() : (MAX_PATH - 1);
 		memcpy(system_data.appdata_dir, new_path.data(), len);
 		system_data.appdata_dir[len] = '\0';
-	}
-
-	report<string> ReadTextFile(string_view path) {
-		std::ifstream file(string(path), std::ios::binary);
-		if (!file) {
-			return unexpected(error(
-				generic_errc::input_error,
-				format("failed to open '{}'", path)));
-		}
-
-		string text(
-			(std::istreambuf_iterator<char>(file)),
-			std::istreambuf_iterator<char>());
-		if (!file.eof() && file.fail()) {
-			return unexpected(error(
-				generic_errc::input_error,
-				format("failed to read '{}'", path)));
-		}
-		return text;
 	}
 } // namespace lf

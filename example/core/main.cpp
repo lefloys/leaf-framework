@@ -7,17 +7,13 @@
 int main(int argc, char* argv[]) {
 	lf::vector<lf::string_view> args;
 	args.reserve(argc);
-	for (int i = 0; i < argc; ++i) {
-		args.push_back(argv[i]);
-	}
+	for (int i = 0; i < argc; ++i) { args.push_back(argv[i]); }
 
 	const lf::error error = lf::Init(args);
-	if (error) {
-		std::cerr << "leaf init failed: " << error.message << "\n";
-		return 1;
-	}
+	if (error) { std::cerr << "leaf init failed: " << error.message << "\n"; return 1; }
 
-	std::cout << "leaf initialized\n";
+	lf::Update();
+
 	lf::Exit();
 	return 0;
 }

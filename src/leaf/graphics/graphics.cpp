@@ -36,8 +36,6 @@ namespace lf {
 				enable_validation_layer = true;
 			} else if (is_graphics_argument(args[i]) && i + 1 < args.size()) {
 				backend_name = args[++i].data();
-			} else if (!is_option_argument(args[i])) {
-				backend_name = args[i].data();
 			}
 		}
 
