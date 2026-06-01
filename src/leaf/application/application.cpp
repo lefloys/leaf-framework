@@ -1,6 +1,7 @@
 #include "application.hpp"
 
 #include "application_stats.hpp"
+#include "rml_window.hpp"
 
 #include <leaf/core/filesystem.hpp>
 #include <leaf/core/format.hpp>
@@ -260,6 +261,7 @@ namespace lf {
 		if (!context) {
 			throw runtime_exception("failed to create RmlUi application context");
 		}
+		add_rml_element_installer(RegisterRmlWindowElement);
 	}
 
 	Application::Application(handle<lf::window> display)
@@ -280,6 +282,7 @@ namespace lf {
 		if (!context) {
 			throw runtime_exception("failed to create RmlUi application context");
 		}
+		add_rml_element_installer(RegisterRmlWindowElement);
 	}
 
 	Application::~Application() {
@@ -298,6 +301,9 @@ namespace lf {
 			return error::no_error;
 		}
 
+		for (const ElementInstaller& installer : rml_element_installers) {
+			installer();
+		}
 		load_scene(scene_source);
 		{
 			std::lock_guard lock(window_mutex);
@@ -387,6 +393,18 @@ namespace lf {
 		return stats.updates_per_second.load(std::memory_order_relaxed);
 	}
 
+	void Application::add_rml_element_installer(ElementInstaller installer) {
+		rml_element_installers.push_back(std::move(installer));
+	}
+
+	void Application::add_scene_script_installer(Scene::ScriptInstaller installer) {
+		scene_script_installers.push_back(std::move(installer));
+	}
+
+	void Application::add_scene_fixed_updater(Scene::FixedUpdater updater) {
+		scene_fixed_updaters.push_back(std::move(updater));
+	}
+
 	f32 Application::current_fps() const {
 		return stats.current_fps.load(std::memory_order_relaxed);
 	}
@@ -430,7 +448,7 @@ namespace lf {
 			persistent_elements = loaded_scene->release_persistent_elements();
 			loaded_scene.reset();
 		}
-		loaded_scene = make_scene(*context, display, stats, scene_source, args_yaml, std::move(persistent_elements));
+		loaded_scene = make_scene(*context, display, stats, scene_source, args_yaml, std::move(persistent_elements), scene_script_installers, scene_fixed_updaters);
 		window_title = string(loaded_scene->title());
 		Window::SetTitle(display, window_title);
 	}

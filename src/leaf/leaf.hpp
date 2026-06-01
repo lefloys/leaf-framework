@@ -21,7 +21,26 @@
 #include <leaf/pmg/pmg.hpp>
 
 namespace lf {
+	/*!
+	** @brief Initializes Leaf's global systems.
+	** @param args Command line arguments passed to the process.
+	** @return An error when initialization fails, or an empty error on success.
+	**
+	** Call this before creating Leaf applications or using subsystems that need
+	** framework-level setup.
+	*/
 	error Init(span<string_view> args);
+
+	/*!
+	** @brief Advances framework-level work for one host iteration.
+	** @return True while the framework should continue running.
+	*/
 	bool Update();
+
+	/*!
+	** @brief Shuts down Leaf's global systems.
+	**
+	** Call this after application shutdown to release framework-level resources.
+	*/
 	void Exit();
 } // namespace lf

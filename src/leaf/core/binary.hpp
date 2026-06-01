@@ -31,8 +31,38 @@ lf::error process(...) requires false;
 namespace lf::bin {
 	using ::process;
 
-	/*
-	** Leaf binary format contract:
+	/*!
+	** @ingroup binary
+	** @brief Binary serialization and parsing helpers.
+	**
+	** The binary API is built around one customization point:
+	**
+	** @code{.cpp}
+	** struct player_save {
+	**     lf::vec2 position;
+	**     lf::string name;
+	**     i32 health = 0;
+	** };
+	**
+	** template<lf::bin::byte_stream Stream, lf::bin::data<player_save> Player>
+	** lf::error process(Stream& stream, Player& player) {
+	**     return stream(
+	**         lf::bin::field("position", player.position),
+	**         lf::bin::field("name", player.name),
+	**         lf::bin::field("health", player.health)
+	**     );
+	** }
+	**
+	** lf::report<lf::vector<lf::byte>> bytes = lf::bin::write(player);
+	** lf::report<player_save> parsed = lf::bin::read<player_save>(*bytes);
+	** @endcode
+	**
+	** Field names are not written to the byte stream. They are used to build
+	** readable diagnostics such as "player : inventory : [3] : id" when parsing
+	** or writing fails. For payloads embedded inside a larger packet, construct
+	** read_stream or write_stream directly instead of using read<T>().
+	**
+	** Binary format contract:
 	** - Fixed-width integers are encoded little-endian.
 	** - Floating-point values are encoded by preserving their IEEE-style bit pattern as
 	**   little-endian u32/u64 payloads.
@@ -47,6 +77,15 @@ namespace lf::bin {
 	** - read<T>() expects the whole input span to be consumed. Use read_stream directly
 	**   for embedded/chunked payloads with trailing bytes.
 	**/
+
+	/*!
+	** @ingroup binary
+	** @brief Variable-length encoded size value.
+	**
+	** size is encoded as an unsigned 7-bit continuation varint. It is used by
+	** strings, vectors, maps, and any user format that needs a compact element
+	** count or byte count.
+	*/
 	struct size {
 		size_t value = 0;
 
@@ -60,15 +99,40 @@ namespace lf::bin {
 		constexpr bool operator==(const size&) const = default;
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Allocation and payload limits applied while reading.
+	**
+	** Use these limits when parsing untrusted or network-provided payloads to
+	** reject oversized strings, vectors, and maps before allocation.
+	*/
 	struct read_limits {
+		/*!
+		** @brief Maximum string byte length accepted while reading.
+		*/
 		size_t max_string_bytes = std::numeric_limits<size_t>::max();
+
+		/*!
+		** @brief Maximum vector or map element count accepted while reading.
+		*/
 		size_t max_vector_elements = std::numeric_limits<size_t>::max();
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Options passed to read() and fast_read().
+	*/
 	struct read_options {
 		read_limits limits;
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Named field reference passed to a binary stream.
+	**
+	** field_ref stores the field name, the value to process, and optional extra
+	** arguments forwarded to a custom process overload.
+	*/
 	template<typename T, typename... Args>
 	struct field_ref {
 		string_view name;
@@ -76,6 +140,13 @@ namespace lf::bin {
 		std::tuple<Args&...> args;
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Creates a named field reference for stream(...).
+	** @param name Diagnostic field name.
+	** @param value Value to serialize or parse.
+	** @param args Optional arguments forwarded to process(stream, value, args...).
+	*/
 	template<typename T, typename... Args>
 	field_ref<T, Args...> field(string_view name, T& value, Args&... args) { return { name, value, { args... } }; }
 
@@ -89,6 +160,15 @@ namespace lf::bin {
 		}
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Opt-in marker for trivially copyable binary payload types.
+	**
+	** Specialize this variable template to true only for types whose in-memory
+	** representation is stable enough to write as raw bytes. Fixed integers,
+	** floats, bools, and enums are handled by dedicated portable encoders and do
+	** not need this marker.
+	*/
 	template<typename T>
 	constexpr bool trivially_binary_serializable_v = false;
 
@@ -105,6 +185,10 @@ namespace lf::bin {
 	template<auto Version>
 	struct version_tag { static constexpr auto value = Version; };
 
+	/*!
+	** @ingroup binary
+	** @brief Reserves or skips a fixed number of bytes in a binary layout.
+	*/
 	template<size_t Amount>
 	struct padding {
 		static constexpr size_t amount = Amount;
@@ -355,6 +439,14 @@ namespace lf::bin {
 
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Checked reader for binary data.
+	**
+	** read_stream tracks a cursor through an input byte span and preserves
+	** field context for diagnostics. Use it directly when a payload is embedded
+	** in a larger byte stream or when trailing bytes are expected.
+	*/
 	struct read_stream {
 		using stream_tag = read_stream_tag;
 
@@ -385,6 +477,11 @@ namespace lf::bin {
 			return {};
 		}
 
+		/*!
+		** @brief Reads a zero-copy view into the remaining input.
+		**
+		** The returned span points into the original input passed to the stream.
+		*/
 		error bytes_view(span<const lf::byte>& out, size_t byte_count) {
 			if (byte_count > remaining()) {
 				return error(generic_errc::parse_error, detail::context_message(*this, format("reading {} bytes failed at byte {}: {} bytes remain", byte_count, m_cursor, remaining())));
@@ -426,6 +523,11 @@ namespace lf::bin {
 			m_context = std::move(context);
 		}
 
+		/*!
+		** @brief Installs a callback invoked whenever the read cursor advances.
+		**
+		** The callback receives the current cursor and total input size.
+		*/
 		void set_progress(std::function<void(size_t, size_t)> progress) {
 			m_progress = std::move(progress);
 		}
@@ -436,6 +538,11 @@ namespace lf::bin {
 			return detail::process_value(*this, value);
 		}
 
+		/*!
+		** @brief Processes named fields in order.
+		**
+		** This is the usual implementation tool for custom process overloads.
+		*/
 		template<binary_field... Fields>
 		error operator()(Fields&&... fields) {
 			return detail::process_fields(*this, "reading", std::forward<Fields>(fields)...);
@@ -456,6 +563,14 @@ namespace lf::bin {
 		}
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Reader variant with reduced diagnostic context overhead.
+	**
+	** fast_read_stream keeps the same binary format as read_stream but skips
+	** field context tracking. Use it for hot paths where detailed parse errors
+	** are less important than throughput.
+	*/
 	struct fast_read_stream {
 		using stream_tag = read_stream_tag;
 		using speed_tag = fast_stream_tag;
@@ -542,6 +657,14 @@ namespace lf::bin {
 		size_t m_cursor = 0;
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Growing writer for binary data.
+	**
+	** write_stream appends encoded bytes into an owned vector. Use write() for
+	** the common case, or construct write_stream directly when building a larger
+	** packet in multiple steps.
+	*/
 	struct write_stream {
 		using stream_tag = write_stream_tag;
 
@@ -572,10 +695,19 @@ namespace lf::bin {
 			return {};
 		}
 
+		/*!
+		** @brief Gets the bytes written so far.
+		**
+		** The returned span remains valid until the stream writes more data or is
+		** destroyed.
+		*/
 		span<const lf::byte> written() const {
 			return m_output;
 		}
 
+		/*!
+		** @brief Moves the written bytes out of the stream.
+		*/
 		vector<lf::byte> take_written() {
 			return std::move(m_output);
 		}
@@ -599,6 +731,11 @@ namespace lf::bin {
 			return detail::process_value(*this, value);
 		}
 
+		/*!
+		** @brief Processes named fields in order.
+		**
+		** This is the usual implementation tool for custom process overloads.
+		*/
 		template<binary_field... Fields>
 		error operator()(Fields&&... fields) {
 			return detail::process_fields(*this, "writing", std::forward<Fields>(fields)...);
@@ -609,6 +746,13 @@ namespace lf::bin {
 		string m_context;
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Writer variant with reduced diagnostic context overhead.
+	**
+	** fast_write_stream emits the same bytes as write_stream but skips field
+	** context tracking.
+	*/
 	struct fast_write_stream {
 		using stream_tag = write_stream_tag;
 		using speed_tag = fast_stream_tag;
@@ -674,6 +818,14 @@ namespace lf::bin {
 		vector<lf::byte> m_output;
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Writer that targets caller-provided fixed storage.
+	**
+	** fixed_write_stream is useful when a protocol requires writing into an
+	** existing buffer. Writes fail with parse_error if the output span is too
+	** small.
+	*/
 	struct fixed_write_stream {
 		using stream_tag = write_stream_tag;
 
@@ -756,6 +908,13 @@ namespace lf::bin {
 		string m_context;
 	};
 
+	/*!
+	** @ingroup binary
+	** @brief Writer-like stream that counts bytes without storing them.
+	**
+	** measure_stream follows the same process path as writing, making it useful
+	** for pre-sizing output buffers.
+	*/
 	struct measure_stream {
 		using stream_tag = write_stream_tag;
 
@@ -825,11 +984,27 @@ namespace lf::bin {
 		concept has_migration_source = !std::same_as<std::remove_cvref_t<decltype(migration_source<T, TargetVersion>)>, missing_migration_source>;
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Processes a value with a specific binary schema version.
+	**
+	** Define process(stream, version_tag<Version>{}, value) overloads for each
+	** layout version, then call this helper when writing or when reading bytes
+	** already known to match Version exactly.
+	*/
 	template<typename T, auto Version, byte_stream Stream, data<T> Value>
 	error process(Stream& stream, Value& value) {
 		return process(stream, version_tag<Version>{}, value);
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Migrates data from its encoded file version to a target version.
+	**
+	** Specialize migration_source<T, TargetVersion> with the immediately
+	** preceding version, and provide migrate(version_tag<TargetVersion>, value)
+	** to transform the already-read value one version step forward.
+	*/
 	template<typename T, auto TargetVersion, readable_byte_stream Stream>
 	error migrate(Stream& stream, version file_version, T& value) {
 		if constexpr (detail::has_migration_source<T, TargetVersion>) {
@@ -849,6 +1024,10 @@ namespace lf::bin {
 		}
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Reads a versioned value and migrates it to TargetVersion if needed.
+	*/
 	template<typename T, auto TargetVersion, readable_byte_stream Stream>
 	error process(Stream& stream, version file_version, T& value) {
 		if (file_version == TargetVersion) {
@@ -1391,6 +1570,13 @@ namespace lf::bin {
 		return stream.padding(std::remove_cvref_t<Padding>::amount);
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Parses a complete byte span into T.
+	**
+	** read() fails if parsing fails or if any trailing bytes remain. Use
+	** read_stream directly when the input span contains more data after T.
+	*/
 	template<typename T>
 	report<T> read(span<const lf::byte> bytes, read_options options = {}) {
 		T value{};
@@ -1404,6 +1590,13 @@ namespace lf::bin {
 		return value;
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Parses a complete byte span into T with reduced diagnostics.
+	**
+	** fast_read() uses fast_read_stream. It emits the same values as read() but
+	** omits field context from parse errors.
+	*/
 	template<typename T>
 	report<T> fast_read(span<const lf::byte> bytes, read_options options = {}) {
 		T value{};
@@ -1417,11 +1610,19 @@ namespace lf::bin {
 		return value;
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Alias for read<T>().
+	*/
 	template<typename T>
 	report<T> process(span<const lf::byte> bytes, read_options options = {}) {
 		return read<T>(bytes, options);
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Computes the number of bytes write(value) would produce.
+	*/
 	template<typename T>
 	report<size_t> measure(const T& value) {
 		measure_stream stream;
@@ -1431,6 +1632,10 @@ namespace lf::bin {
 		return stream.size();
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Serializes value into an owned byte vector.
+	*/
 	template<typename T>
 	report<vector<lf::byte>> write(const T& value) {
 		write_stream stream;
@@ -1440,6 +1645,12 @@ namespace lf::bin {
 		return stream.take_written();
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Serializes value with reduced diagnostic context overhead.
+	**
+	** fast_write() emits the same bytes as write().
+	*/
 	template<typename T>
 	report<vector<lf::byte>> fast_write(const T& value) {
 		fast_write_stream stream;
@@ -1449,6 +1660,13 @@ namespace lf::bin {
 		return stream.take_written();
 	}
 
+	/*!
+	** @ingroup binary
+	** @brief Serializes value into caller-provided storage.
+	**
+	** Returns an error if the output span cannot hold the complete encoded
+	** value. Use measure(value) to size the span first when needed.
+	*/
 	template<typename T>
 	error write_to(span<lf::byte> out, const T& value) {
 		fixed_write_stream stream(out);
