@@ -3,6 +3,7 @@
 
 #include <leaf/core/exception.hpp>
 #include <leaf/core/profiler.hpp>
+#include <leaf/graphics/queue.hpp>
 
 #include <memory>
 #include <utility>
@@ -389,6 +390,7 @@ namespace lf {
 		}
 
 		rt_swapchain_acquire_result acquired = {};
+		auto queue_lock = detail::lock_queue(queue);
 		{
 			LF_PROFILE_SCOPE("Window::AcquireSwapchain");
 			acquired = rtSwapchainAcquire(window.value->swapchain);
@@ -403,7 +405,8 @@ namespace lf {
 		timepoint ready = acquired.timepoint;
 		{
 			LF_PROFILE_SCOPE("Window::WaitForAcquire");
-			Queue::Wait(queue, ready);
+			rtQueueWait(queue, ready);
+			detail::check_rutile_error("failed to wait for swapchain acquire");
 		}
 		{
 			LF_PROFILE_SCOPE("Window::BeginCommandBuffer");
@@ -417,11 +420,15 @@ namespace lf {
 	void Window::EndFrame(view<window> window) {
 		LF_PROFILE_SCOPE("Window::EndFrame");
 		timepoint rendered;
+		auto queue_lock = detail::lock_queue(window.value->current_queue);
 		{
 			LF_PROFILE_SCOPE("Window::SubmitFrame");
 			CommandBuffer::EndRendering(window.value->frame_command_buffer);
 			CommandBuffer::End(window.value->frame_command_buffer);
-			rendered = Queue::Submit(window.value->current_queue, window.value->frame_command_buffer);
+			rendered = rtQueueSubmit(window.value->current_queue, window.value->frame_command_buffer.get().value);
+			detail::check_rutile_error("failed to submit swapchain frame");
+			rendered = rtQueueFlush(window.value->current_queue);
+			detail::check_rutile_error("failed to flush swapchain frame");
 		}
 		{
 			LF_PROFILE_SCOPE("Window::PresentSwapchain");

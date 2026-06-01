@@ -19,6 +19,7 @@ endif()
 # Build options.
 option(LEAF_BUILD_EXAMPLES "Build leaf-framework examples." ${PROJECT_IS_TOP_LEVEL})
 option(LEAF_BUILD_TESTS "Build leaf-framework tests." ${PROJECT_IS_TOP_LEVEL})
+option(LEAF_BUILD_TOOLS "Build leaf-framework developer tools." ON)
 option(LEAF_BUILD_RUTILE_VULKAN "Build the Vulkan Rutile runtime." ON)
 option(LEAF_BUILD_RUTILE_DX12 "Build the DirectX 12 Rutile runtime on Windows." ON)
 option(LEAF_BUILD_RUTILE_VALIDATION_LAYER "Build the Rutile validation layer." ON)
@@ -135,6 +136,10 @@ endfunction()
 # Optional developer targets.
 if(LEAF_BUILD_EXAMPLES)
     add_subdirectory(example)
+endif()
+
+if(LEAF_BUILD_TOOLS)
+    add_subdirectory("tools")
 endif()
 
 if(LEAF_BUILD_TESTS)

@@ -47,6 +47,10 @@ namespace lf::detail {
 	std::unique_lock<std::mutex> lock_queue(view<queue> queue) {
 		return std::unique_lock(queue_locks().get(queue));
 	}
+
+	std::unique_lock<std::mutex> lock_queue(rt_queue queue) {
+		return std::unique_lock(queue_locks().get(queue));
+	}
 } // namespace lf::detail
 
 namespace lf {
@@ -66,6 +70,8 @@ namespace lf {
 		auto lock = detail::lock_queue(queue);
 		rt_timepoint timepoint = rtQueueSubmit(queue, command_buffer);
 		detail::check_rutile_error("failed to submit command buffer");
+		timepoint = rtQueueFlush(queue);
+		detail::check_rutile_error("failed to flush submitted command buffer");
 		return timepoint;
 	}
 

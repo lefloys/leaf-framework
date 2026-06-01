@@ -21,6 +21,7 @@ namespace lf {
 
 	namespace detail {
 		std::unique_lock<std::mutex> lock_queue(view<queue> queue);
+		std::unique_lock<std::mutex> lock_queue(rt_queue queue);
 	}
 } // namespace lf
 

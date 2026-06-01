@@ -67,20 +67,25 @@ namespace lf::sys {
 			throw runtime_exception("UDP message is too large");
 		}
 
-		addrinfo hints{};
-		hints.ai_family = AF_INET;
-		hints.ai_socktype = SOCK_DGRAM;
-		hints.ai_protocol = IPPROTO_UDP;
-
-		addrinfo* result = nullptr;
-		const string port_string = std::to_string(port);
-		if (getaddrinfo(string(address).c_str(), port_string.c_str(), &hints, &result) != 0 || !result) {
-			throw runtime_exception("failed to resolve UDP peer");
-		}
-
 		sockaddr_in remote{};
-		std::memcpy(&remote, result->ai_addr, sizeof(remote));
-		freeaddrinfo(result);
+		remote.sin_family = AF_INET;
+		remote.sin_port = htons(port);
+		const string address_string(address);
+		if (inet_pton(AF_INET, address_string.c_str(), &remote.sin_addr) != 1) {
+			addrinfo hints{};
+			hints.ai_family = AF_INET;
+			hints.ai_socktype = SOCK_DGRAM;
+			hints.ai_protocol = IPPROTO_UDP;
+
+			addrinfo* result = nullptr;
+			const string port_string = std::to_string(port);
+			if (getaddrinfo(address_string.c_str(), port_string.c_str(), &hints, &result) != 0 || !result) {
+				throw runtime_exception("failed to resolve UDP peer");
+			}
+
+			std::memcpy(&remote, result->ai_addr, sizeof(remote));
+			freeaddrinfo(result);
+		}
 
 		const int sent = sendto(
 			native_socket(socket),

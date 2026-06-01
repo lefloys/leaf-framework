@@ -1,14 +1,6 @@
 #include "command_buffer.hpp"
 
-#include <leaf/core/exception.hpp>
-
 namespace lf {
-	void RequireCommandBufferComputeExtension() {
-		if (!rt_rtCmdUseComputeProgram) {
-			throw runtime_exception("Rutile compute extension is not available");
-		}
-	}
-
 	handle<command_buffer> CommandBuffer::Create() {
 		rt_command_buffer command_buffer = rtCmdCreate();
 		detail::check_rutile_error("failed to create command buffer");
@@ -60,7 +52,6 @@ namespace lf {
 
 	void CommandBuffer::UseComputeProgram(view<command_buffer> command_buffer,
 										  view<compute_program> program) {
-		RequireCommandBufferComputeExtension();
 		rtCmdUseComputeProgram(command_buffer, program);
 		detail::check_rutile_error("failed to bind compute program");
 	}
@@ -81,25 +72,17 @@ namespace lf {
 
 	void CommandBuffer::StorageBuffer(view<command_buffer> command_buffer, u32 binding,
 									  view<buffer> buffer, u64 offset, u64 size) {
-		if (!rt_rtCmdStorageBuffer) {
-			rt_rtCmdStorageBuffer = (PFN_rtCmdStorageBuffer)rtGetProc("rtCmdStorageBuffer");
-		}
-		if (!rt_rtCmdStorageBuffer) {
-			throw runtime_exception("Rutile storage buffer binding is not available");
-		}
 		rtCmdStorageBuffer(command_buffer, binding, buffer, offset, size);
 		detail::check_rutile_error("failed to bind storage buffer");
 	}
 
 	void CommandBuffer::StorageTexture(view<command_buffer> command_buffer, u32 binding,
 									   view<texture_view> texture_view) {
-		RequireCommandBufferComputeExtension();
 		rtCmdStorageTexture(command_buffer, binding, texture_view);
 		detail::check_rutile_error("failed to bind storage texture");
 	}
 
 	void CommandBuffer::ComputeBarrier(view<command_buffer> command_buffer) {
-		RequireCommandBufferComputeExtension();
 		rtCmdComputeBarrier(command_buffer);
 		detail::check_rutile_error("failed to insert compute barrier");
 	}
@@ -118,7 +101,6 @@ namespace lf {
 
 	void CommandBuffer::Dispatch(view<command_buffer> command_buffer, u32 group_count_x,
 								 u32 group_count_y, u32 group_count_z) {
-		RequireCommandBufferComputeExtension();
 		rtCmdDispatch(command_buffer, group_count_x, group_count_y, group_count_z);
 		detail::check_rutile_error("failed to dispatch");
 	}

@@ -10,6 +10,7 @@
 #include <sol/sol.hpp>
 
 #include <cmath>
+#include <algorithm>
 #include <functional>
 #include <limits>
 #include <unordered_map>
@@ -502,12 +503,22 @@ option["scene"] = {}
 				}
 				dict& type_table = it->second.get<dict>();
 				fn.reserve(type_table.size());
+				vector<string> names;
+				names.reserve(type_table.size());
 				for (const auto& [name, data] : type_table) {
-					if (!data.is<dict>()) {
+					names.emplace_back(name);
+				}
+				std::sort(names.begin(), names.end());
+				for (const string& name : names) {
+					auto prototype = type_table.find(name);
+					if (prototype == type_table.end()) {
+						continue;
+					}
+					if (!prototype->second.is<dict>()) {
 						return error(generic_errc::type_mismatch, lf::format("data.raw[{}][{}] must be a table/dict", fn.type(), name));
 					}
 					try {
-						fn.create(name, data.get<dict>());
+						fn.create(name, prototype->second.get<dict>());
 					} catch (const lf::exception& e) {
 						return error(generic_errc::parse_error, e.what()).add_context(lf::format("creating prototype '{}' (type:{})", name, fn.type()));
 					}

@@ -60,8 +60,14 @@ namespace lf::lockstep {
 		vector<byte> bytes;
 	};
 
+	struct queued_send {
+		net::Peer peer;
+		vector<byte> bytes;
+	};
+
 	struct received_packets {
 		PacketSequence next_expected = 1;
+		vector<PacketSequence> missing;
 	};
 
 	struct packet_record {
@@ -78,6 +84,7 @@ namespace lf::lockstep {
 	struct snapshot_download {
 		bool active = false;
 		bool end_received = false;
+		bool load_started = false;
 		u64 snapshot_id = 0;
 		Tick baseline_tick = 0;
 		u16 chunk_size = 1000;
@@ -93,6 +100,14 @@ namespace lf::lockstep {
 		net::Peer peer;
 		SessionId session_id = 0;
 		state connection_state = state::logging_in;
+		bool snapshot_requested = false;
+		bool snapshot_sending = false;
+		u64 snapshot_id = 0;
+		Tick snapshot_baseline_tick = 0;
+		u16 snapshot_chunk_size = 1000;
+		u32 snapshot_chunk_count = 0;
+		u32 next_snapshot_chunk = 0;
+		vector<byte> snapshot_bytes;
 		PacketSequence next_send_sequence = 1;
 		received_packets received;
 		vector<sent_packet> sent_packets;
@@ -114,6 +129,7 @@ namespace lf::lockstep {
 		Simulation* simulation = nullptr;
 		Options options;
 		Tick current_tick = 0;
+		SessionId local_session = 0;
 		PayloadId next_payload_id = 1;
 		vector<pending_payload> pending_payloads;
 		vector<PendingPayload> pending_views;
@@ -154,9 +170,13 @@ namespace lf::lockstep {
 		host_connection& find_or_create_connection(const net::Peer& peer);
 		host_connection* find_connection(const net::Peer& peer, SessionId session_id);
 		void send_connect_accept(host_connection& connection);
-		void send_snapshot(host_connection& connection);
+		void request_snapshot(host_connection& connection);
+		void process_snapshot_requests();
+		void begin_snapshot(host_connection& connection);
+		void continue_snapshot(host_connection& connection);
 		void send_missing_for(host_connection& connection, vector<PacketSequence> missing);
 		void resend_missing(host_connection& connection, const vector<PacketSequence>& missing);
+		void flush_send_queue();
 
 		template<typename Writer>
 		void send_connected(host_connection& connection, packet_kind kind, Writer writer);
@@ -164,6 +184,7 @@ namespace lf::lockstep {
 		net::Socket socket;
 		std::array<byte, 65507> receive_buffer{};
 		vector<host_connection> connections;
+		vector<queued_send> send_queue;
 		vector<stored_payload> staged_commands;
 		SessionId next_session_id = 2;
 		u64 next_snapshot_id = 1;
@@ -179,7 +200,7 @@ namespace lf::lockstep {
 		void receive_message(const net::Message& message);
 		void collect_local();
 		void buffer_tick(const tick_closure& closure);
-		void drain_buffered_ticks();
+		bool drain_buffered_ticks();
 		void try_finish_snapshot();
 		bool valid_session(SessionId packet_session_id) const;
 		void send_connect_request();
@@ -202,6 +223,7 @@ namespace lf::lockstep {
 		vector<stored_payload> outgoing_commands;
 		vector<stored_tick> buffered_ticks;
 		snapshot_download snapshot;
+		instant last_connect_activity = now();
 		instant next_connect_request = now();
 		instant next_join_request = now();
 		Tick next_pending_resend_tick = 0;
@@ -374,15 +396,36 @@ namespace lf::lockstep {
 
 	packet_record record_received_packet(received_packets& received, PacketSequence sequence, const Options& options) {
 		packet_record record;
-		if (sequence == 0 || sequence < received.next_expected) {
+		auto append_missing = [&] {
+			for (PacketSequence missing_sequence : received.missing) {
+				if (record.missing.size() >= options.max_missing_per_nack) {
+					break;
+				}
+				record.missing.emplace_back(missing_sequence);
+			}
+		};
+
+		if (sequence == 0) {
 			return record;
 		}
+
+		if (sequence < received.next_expected) {
+			auto missing = std::find(received.missing.begin(), received.missing.end(), sequence);
+			if (missing != received.missing.end()) {
+				received.missing.erase(missing);
+				record.fresh = true;
+			}
+			append_missing();
+			return record;
+		}
+
 		record.fresh = true;
-		while (received.next_expected < sequence && record.missing.size() < options.max_missing_per_nack) {
-			record.missing.emplace_back(received.next_expected);
+		while (received.next_expected < sequence) {
+			received.missing.emplace_back(received.next_expected);
 			++received.next_expected;
 		}
 		received.next_expected = sequence + 1;
+		append_missing();
 		return record;
 	}
 
@@ -497,7 +540,9 @@ namespace lf::lockstep {
 		case packet_kind::join_request: {
 			SessionId session_id = 0;
 			PacketSequence packet_sequence = 0;
+			vector<byte> login_payload;
 			IF_ERROR_RETURN_ERROR(read_connected_header(stream, session_id, packet_sequence));
+			IF_ERROR_RETURN_ERROR(stream(bin::field("login_payload", login_payload)));
 
 			host_connection* connection = session.find_connection(peer, session_id);
 			if (!connection) {
@@ -505,14 +550,30 @@ namespace lf::lockstep {
 			}
 			packet_record record = record_received_packet(connection->received, packet_sequence, session.options);
 			session.send_missing_for(*connection, std::move(record.missing));
-			if (!record.fresh && connection->connection_state == state::joined) {
-				session.send_snapshot(*connection);
+			if (connection->connection_state == state::joined ||
+				connection->connection_state == state::downloading_snapshot ||
+				!record.fresh) {
 				return {};
 			}
-			if (connection->connection_state != state::joined) {
-				session.send_snapshot(*connection);
-				connection->connection_state = state::joined;
+			u16 joined_clients = 0;
+			for (const host_connection& existing : session.connections) {
+				if (existing.connection_state == state::joined) {
+					++joined_clients;
+				}
 			}
+			if (session.options.max_clients != 0 && joined_clients >= session.options.max_clients) {
+				session.send_connected(*connection, packet_kind::disconnect, [](bin::write_stream&) -> error {
+					return {};
+				});
+				return {};
+			}
+			if (!session.simulation->accept_login(span<const byte>(login_payload.data(), login_payload.size()))) {
+				session.send_connected(*connection, packet_kind::disconnect, [](bin::write_stream&) -> error {
+					return {};
+				});
+				return {};
+			}
+			session.request_snapshot(*connection);
 			return {};
 		}
 		case packet_kind::client_heartbeat: {
@@ -596,6 +657,7 @@ namespace lf::lockstep {
 			packet_record record = record_received_packet(session.received, packet_sequence, session.options);
 			session.send_missing_for(std::move(record.missing));
 			session.session_id = accepted_session_id;
+			session.local_session = accepted_session_id;
 			if (session.session_state == state::connecting) {
 				session.session_state = state::logging_in;
 				session.next_join_request = now();
@@ -622,6 +684,12 @@ namespace lf::lockstep {
 			}
 			packet_record record = record_received_packet(session.received, packet_sequence, session.options);
 			session.send_missing_for(std::move(record.missing));
+			if (session.session_state == state::catching_up || session.session_state == state::joined) {
+				return {};
+			}
+			if (session.snapshot.active && session.snapshot.snapshot_id == snapshot_id) {
+				return {};
+			}
 			session.session_state = state::downloading_snapshot;
 			session.snapshot = {};
 			session.snapshot.active = true;
@@ -701,8 +769,7 @@ namespace lf::lockstep {
 			if (session.session_state != state::connecting &&
 				session.session_state != state::logging_in &&
 				session.session_state != state::downloading_snapshot) {
-				session.drain_buffered_ticks();
-				if (session.session_state == state::catching_up) {
+				if (session.drain_buffered_ticks() && session.session_state == state::catching_up) {
 					session.session_state = state::joined;
 				}
 			}
@@ -737,7 +804,9 @@ namespace lf::lockstep {
 	}
 
 	offline_session::offline_session(Simulation& simulation, Options options)
-		: Impl(mode::offline, state::joined, simulation, options) {}
+		: Impl(mode::offline, state::joined, simulation, options) {
+		local_session = host_session_id;
+	}
 
 	void offline_session::update() {
 		collect_local();
@@ -773,19 +842,28 @@ namespace lf::lockstep {
 	}
 
 	host_session::host_session(net::Socket socket, Simulation& simulation, Options options)
-		: Impl(mode::host, state::joined, simulation, options), socket(std::move(socket)) {}
+		: Impl(mode::host, state::joined, simulation, options), socket(std::move(socket)) {
+		local_session = host_session_id;
+	}
 
 	void host_session::update() {
 		if (session_state == state::disconnected) {
 			return;
 		}
+		process_snapshot_requests();
 		poll_socket();
 		collect_local();
+		flush_send_queue();
 	}
 
 	void host_session::advance() {
 		if (session_state == state::disconnected) {
 			throw runtime_exception("lockstep session is disconnected");
+		}
+		for (const host_connection& connection : connections) {
+			if (connection.snapshot_requested || connection.connection_state == state::downloading_snapshot) {
+				return;
+			}
 		}
 		++current_tick;
 		sort_commands(staged_commands);
@@ -816,13 +894,19 @@ namespace lf::lockstep {
 		if (session_state == state::disconnected) {
 			return;
 		}
+		bool was_sending_snapshot = false;
 		for (host_connection& connection : connections) {
+			was_sending_snapshot = was_sending_snapshot || connection.snapshot_sending;
 			send_connected(connection, packet_kind::disconnect, [](bin::write_stream&) -> error {
 				return {};
 			});
 		}
+		flush_send_queue();
 		socket.disconnect();
 		session_state = state::disconnected;
+		if (was_sending_snapshot) {
+			simulation->snapshot_save_finished();
+		}
 		simulation->disconnected();
 	}
 
@@ -832,11 +916,17 @@ namespace lf::lockstep {
 	}
 
 	void host_session::poll_socket() {
-		while (optional<net::Message> message = socket.recv(receive_buffer)) {
+		u32 received = 0;
+		while (received < options.max_incoming_packets_per_update) {
+			optional<net::Message> message = socket.recv(receive_buffer);
+			if (!message) {
+				break;
+			}
 			try {
 				receive_message(*message);
 			} catch (const exception&) {
 			}
+			++received;
 		}
 	}
 
@@ -882,44 +972,94 @@ namespace lf::lockstep {
 			);
 		});
 		socket.send(connection.peer, bytes_view(bytes));
+		flush_send_queue();
 		remember_sent_packet(connection.sent_packets, packet_sequence, bytes);
 	}
 
-	void host_session::send_snapshot(host_connection& connection) {
-		vector<byte> snapshot = simulation->save_snapshot();
+	void host_session::request_snapshot(host_connection& connection) {
+		connection.connection_state = state::downloading_snapshot;
+		connection.snapshot_requested = true;
+		simulation->snapshot_save_started();
+	}
+
+	void host_session::process_snapshot_requests() {
+		for (host_connection& connection : connections) {
+			if (connection.snapshot_sending) {
+				continue_snapshot(connection);
+				return;
+			}
+			if (!connection.snapshot_requested) {
+				continue;
+			}
+			connection.snapshot_requested = false;
+			try {
+				begin_snapshot(connection);
+				continue_snapshot(connection);
+			} catch (...) {
+				connection.connection_state = state::disconnected;
+				connection.snapshot_sending = false;
+				connection.snapshot_bytes.clear();
+				simulation->snapshot_save_finished();
+				throw;
+			}
+			return;
+		}
+	}
+
+	void host_session::begin_snapshot(host_connection& connection) {
+		connection.snapshot_bytes = simulation->save_snapshot();
 		const u16 chunk_size = options.snapshot_chunk_bytes == 0 ? 1000 : options.snapshot_chunk_bytes;
-		const u32 chunk_count = static_cast<u32>((snapshot.size() + chunk_size - 1u) / chunk_size);
-		const u64 snapshot_id = next_snapshot_id;
+		const u32 chunk_count = static_cast<u32>((connection.snapshot_bytes.size() + chunk_size - 1u) / chunk_size);
+		connection.snapshot_id = next_snapshot_id;
 		++next_snapshot_id;
+		connection.snapshot_baseline_tick = current_tick;
+		connection.snapshot_chunk_size = chunk_size;
+		connection.snapshot_chunk_count = chunk_count;
+		connection.next_snapshot_chunk = 0;
+		connection.snapshot_sending = true;
 
 		send_connected(connection, packet_kind::snapshot_begin, [&](bin::write_stream& stream) -> error {
-			const u64 total_bytes = static_cast<u64>(snapshot.size());
+			const u64 total_bytes = static_cast<u64>(connection.snapshot_bytes.size());
 			return stream(
-				bin::field("snapshot_id", snapshot_id),
-				bin::field("baseline_tick", current_tick),
+				bin::field("snapshot_id", connection.snapshot_id),
+				bin::field("baseline_tick", connection.snapshot_baseline_tick),
 				bin::field("total_bytes", total_bytes),
-				bin::field("chunk_count", chunk_count)
+				bin::field("chunk_count", connection.snapshot_chunk_count)
 			);
 		});
+	}
 
-		for (u32 chunk_index = 0; chunk_index < chunk_count; ++chunk_index) {
-			const size_t offset = static_cast<size_t>(chunk_index) * chunk_size;
-			const size_t remaining = snapshot.size() - offset;
-			const size_t count = std::min(static_cast<size_t>(chunk_size), remaining);
+	void host_session::continue_snapshot(host_connection& connection) {
+		u32 sent = 0;
+		while (connection.next_snapshot_chunk < connection.snapshot_chunk_count && sent < options.max_snapshot_chunks_per_update) {
+			const u32 chunk_index = connection.next_snapshot_chunk;
+			++connection.next_snapshot_chunk;
+			const size_t offset = static_cast<size_t>(chunk_index) * connection.snapshot_chunk_size;
+			const size_t remaining = connection.snapshot_bytes.size() - offset;
+			const size_t count = std::min(static_cast<size_t>(connection.snapshot_chunk_size), remaining);
 			send_connected(connection, packet_kind::snapshot_chunk, [&](bin::write_stream& stream) -> error {
 				vector<byte> bytes;
-				bytes.assign(snapshot.begin() + static_cast<i64>(offset), snapshot.begin() + static_cast<i64>(offset + count));
+				bytes.assign(connection.snapshot_bytes.begin() + static_cast<i64>(offset), connection.snapshot_bytes.begin() + static_cast<i64>(offset + count));
 				return stream(
-					bin::field("snapshot_id", snapshot_id),
+					bin::field("snapshot_id", connection.snapshot_id),
 					bin::field("chunk_index", chunk_index),
 					bin::field("bytes", bytes)
 				);
 			});
+			++sent;
+		}
+
+		if (connection.next_snapshot_chunk < connection.snapshot_chunk_count) {
+			return;
 		}
 
 		send_connected(connection, packet_kind::snapshot_end, [&](bin::write_stream& stream) -> error {
-			return stream(bin::field("snapshot_id", snapshot_id));
+			return stream(bin::field("snapshot_id", connection.snapshot_id));
 		});
+		connection.snapshot_sending = false;
+		connection.snapshot_bytes.clear();
+		connection.connection_state = state::joined;
+		simulation->snapshot_save_finished();
 	}
 
 	void host_session::send_missing_for(host_connection& connection, vector<PacketSequence> missing) {
@@ -935,12 +1075,25 @@ namespace lf::lockstep {
 		resend_packets(socket, connection.peer, connection.sent_packets, missing, options.max_resends_per_update);
 	}
 
+	void host_session::flush_send_queue() {
+		u32 sent = 0;
+		while (!send_queue.empty() && sent < options.max_outgoing_packets_per_update) {
+			queued_send outgoing = std::move(send_queue.front());
+			send_queue.erase(send_queue.begin());
+			socket.send(outgoing.peer, bytes_view(outgoing.bytes));
+			++sent;
+		}
+	}
+
 	template<typename Writer>
 	void host_session::send_connected(host_connection& connection, packet_kind kind, Writer writer) {
 		const PacketSequence packet_sequence = connection.next_send_sequence;
 		++connection.next_send_sequence;
 		vector<byte> bytes = write_connected_packet(kind, connection.session_id, packet_sequence, writer);
-		socket.send(connection.peer, bytes_view(bytes));
+		send_queue.emplace_back(queued_send {
+			.peer = connection.peer,
+			.bytes = bytes,
+		});
 		remember_sent_packet(connection.sent_packets, packet_sequence, bytes);
 	}
 
@@ -952,7 +1105,26 @@ namespace lf::lockstep {
 			return;
 		}
 		poll_socket();
+		if (session_state == state::downloading_snapshot && snapshot.load_started) {
+			try_finish_snapshot();
+		}
+		if (session_state == state::catching_up) {
+			if (drain_buffered_ticks()) {
+				session_state = state::joined;
+			}
+		}
 		const instant current_time = now();
+		if ((session_state == state::connecting ||
+			 session_state == state::logging_in ||
+			 session_state == state::downloading_snapshot ||
+			 session_state == state::catching_up) &&
+			options.connect_timeout.quantum_count() > 0 &&
+			duration::from_quantum(current_time.quantum_count() - last_connect_activity.quantum_count()) >= options.connect_timeout) {
+			socket.disconnect();
+			session_state = state::disconnected;
+			simulation->disconnected();
+			return;
+		}
 		if (session_state == state::connecting && current_time >= next_connect_request) {
 			send_connect_request();
 			next_connect_request = current_time + options.handshake_interval;
@@ -988,16 +1160,23 @@ namespace lf::lockstep {
 	}
 
 	void client_session::poll_socket() {
-		while (optional<net::Message> message = socket.recv(receive_buffer)) {
+		u32 received = 0;
+		while (received < options.max_incoming_packets_per_update) {
+			optional<net::Message> message = socket.recv(receive_buffer);
+			if (!message) {
+				break;
+			}
 			try {
 				receive_message(*message);
 			} catch (const exception&) {
 			}
+			++received;
 		}
 	}
 
 	void client_session::receive_message(const net::Message& message) {
 		bin::read_stream stream(message.second);
+		last_connect_activity = now();
 		if (error err = process(stream, *this, message.first)) {
 			throw runtime_exception(err.message);
 		}
@@ -1026,8 +1205,9 @@ namespace lf::lockstep {
 		buffered_ticks.emplace_back(std::move(tick));
 	}
 
-	void client_session::drain_buffered_ticks() {
-		while (true) {
+	bool client_session::drain_buffered_ticks() {
+		u32 stepped = 0;
+		while (stepped < options.max_tick_steps_per_update) {
 			const Tick next_tick = current_tick + 1;
 			size_t found_index = buffered_ticks.size();
 			for (size_t index = 0; index < buffered_ticks.size(); ++index) {
@@ -1037,7 +1217,7 @@ namespace lf::lockstep {
 				}
 			}
 			if (found_index == buffered_ticks.size()) {
-				break;
+				return true;
 			}
 			stored_tick tick = std::move(buffered_ticks[found_index]);
 			buffered_ticks.erase(buffered_ticks.begin() + static_cast<i64>(found_index));
@@ -1046,21 +1226,35 @@ namespace lf::lockstep {
 			erase_confirmed_pending(pending_payloads, session_id, tick.commands);
 			rebuild_pending_views();
 			current_tick = tick.tick;
+			++stepped;
 		}
+		const Tick next_tick = current_tick + 1;
+		for (const stored_tick& tick : buffered_ticks) {
+			if (tick.tick == next_tick) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	void client_session::try_finish_snapshot() {
 		if (!snapshot.active || !snapshot.end_received || snapshot.received_count != snapshot.chunk_count) {
 			return;
 		}
-		simulation->load_snapshot(bytes_view(snapshot.bytes));
+		if (!snapshot.load_started) {
+			snapshot.load_started = true;
+			simulation->start_load_snapshot(bytes_view(snapshot.bytes));
+			return;
+		}
+		if (!simulation->snapshot_load_finished()) {
+			return;
+		}
 		current_tick = snapshot.baseline_tick;
 		pending_payloads.clear();
 		rebuild_pending_views();
 		snapshot = {};
 		session_state = state::catching_up;
-		drain_buffered_ticks();
-		if (session_state == state::catching_up) {
+		if (drain_buffered_ticks() && session_state == state::catching_up) {
 			session_state = state::joined;
 		}
 	}
@@ -1087,8 +1281,9 @@ namespace lf::lockstep {
 		if (session_id == 0) {
 			return;
 		}
-		send_connected(packet_kind::join_request, [](bin::write_stream&) -> error {
-			return {};
+		send_connected(packet_kind::join_request, [&](bin::write_stream& stream) -> error {
+			vector<byte> payload = simulation->login_payload();
+			return stream(bin::field("login_payload", payload));
 		});
 	}
 
@@ -1219,6 +1414,10 @@ namespace lf::lockstep {
 
 	state Session::state() const {
 		return impl ? impl->session_state : state::disconnected;
+	}
+
+	SessionId Session::local_session_id() const {
+		return impl ? impl->local_session : 0;
 	}
 
 	Tick Session::tick() const {

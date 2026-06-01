@@ -69,6 +69,12 @@ namespace lf::lockstep {
 
 		virtual vector<byte> save_snapshot() = 0;
 		virtual void load_snapshot(span<const byte> bytes) = 0;
+		virtual void start_load_snapshot(span<const byte> bytes) { load_snapshot(bytes); }
+		virtual bool snapshot_load_finished() { return true; }
+		virtual void snapshot_save_started() {}
+		virtual void snapshot_save_finished() {}
+		virtual vector<byte> login_payload() { return {}; }
+		virtual bool accept_login(span<const byte>) { return true; }
 		virtual void collect(Submitter& submitter) = 0;
 		virtual void step(Tick tick, span<const Command> commands) = 0;
 		virtual void disconnected() {}
@@ -76,10 +82,16 @@ namespace lf::lockstep {
 
 	struct Options {
 		u16 snapshot_chunk_bytes = 1000;
+		u16 max_clients = 0;
 		duration handshake_interval = duration::from_quantum(500'000'000);
 		duration nack_interval = duration::from_quantum(50'000'000);
+		duration connect_timeout = duration::from_quantum(15'000'000'000);
 		u32 max_missing_per_nack = 64;
 		u32 max_resends_per_update = 128;
+		u32 max_outgoing_packets_per_update = 128;
+		u32 max_incoming_packets_per_update = 128;
+		u32 max_snapshot_chunks_per_update = 16;
+		u32 max_tick_steps_per_update = 4;
 	};
 
 	class Session {
@@ -109,6 +121,7 @@ namespace lf::lockstep {
 
 		lockstep::mode mode() const;
 		lockstep::state state() const;
+		SessionId local_session_id() const;
 		Tick tick() const;
 		bool joined() const;
 		span<const PendingPayload> pending() const;

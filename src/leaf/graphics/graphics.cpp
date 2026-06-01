@@ -56,9 +56,9 @@ namespace lf {
 		if (rtLoad(backend_name, layers, layer_count) != RT_SUCCESS) {
 			return error(generic_errc::unknown, "rtLoad failed");
 		}
-		if (!rtLoad_RT_EXT_SWAPCHAIN() || !rtLoad_RT_EXT_GLFW()) {
+		if (!rtLoad_RT_EXT_SWAPCHAIN() || !rtLoad_RT_EXT_GLFW() || !rtLoad_RT_EXT_COMPUTE()) {
 			rtUnload();
-			return error(generic_errc::unknown, "required Rutile window extensions are not available");
+			return error(generic_errc::unknown, "required Rutile graphics extensions are not available");
 		}
 
 		const char* features[] = { RT_FEATURE_PRESENTATION };

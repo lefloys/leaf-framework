@@ -18,7 +18,6 @@
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -405,29 +404,9 @@ namespace lf {
 	}
 
 	bool Application::update() {
-		string title;
-		if (context) {
-			std::lock_guard lock(rml_mutex);
-			if (loaded_scene) {
-				if (std::optional<Scene::LoadRequest> request = loaded_scene->take_load_request()) {
-					report<string> scene_source = ReadVirtualTextFile(request->path);
-					if (!scene_source) {
-						log_error(format("[scene] {}: {}", request->path, scene_source.error().message));
-					} else {
-						load_scene(inject_scene_args(std::move(*scene_source), request->args_yaml), request->args_yaml);
-					}
-				}
-				loaded_scene->refresh_title();
-				title = string(loaded_scene->title());
-			}
-		}
 		bool should_run = running;
 		{
 			std::lock_guard lock(window_mutex);
-			if (!title.empty() && title != window_title) {
-				Window::SetTitle(display, title);
-				window_title = std::move(title);
-			}
 			if (!render_frame_active) {
 				Window::ApplyFullscreenRequest(display);
 			}
@@ -755,6 +734,28 @@ namespace lf {
 				if (!scene) {
 					updated = false;
 				} else {
+					if (std::optional<Scene::LoadRequest> request = scene->take_load_request()) {
+						report<string> scene_source = ReadVirtualTextFile(request->path);
+						if (!scene_source) {
+							log_error(format("[scene] {}: {}", request->path, scene_source.error().message));
+						} else {
+							app.load_scene(inject_scene_args(std::move(*scene_source), request->args_yaml), request->args_yaml);
+							scene = app.scene();
+						}
+					}
+					if (!scene) {
+						updated = false;
+						continue;
+					}
+					scene->refresh_title();
+					string title(scene->title());
+					{
+						std::lock_guard window_lock(app.window_mutex);
+						if (!title.empty() && title != app.window_title) {
+							Window::SetTitle(app.display, title);
+							app.window_title = std::move(title);
+						}
+					}
 					fs::path lua_console_path = fs::folder::appdata / "lua_console.in";
 					if (std::filesystem::exists(lua_console_path)) {
 						std::ifstream file(lua_console_path, std::ios::binary);
