@@ -3,6 +3,7 @@
 #include "leaf.hpp"
 
 #include "leaf/core/error.hpp"
+#include "leaf/core/messages.hpp"
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/store/lifecycle.hpp"
@@ -14,22 +15,28 @@
 
 namespace lf {
 	error Init(span<string_view> args) {
+		LF_LOG_INFO("leaf.lifecycle", "init begin");
 		error err;
 
 		err = init_system(args);
-		if (err) { goto system_exit; }
+		if (err) { LF_LOG_ERROR("leaf.lifecycle", err.message); goto system_exit; }
+		LF_LOG_DEBUG("leaf.lifecycle", "system initialized");
 
 		err = init_platform(args);
-		if (err) { goto platform_exit; }
+		if (err) { LF_LOG_ERROR("leaf.lifecycle", err.message); goto platform_exit; }
+		LF_LOG_DEBUG("leaf.lifecycle", "platform initialized");
 
 		err = init_graphics(args);
-		if (err) { goto graphics_exit; }
+		if (err) { LF_LOG_ERROR("leaf.lifecycle", err.message); goto graphics_exit; }
+		LF_LOG_DEBUG("leaf.lifecycle", "graphics initialized");
 
 		err = init_store(args);
-		if (err) { goto store_exit; }
+		if (err) { LF_LOG_ERROR("leaf.lifecycle", err.message); goto store_exit; }
+		LF_LOG_DEBUG("leaf.lifecycle", "store initialized");
 
 		err = init_rml(args); 
-		if (err) { goto rml_exit; }
+		if (err) { LF_LOG_ERROR("leaf.lifecycle", err.message); goto rml_exit; }
+		LF_LOG_INFO("leaf.lifecycle", "init complete");
 
 		return err;
 	rml_exit:
@@ -51,10 +58,17 @@ namespace lf {
 	}
 
 	void Exit() {
+		LF_LOG_INFO("leaf.lifecycle", "shutdown begin");
 		exit_rml();
+		LF_LOG_DEBUG("leaf.lifecycle", "rml shut down");
 		exit_store();
+		LF_LOG_DEBUG("leaf.lifecycle", "store shut down");
 		exit_graphics();
+		LF_LOG_DEBUG("leaf.lifecycle", "graphics shut down");
 		exit_platform();
+		LF_LOG_DEBUG("leaf.lifecycle", "platform shut down");
 		exit_system();
+		LF_LOG_INFO("leaf.lifecycle", "shutdown complete");
+		log::Shutdown();
 	}
 } // namespace lf

@@ -10,18 +10,64 @@
 
 namespace lf {
 
+	/*!
+	** @brief Opaque Rutile buffer resource.
+	*/
 	struct buffer;
+
+	/*!
+	** @brief Opaque Rutile texture resource.
+	*/
 	struct texture;
+
+	/*!
+	** @brief Opaque Rutile texture view resource.
+	*/
 	struct texture_view;
+
+	/*!
+	** @brief Opaque Rutile graphics program resource.
+	*/
 	struct graphics_program;
+
+	/*!
+	** @brief Opaque Rutile compute program resource.
+	*/
 	struct compute_program;
+
+	/*!
+	** @brief Opaque Rutile command buffer resource.
+	*/
 	struct command_buffer;
+
+	/*!
+	** @brief Opaque Rutile framebuffer resource.
+	*/
 	struct framebuffer;
+
+	/*!
+	** @brief Opaque Rutile queue resource.
+	*/
 	struct queue;
+
+	/*!
+	** @brief Rutile shader uniform location.
+	*/
 	using uniform_location = rt_uniform_location;
+
+	/*!
+	** @brief Rutile synchronization timestamp.
+	*/
 	using timepoint = rt_timepoint;
+
+	/*!
+	** @brief Opaque platform window resource.
+	*/
 	struct window;
 
+	/*!
+	** @brief Maps a Leaf resource tag to its native handle and destroy routine.
+	*/
 	template <typename Resource>
 	struct resource_traits;
 
@@ -51,52 +97,125 @@ namespace lf {
 
 	} // namespace detail
 
+	/*!
+	** @brief Owning-compatible raw handle for a Rutile-backed resource.
+	**
+	** A handle is a nullable native object value. It does not destroy the
+	** resource by itself; use unique when RAII ownership is needed.
+	*/
 	template <typename Resource>
 	struct handle {
 		static_assert(!std::is_const_v<Resource>);
+		/*!
+		** @brief Native handle type for the resource.
+		*/
 		using native_handle = resource_traits<Resource>::native_handle;
+
+		/*!
+		** @brief Native resource value.
+		*/
 		native_handle value = detail::null_handle<native_handle>();
 
+		/*!
+		** @brief Checks whether the handle is non-null.
+		*/
 		explicit operator bool() const {
 			return value != detail::null_handle<native_handle>();
 		}
 
+		/*!
+		** @brief Converts to the native Rutile handle.
+		*/
 		operator native_handle() const {
 			return value;
 		}
 	};
 
+	/*!
+	** @brief Non-owning view of a Rutile-backed resource.
+	*/
 	template <typename Resource>
 	struct view {
+		/*!
+		** @brief Resource type without const qualification.
+		*/
 		using base_resource = std::remove_const_t<Resource>;
+
+		/*!
+		** @brief Resource trait mapping for the base resource.
+		*/
 		using traits = resource_traits<base_resource>;
+
+		/*!
+		** @brief Mutable native handle type.
+		*/
 		using base_native_handle = traits::native_handle;
+
+		/*!
+		** @brief Native handle type with const propagated where supported.
+		*/
 		using native_handle = std::conditional_t<std::is_const_v<Resource>, detail::const_handle_t<base_native_handle>, base_native_handle>;
+
+		/*!
+		** @brief Native resource value.
+		*/
 		native_handle value = detail::null_handle<native_handle>();
 
 		view() = default;
 		view(const view&) = default;
 		view& operator=(const view&) = default;
+
+		/*!
+		** @brief Creates a view from an owning-compatible handle.
+		*/
 		view(handle<base_resource> handle) : value(handle.value) {}
 
+		/*!
+		** @brief Creates a const view from a mutable view.
+		*/
 		template <typename OtherResource>
 		view(view<OtherResource> view) requires(std::is_const_v<Resource> && std::is_same_v<OtherResource, base_resource>) : value(view.value) {}
 
+		/*!
+		** @brief Checks whether the view is non-null.
+		*/
 		explicit operator bool() const { return value != detail::null_handle<native_handle>(); }
 
+		/*!
+		** @brief Converts to the native Rutile handle.
+		*/
 		operator native_handle() const { return value; }
 	};
 
+	/*!
+	** @brief RAII owner for a Leaf resource handle.
+	**
+	** The owned handle is destroyed through resource_traits when reset or when
+	** the unique object is destroyed.
+	*/
 	template <typename Resource>
 	class unique {
 	  public:
+		/*!
+		** @brief Creates an empty owner.
+		*/
 		unique() = default;
+
+		/*!
+		** @brief Takes ownership of an existing handle.
+		*/
 		explicit unique(handle<Resource> handle) : resource(handle) {}
 		unique(const unique&) = delete;
 		unique& operator=(const unique&) = delete;
 
+		/*!
+		** @brief Move-constructs by taking ownership from another unique.
+		*/
 		unique(unique&& other) noexcept : resource(other.release()) {}
 
+		/*!
+		** @brief Move-assigns by replacing the currently owned resource.
+		*/
 		unique& operator=(unique&& other) noexcept {
 			if (this != &other) {
 				reset(other.release());
@@ -104,20 +223,33 @@ namespace lf {
 			return *this;
 		}
 
+		/*!
+		** @brief Destroys the owned resource if one is present.
+		*/
 		~unique() {
 			reset();
 		}
 
+		/*!
+		** @brief Gets the owned handle without releasing it.
+		*/
 		handle<Resource> get() const {
 			return resource;
 		}
 
+		/*!
+		** @brief Releases ownership without destroying the resource.
+		*/
 		handle<Resource> release() {
 			handle<Resource> released = resource;
 			resource = {};
 			return released;
 		}
 
+		/*!
+		** @brief Replaces the owned resource.
+		** @param next New handle to own, or an empty handle.
+		*/
 		void reset(handle<Resource> next = {}) {
 			if (resource) {
 				resource_traits<Resource>::destroy(resource.value);
@@ -125,18 +257,30 @@ namespace lf {
 			resource = next;
 		}
 
+		/*!
+		** @brief Checks whether a resource is currently owned.
+		*/
 		explicit operator bool() const {
 			return static_cast<bool>(resource);
 		}
 
+		/*!
+		** @brief Converts to the owned handle.
+		*/
 		operator handle<Resource>() const {
 			return resource;
 		}
 
+		/*!
+		** @brief Converts to a mutable non-owning view.
+		*/
 		operator view<Resource>() const {
 			return view<Resource>(resource);
 		}
 
+		/*!
+		** @brief Converts to a read-only non-owning view.
+		*/
 		operator view<const Resource>() const {
 			return view<const Resource>(resource);
 		}

@@ -7,7 +7,7 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "MSVC runtime library")
 endif()
 
-project(leaf-framework VERSION 0.1.0 LANGUAGES C CXX)
+project("leaf-framework" VERSION 0.1.0 LANGUAGES C CXX)
 
 if(WIN32 AND DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET STREQUAL "x64-windows")
     message(FATAL_ERROR "leaf-framework uses statically linked vcpkg dependencies on Windows. Configure with -DVCPKG_TARGET_TRIPLET=x64-windows-static, or clear the existing build directory if it cached x64-windows.")

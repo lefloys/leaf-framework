@@ -246,16 +246,6 @@ namespace lf {
 			return !actual.empty() && normalized_key_name(requested) == actual;
 		}
 
-		std::vector<Scene::ScriptInstaller>& script_installers() {
-			static std::vector<Scene::ScriptInstaller> installers;
-			return installers;
-		}
-
-		std::vector<Scene::FixedUpdater>& fixed_updaters() {
-			static std::vector<Scene::FixedUpdater> updaters;
-			return updaters;
-		}
-
 		string strip_inline_scripts(string_view source) {
 			constexpr string_view open = "<script type=\"text/lua\"";
 			constexpr string_view close = "</script>";
@@ -383,11 +373,15 @@ namespace lf {
 		ApplicationStats& stats,
 		string_view initial,
 		string_view args_yaml,
-		std::vector<PersistentElement> persistent_elements
+		std::vector<PersistentElement> persistent_elements,
+		std::vector<ScriptInstaller> script_installers,
+		std::vector<FixedUpdater> fixed_updaters
 	)
 		: display(display),
 		  stats(stats),
-		  scene_args_yaml(args_yaml) {
+		  scene_args_yaml(args_yaml),
+		  script_installers(std::move(script_installers)),
+		  fixed_updaters(std::move(fixed_updaters)) {
 		lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
 		lua["scene_args_yaml"] = string(this->scene_args_yaml);
 
@@ -402,7 +396,6 @@ namespace lf {
 			log_info(message);
 		});
 
-		RegisterRmlWindowElement();
 		string document_source = install_rml_window_defaults(strip_inline_scripts(initial));
 		document = context.LoadDocumentFromMemory(Rml::String(document_source));
 		if (!document) {
@@ -925,7 +918,7 @@ namespace lf {
 			}
 		});
 
-		for (const ScriptInstaller& installer : script_installers()) {
+		for (const ScriptInstaller& installer : script_installers) {
 			installer(lua, *document);
 		}
 		install_ui_automation_helpers();
@@ -1480,7 +1473,7 @@ end
 		if (!document) {
 			return;
 		}
-		for (const FixedUpdater& updater : fixed_updaters()) {
+		for (const FixedUpdater& updater : fixed_updaters) {
 			updater(*document);
 		}
 	}
@@ -1573,22 +1566,16 @@ end
 		return title_text;
 	}
 
-	void Scene::RegisterScriptInstaller(ScriptInstaller installer) {
-		script_installers().push_back(std::move(installer));
-	}
-
-	void Scene::RegisterFixedUpdater(FixedUpdater updater) {
-		fixed_updaters().push_back(std::move(updater));
-	}
-
 	unique_ptr<Scene> make_scene(
 		Rml::Context& context,
 		view<window> display,
 		ApplicationStats& stats,
 		string_view initial,
 		string_view args_yaml,
-		std::vector<Scene::PersistentElement> persistent_elements
+		std::vector<Scene::PersistentElement> persistent_elements,
+		std::vector<Scene::ScriptInstaller> script_installers,
+		std::vector<Scene::FixedUpdater> fixed_updaters
 	) {
-		return make_unique<Scene>(context, display, stats, initial, args_yaml, std::move(persistent_elements));
+		return make_unique<Scene>(context, display, stats, initial, args_yaml, std::move(persistent_elements), std::move(script_installers), std::move(fixed_updaters));
 	}
 } // namespace lf

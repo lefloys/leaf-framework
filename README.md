@@ -1,6 +1,6 @@
-# Leaf Framework
+# leaf-framework
 
-Leaf is the C++23 framework used by Outposts of Odyssey. It owns the application loop, RML scene support, Lua scripting hooks, mod/prototype loading, localization, audio, and the Rutile graphics integration.
+leaf-framework is a C++23 framework for application loops, RML scene support, Lua scripting hooks, mod/prototype loading, localization, audio, and Rutile graphics integration.
 
 This directory is also a standalone CMake project, so Leaf can be built independently from the game.
 
@@ -39,7 +39,7 @@ cmake --build out/build/x64-Debug --target leaf-framework-dev
 ctest --test-dir out/build/x64-Debug --output-on-failure
 ```
 
-From the Outposts of Odyssey umbrella project, Leaf is built through the game target and does not need a separate configure step.
+When leaf-framework is included from a parent CMake project, it is built through the parent target and does not need a separate configure step.
 
 ### Linux
 

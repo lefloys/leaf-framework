@@ -1,0 +1,31 @@
+/*!
+** @mainpage leaf-framework
+**
+** leaf-framework is organized around a few public modules. Start with the
+** module that matches the system you are integrating, then use the generated
+** symbol pages as reference material when you need a specific type or function.
+**
+** @section modules Core Modules
+**
+** - @ref binary "Binary Serialization": portable binary writing, parsing,
+**   version migration, and bounded reads.
+** - @ref application "Application": application lifetime, scenes, RML UI, and
+**   runtime statistics.
+** - @ref modding "Modding": mod discovery, metadata, loading, localization, and
+**   prototype registration.
+**
+** @section reference Reference Indexes
+**
+** The class, namespace, file, and member indexes remain available from the
+** sidebar. They are secondary reference views rather than the intended starting
+** point for learning the framework.
+**
+** @defgroup binary Binary Serialization
+** @brief Portable binary writing, parsing, version migration, and bounded reads.
+**
+** @defgroup application Application
+** @brief Application lifetime, scenes, RML UI integration, and runtime stats.
+**
+** @defgroup modding Modding
+** @brief Mod metadata, discovery, loading, localization, and prototypes.
+*/

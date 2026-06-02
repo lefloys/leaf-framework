@@ -5,6 +5,10 @@
 #include "leaf/core/version.hpp"
 
 namespace lf {
+	/*!
+	** @ingroup modding
+	** @brief Collection of mod search roots.
+	*/
 	struct ModCollection {
 		void add_privileged_dir(const fs::path& path);
 		void add_unprivileged_dir(const fs::path& path);
@@ -13,6 +17,10 @@ namespace lf {
 		vector<fs::path> unprivileged_dirs;
 	};
 
+	/*!
+	** @ingroup modding
+	** @brief Parsed dependency constraint from a mod metadata file.
+	*/
 	struct ModDependency {
 		static ModDependency parse(string_view str);
 
@@ -35,6 +43,10 @@ namespace lf {
 		version required_version;
 	};
 
+	/*!
+	** @ingroup modding
+	** @brief Metadata and resolved location for one mod.
+	*/
 	struct ModInfo {
 		string name;
 		version mod_version;
@@ -49,5 +61,11 @@ namespace lf {
 		bool privileged;
 	};
 
+	/*!
+	** @ingroup modding
+	** @brief Parses mod metadata from a mod info file.
+	** @param path Path to the metadata file.
+	** @param priviledged Whether the mod is loaded from a privileged root.
+	*/
 	ModInfo parse_mod_info(string_view path, bool priviledged);
 } // namespace lf
