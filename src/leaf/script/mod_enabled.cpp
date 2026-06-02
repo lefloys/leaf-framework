@@ -1,4 +1,5 @@
 #include "mod_enabled.hpp"
+#include <algorithm>
 #include <fstream>
 #include <yaml-cpp/yaml.h>
 
@@ -26,7 +27,14 @@ namespace lf {
 		YAML::Emitter emitter;
 		emitter << YAML::BeginMap;
 		emitter << "mods" << YAML::BeginMap;
+		vector<string> names;
+		names.reserve(mods.size());
 		for (const auto& [name, info] : mods) {
+			names.push_back(name);
+		}
+		std::sort(names.begin(), names.end());
+		for (const string& name : names) {
+			const ModEnabledInfo& info = mods.at(name);
 			emitter << name << YAML::BeginMap;
 			emitter << "enabled" << info.enabled;
 			emitter << "version"

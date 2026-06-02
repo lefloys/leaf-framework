@@ -2,7 +2,7 @@
 
 #include <leaf/core/format.hpp>
 #include <leaf/core/filesystem.hpp>
-#include <leaf/core/messages.hpp>
+#include <leaf/logging/logging.hpp>
 #include <leaf/core/unordered_map.hpp>
 #include <leaf/core/vector.hpp>
 
@@ -74,7 +74,7 @@ namespace lf {
 		vector<ProfileSnapshotEntry> snapshot = ProfileSnapshot();
 		static std::ofstream file(fs::folder::appdata / "leaf_profile.log", std::ios::app);
 		auto write_line = [&](string_view message) {
-			log_info(message);
+			log::Debug("{}", message);
 			if (file) {
 				file << message << "\n";
 				file.flush();

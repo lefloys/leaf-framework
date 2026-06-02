@@ -1,7 +1,7 @@
 #include "cursor.hpp"
 
 #include <leaf/core/format.hpp>
-#include <leaf/core/messages.hpp>
+#include <leaf/logging/logging.hpp>
 #include <leaf/script/cursor_prototype.hpp>
 #include <leaf/script/database.hpp>
 #include <leaf/script/virtual_filesystem.hpp>
@@ -22,14 +22,14 @@ namespace lf {
 
 		identifier<CursorPrototype, u16, void> id = Database<CursorPrototype>::find(name);
 		if (!id) {
-			log_warning(format("[cursor] missing cursor prototype '{}'", name));
+			log::Warning("{}", format("[cursor] missing cursor prototype '{}'", name));
 			return false;
 		}
 
 		const CursorPrototype& cursor = Database<CursorPrototype>::get(id);
 		auto path = ResolveVirtualPathReport(cursor.path);
 		if (!path) {
-			log_warning(format("[cursor] {}", path.error().message));
+			log::Warning("{}", format("[cursor] {}", path.error().message));
 			return false;
 		}
 
@@ -40,12 +40,12 @@ namespace lf {
 			stbi_load(path->string().c_str(), &width, &height, &components, 4),
 			stbi_image_free);
 		if (!pixels || width <= 0 || height <= 0) {
-			log_warning(format("[cursor] failed to load cursor image '{}'", path->string()));
+			log::Warning("{}", format("[cursor] failed to load cursor image '{}'", path->string()));
 			return false;
 		}
 
 		if (cursor.hotspot_x >= static_cast<u32>(width) || cursor.hotspot_y >= static_cast<u32>(height)) {
-			log_warning(format("[cursor] hotspot outside cursor image '{}'", cursor.name));
+			log::Warning("{}", format("[cursor] hotspot outside cursor image '{}'", cursor.name));
 			return false;
 		}
 

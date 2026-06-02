@@ -1,8 +1,8 @@
 #include "resource.hpp"
 
 #include <leaf/core/exception.hpp>
+#include <leaf/logging/logging.hpp>
 
-#include <iostream>
 namespace lf {
 
 	void detail::check_rutile_error(string_view context) {
@@ -16,7 +16,7 @@ namespace lf {
 			message += ": ";
 			message += rutile_message;
 		}
-		std::cout << rtError() << " " << rutile_message << "\n";
+		log::Error("rutile error {}: {}", static_cast<int>(rtError()), rutile_message);
 		rtClearError();
 		throw runtime_exception(message);
 	}

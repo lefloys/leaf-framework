@@ -26,7 +26,12 @@ add_files("leaf-framework"
 	"timepoint.cpp"
 	"timepoint.hpp"
 	"uniform_location.hpp"
-	"window.cpp"
-	"window.hpp"
-	"window_private.hpp"
 )
+
+if(NOT LEAF_HEADLESS)
+	add_files("leaf-framework"
+		"window.cpp"
+		"window.hpp"
+		"window_private.hpp"
+	)
+endif()

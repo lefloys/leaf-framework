@@ -2,7 +2,7 @@
 
 #include <leaf/core/exception.hpp>
 #include <leaf/core/format.hpp>
-#include <leaf/core/messages.hpp>
+#include <leaf/logging/logging.hpp>
 #include <leaf/script/virtual_filesystem.hpp>
 
 #include <algorithm>
@@ -50,7 +50,7 @@ namespace lf {
 		try {
 			path = resolve_path(options, source.path);
 		} catch (const lf::exception& e) {
-			log_warning(format("[textures] failed to resolve texture frame '{}': {}", source.path, e.what()));
+			log::Warning("{}", format("[textures] failed to resolve texture frame '{}': {}", source.path, e.what()));
 			return make_fallback_frame(source.texture_index, source.frame_index);
 		}
 		int image_width = 0;
@@ -60,7 +60,7 @@ namespace lf {
 			stbi_load(path.string().c_str(), &image_width, &image_height, &components, 4),
 			stbi_image_free);
 		if (!image || image_width <= 0 || image_height <= 0) {
-			log_warning(format("[textures] missing texture frame '{}', using fallback", path.string()));
+			log::Warning("{}", format("[textures] missing texture frame '{}', using fallback", path.string()));
 			return make_fallback_frame(source.texture_index, source.frame_index);
 		}
 
@@ -70,7 +70,7 @@ namespace lf {
 		u32 source_height = source.rect.enabled ? source.rect.height : static_cast<u32>(image_height);
 		if (source_x >= static_cast<u32>(image_width) || source_y >= static_cast<u32>(image_height) ||
 			source_width == 0 || source_height == 0) {
-			log_warning(format("[textures] invalid frame rect in '{}', using fallback", path.string()));
+			log::Warning("{}", format("[textures] invalid frame rect in '{}', using fallback", path.string()));
 			return make_fallback_frame(source.texture_index, source.frame_index);
 		}
 
@@ -151,7 +151,7 @@ namespace lf {
 		if (frame.rect.x < 0 || frame.rect.y < 0 ||
 			frame.rect.x + padded_width > static_cast<i32>(atlas_width) ||
 			frame.rect.y + padded_height > static_cast<i32>(atlas_height)) {
-			log_warning(format("[textures] packed frame {}:{} is outside atlas bounds; skipping",
+			log::Warning("{}", format("[textures] packed frame {}:{} is outside atlas bounds; skipping",
 							   frame.texture_index, frame.frame_index));
 			return;
 		}
@@ -210,7 +210,7 @@ namespace lf {
 		atlas.view.reset(TextureView::CreateFromTexture(atlas.atlas_texture));
 		TextureView::Filter(atlas.view, RT_FILTER_NEAREST, RT_FILTER_NEAREST, RT_MIP_FILTER_NONE);
 		TextureView::Address(atlas.view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
-		log_info(format("[textures] atlas {}x{} with {} frames", atlas.width, atlas.height,
+		log::Debug("{}", format("[textures] atlas {}x{} with {} frames", atlas.width, atlas.height,
 						loaded_frames.size()));
 		return atlas;
 	}

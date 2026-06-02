@@ -1,6 +1,6 @@
 #include "localization.hpp"
 
-#include <leaf/core/messages.hpp>
+#include <leaf/logging/logging.hpp>
 #include <leaf/script/settings.hpp>
 
 #include <cctype>
@@ -181,7 +181,7 @@ namespace lf {
 
 					section_map metadata;
 					if (error err = load_locale_file(entry.path(), metadata)) {
-						log_warning(format("[locale] ignoring metadata in '{}': {}", entry.path().string(), err.message));
+						log::Warning("{}", format("[locale] ignoring metadata in '{}': {}", entry.path().string(), err.message));
 						continue;
 					}
 					apply_language_metadata(id, metadata);
@@ -199,7 +199,7 @@ namespace lf {
 				if (error err = load_locale_file(locale_path, entries)) {
 					return err.add_context(format("loading locale '{}'", locale_path.string()));
 				}
-				log_info(format("[locale] loaded: {}/locale/{}", mod.name, locale_path.filename().string()));
+				log::Trace("{}", format("[locale] loaded: {}/locale/{}", mod.name, locale_path.filename().string()));
 			}
 			return error::no_error;
 		}

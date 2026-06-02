@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "leaf/core/filesystem.hpp"
+#include "leaf/script/mod_enabled.hpp"
 #include "leaf/script/mod_loader.hpp"
 #include "leaf/script/prototype.hpp"
 #include "leaf/script/registry.hpp"
@@ -8,9 +9,11 @@
 
 #include <chrono>
 #include <fstream>
+#include <iterator>
+#include <unordered_map>
 
 namespace {
-	struct TestModPrototype : lf::Prototype<TestModPrototype> {
+	struct TestModPrototype : lf::Prototype<lf::identifier<TestModPrototype, u16, void>> {
 		explicit TestModPrototype(const lf::dict& data) : Prototype(data) {
 			if (has_field(data, "value")) {
 				load_field(data, "value", value);
@@ -126,6 +129,42 @@ data:extend({
 	REQUIRE(lf::Database<TestModPrototype>::prototypes[1].value == "one");
 	REQUIRE(lf::Database<TestModPrototype>::prototypes[2].name == "beta");
 	REQUIRE(lf::Database<TestModPrototype>::prototypes[2].value == "two");
+}
+
+TEST_CASE("mod loader assigns deterministic prototype ids independent of directory iteration", "[mod-loader]") {
+	register_test_type_once();
+	TestModWorkspace workspace;
+	workspace.write_core();
+	workspace.write_mod("zeta", R"(
+data:extend({{ type = "test", name = "zeta", value = "last" }})
+)");
+	workspace.write_mod("alpha", R"(
+data:extend({{ type = "test", name = "alpha", value = "first" }})
+)");
+
+	lf::error err = workspace.load();
+	REQUIRE(!err);
+	REQUIRE(lf::Database<TestModPrototype>::prototypes.size() == 3);
+	REQUIRE(lf::Database<TestModPrototype>::prototypes[1].name == "alpha");
+	REQUIRE(lf::Database<TestModPrototype>::prototypes[2].name == "zeta");
+	REQUIRE(lf::Database<TestModPrototype>::find("alpha").get() == 1);
+	REQUIRE(lf::Database<TestModPrototype>::find("zeta").get() == 2);
+}
+
+TEST_CASE("enabled mods file is written in deterministic name order", "[mod-loader]") {
+	TestModWorkspace workspace;
+	std::unordered_map<lf::string, lf::ModEnabledInfo> mods;
+	mods["zeta"] = lf::ModEnabledInfo{ true, lf::version{ 1, 0, 0 } };
+	mods["alpha"] = lf::ModEnabledInfo{ true, lf::version{ 1, 0, 0 } };
+
+	const lf::fs::path path = workspace.root / "enabled_mods.yaml";
+	lf::save_enabled_mods(path, mods);
+
+	std::ifstream in(path, std::ios::binary);
+	lf::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+	REQUIRE(text.find("alpha:") != lf::string::npos);
+	REQUIRE(text.find("zeta:") != lf::string::npos);
+	REQUIRE(text.find("alpha:") < text.find("zeta:"));
 }
 
 TEST_CASE("mod loader data:extend rejects unknown prototype types", "[mod-loader]") {

@@ -1,13 +1,17 @@
 #include "leaf/store/lifecycle.hpp"
 
 #include <leaf/core/format.hpp>
-#include <leaf/core/messages.hpp>
+#include <leaf/logging/logging.hpp>
 
 #include <steam/steam_api.h>
 
 namespace lf {
 	void steam_warning_message_hook(int severity, const char* message) {
-		log_info(format("steam[{}]: {}", severity, message));
+		if (severity > 0) {
+			log::Warning("{}", format("steam[{}]: {}", severity, message));
+		} else {
+			log::Debug("{}", format("steam[{}]: {}", severity, message));
+		}
 	}
 
 	error init_store(span<string_view>) {

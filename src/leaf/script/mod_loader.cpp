@@ -5,7 +5,7 @@
 #include "settings.hpp"
 #include "virtual_filesystem.hpp"
 
-#include <leaf/core/messages.hpp>
+#include <leaf/logging/logging.hpp>
 
 #include <sol/sol.hpp>
 
@@ -341,10 +341,10 @@ option["scene"] = {}
 		try {
 			DataScriptRunner runner(lua);
 			runner.run_file(mod.name + "/" + string(file_name), path, mod.location);
-			log_info(format("[mod-loader] loaded: {}/{}", mod.name, file_name));
+			log::Trace("{}", format("[mod-loader] loaded: {}/{}", mod.name, file_name));
 			return error::no_error;
 		} catch (const lf::exception& e) {
-			log_error(format("[mod-loader] error: {}/{}: {}", mod.name, file_name, e.what()));
+			log::Error("{}", format("[mod-loader] error: {}/{}: {}", mod.name, file_name, e.what()));
 			return error(generic_errc::parse_error, "Failed to execute " + mod.name + "/" + string(file_name) + ": " + e.what());
 		}
 	}
@@ -577,13 +577,20 @@ option["scene"] = {}
 			if (!fs::exists(dir)) {
 				fs::create_directories(dir);
 			}
+			vector<fs::path> mod_dirs;
 			for (const auto& entry : fs::directory_iterator(dir)) {
 				if (entry.is_directory()) {
 					auto info_path = entry.path() / "info.yaml";
 					if (fs::exists(info_path)) {
-						mods.emplace_back(parse_mod_info(info_path.string(), privileged));
+						mod_dirs.push_back(entry.path());
 					}
 				}
+			}
+			std::sort(mod_dirs.begin(), mod_dirs.end(), [](const fs::path& a, const fs::path& b) {
+				return a.filename().generic_string() < b.filename().generic_string();
+			});
+			for (const fs::path& mod_dir : mod_dirs) {
+				mods.emplace_back(parse_mod_info((mod_dir / "info.yaml").string(), privileged));
 			}
 		};
 		for (const auto& dir : mod_tree.privileged_dirs) {
@@ -613,10 +620,10 @@ option["scene"] = {}
 		}
 		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(1), "load-order-ready", 1.0f);
 
-		log_info("[mod-loader] load order:");
+		log::Debug("{}", "[mod-loader] load order:");
 		for (const auto& mod : enabled_mod_list) {
 			RegisterVirtualRoot(mod.name, mod.location);
-			log_info(format("[mod-loader]   - {} (version {})", mod.name,
+			log::Debug("{}", format("[mod-loader]   - {} (version {})", mod.name,
 							version_to_string(mod.mod_version)));
 		}
 
@@ -632,7 +639,7 @@ option["scene"] = {}
 		}
 
 		{
-			log_info("[mod-loader] loading unknown prototypes");
+			log::Trace("{}", "[mod-loader] loading unknown prototypes");
 			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "core/null.lua", 0.0f);
 			sol::state lua;
 			initialize_prototype_lua(lua);
@@ -655,7 +662,7 @@ option["scene"] = {}
 		sol::state lua;
 		initialize_prototype_lua(lua);
 
-		log_info("[mod-loader] loading mods");
+		log::Debug("{}", "[mod-loader] loading mods");
 		for (size_t i = 0; i < enabled_mod_list.size(); ++i) {
 			const auto& mod = enabled_mod_list[i];
 			f32 progress_base = enabled_mod_list.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(enabled_mod_list.size());

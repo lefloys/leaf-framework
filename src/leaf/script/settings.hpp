@@ -14,7 +14,7 @@ namespace lf {
 
 	struct GraphicsSettings {
 		bool fullscreen = false;
-		bool vsync = true;
+		bool vsync = false;
 		f32 max_fps = 60.0f;
 	};
 

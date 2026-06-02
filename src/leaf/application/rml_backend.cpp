@@ -1,7 +1,7 @@
 #include "rml_backend.hpp"
 
 #include <leaf/core/format.hpp>
-#include <leaf/core/messages.hpp>
+#include <leaf/logging/logging.hpp>
 #include <leaf/core/profiler.hpp>
 #include <leaf/platform/platform.hpp>
 #include <leaf/graphics/timepoint.hpp>
@@ -272,7 +272,7 @@ void main() {
 		try {
 			path = ResolveVirtualPath(source.c_str());
 		} catch (const lf::exception& e) {
-			log_warning(format("[rml] failed to resolve texture '{}': {}", source, e.what()));
+			log::Warning("{}", format("[rml] failed to resolve texture '{}': {}", source, e.what()));
 			return 0;
 		}
 
@@ -308,8 +308,8 @@ void main() {
 		auto* texture_data = new TextureData;
 		texture_data->size = { width, height };
 		texture_data->image = unique(Texture::Create());
-		Timepoint::Wait(Texture::Data(upload_queue, texture_data->image, RT_TEXTURE_2D, 0,
-									  width, height, 1, RT_RGBA8_UNORM, pixels));
+		Texture::Data(upload_queue, texture_data->image, RT_TEXTURE_2D, 0,
+					  width, height, 1, RT_RGBA8_UNORM, pixels);
 		texture_data->view = unique(TextureView::CreateFromTexture(texture_data->image));
 		TextureView::Filter(texture_data->view, RT_FILTER_LINEAR, RT_FILTER_LINEAR, RT_MIP_FILTER_NONE);
 		TextureView::Address(texture_data->view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);

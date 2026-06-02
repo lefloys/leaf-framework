@@ -1,5 +1,7 @@
 #include "graphics.hpp"
 
+#include <leaf/logging/logging.hpp>
+
 #define RUTILE_IMPL
 #include <rutile.h>
 #include <rt_ext_compute.h>
@@ -9,6 +11,20 @@
 #include <cstdlib>
 
 namespace lf {
+	void rutile_log_output(const char* message, void*) {
+		if (!message || !message[0]) {
+			return;
+		}
+
+		string_view text(message);
+		while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
+			text.remove_suffix(1);
+		}
+		if (!text.empty()) {
+			log::Debug("{}", text);
+		}
+	}
+
 	bool is_logging_argument(string_view arg) {
 		return arg == "-l" || arg == "--log" || arg == "--logging" || arg == "--logger";
 	}
@@ -17,15 +33,50 @@ namespace lf {
 		return arg == "-v" || arg == "--validation";
 	}
 
-	bool is_option_argument(string_view arg) {
-		return arg.size() > 0 && arg[0] == '-';
-	}
-
 	bool is_graphics_argument(string_view arg) {
 		return arg == "-g" || arg == "--graphics";
 	}
 
-	error init_graphics(span<string_view> args) {
+	struct RutileLoadOptions {
+		const char* backend_name = "rt-vulkan";
+		const char* layers[2] = {};
+		u32 layer_count = 0;
+	};
+
+	error rutile_init_error() {
+		enum rt_error init_error = rtError();
+		if (init_error == RT_SUCCESS) {
+			return error::no_error;
+		}
+
+		const char* message = rtErrorMessage();
+		if (message && message[0]) {
+			return error(generic_errc::unknown, format("rtInit failed: {}", message));
+		}
+		string error_name = "unknown error";
+		switch (init_error) {
+		case RT_OUT_OF_HOST_MEMORY: error_name = "out of host memory"; break;
+		case RT_OUT_OF_DEVICE_MEMORY: error_name = "out of device memory"; break;
+		case RT_IMPROPER_USAGE: error_name = "improper usage"; break;
+		case RT_PLATFORM_FAILURE: error_name = "platform failure"; break;
+		case RT_DEVICE_LOST: error_name = "device lost"; break;
+		case RT_ALREADY_INITIALIZED: error_name = "already initialized"; break;
+		case RT_UNSUPPORTED_PLATFORM: error_name = "unsupported platform"; break;
+		case RT_NO_BACKEND: error_name = "no backend"; break;
+		case RT_UNSUPPORTED_FEATURE: error_name = "unsupported feature"; break;
+		case RT_INITIALIZATION_FAILED: error_name = "initialization failed"; break;
+		case RT_LAYER_NOT_PRESENT: error_name = "layer not present"; break;
+		case RT_EXTENSION_NOT_PRESENT: error_name = "extension not present"; break;
+		case RT_INCOMPATIBLE_DRIVER: error_name = "incompatible driver"; break;
+		case RT_SHADER_COMPILATION_FAILED: error_name = "shader compilation failed"; break;
+		case RT_SHADER_LINK_FAILED: error_name = "shader link failed"; break;
+		default: break;
+		}
+		return error(generic_errc::unknown, format("rtInit failed: {} ({})", error_name, static_cast<int>(init_error)));
+	}
+
+	report<RutileLoadOptions> parse_rutile_load_options(span<string_view> args) {
+		RutileLoadOptions options;
 		const char* backend_name = "rt-vulkan";
 		bool enable_logging_layer = false;
 		bool enable_validation_layer = std::getenv("LEAF_VALIDATION") != nullptr;
@@ -38,60 +89,58 @@ namespace lf {
 				backend_name = args[++i].data();
 			}
 		}
+		options.backend_name = backend_name;
 
-		const char* layers[2] = {};
-		u32 layer_count = 0;
 #ifndef NDEBUG
 		if (enable_validation_layer) {
-			layers[layer_count++] = "RT_VALIDATION";
+			options.layers[options.layer_count++] = "RT_VALIDATION";
 		}
 		if (enable_logging_layer) {
-			layers[layer_count++] = "RT_LOGGING_LAYER";
+			options.layers[options.layer_count++] = "RT_LOGGING_LAYER";
 		}
 #else
 		if (enable_logging_layer) {
-			return error(generic_errc::unknown, "Rutile logging layer is not available in release builds");
+			return unexpected(error(generic_errc::unknown, "Rutile logging layer is not available in release builds"));
 		}
 #endif
-		if (rtLoad(backend_name, layers, layer_count) != RT_SUCCESS) {
+		return options;
+	}
+
+	error init_graphics(span<string_view> args, bool headless) {
+		report<RutileLoadOptions> options = parse_rutile_load_options(args);
+		if (!options) {
+			return options.error();
+		}
+
+		if (rtLoad(options->backend_name, options->layers, options->layer_count) != RT_SUCCESS) {
 			return error(generic_errc::unknown, "rtLoad failed");
 		}
-		if (!rtLoad_RT_EXT_SWAPCHAIN() || !rtLoad_RT_EXT_GLFW() || !rtLoad_RT_EXT_COMPUTE()) {
+		rtSetOutput(rutile_log_output, nullptr);
+		if (!rtLoad_RT_EXT_COMPUTE()) {
 			rtUnload();
-			return error(generic_errc::unknown, "required Rutile graphics extensions are not available");
+			return error(generic_errc::unknown, "required Rutile compute extension is not available");
 		}
 
-		const char* features[] = { RT_FEATURE_PRESENTATION };
-		rtInit(features, 1);
-		enum rt_error init_error = rtError();
-		if (init_error != RT_SUCCESS) {
-			const char* message = rtErrorMessage();
-			if (message && message[0]) {
-				return error(generic_errc::unknown, format("rtInit failed: {}", message));
+		if (!headless) {
+			if (!rtLoad_RT_EXT_SWAPCHAIN() || !rtLoad_RT_EXT_GLFW()) {
+				rtUnload();
+				return error(generic_errc::unknown, "required Rutile presentation extensions are not available");
 			}
-			string error_name = "unknown error";
-			switch (init_error) {
-			case RT_OUT_OF_HOST_MEMORY: error_name = "out of host memory"; break;
-			case RT_OUT_OF_DEVICE_MEMORY: error_name = "out of device memory"; break;
-			case RT_IMPROPER_USAGE: error_name = "improper usage"; break;
-			case RT_PLATFORM_FAILURE: error_name = "platform failure"; break;
-			case RT_DEVICE_LOST: error_name = "device lost"; break;
-			case RT_ALREADY_INITIALIZED: error_name = "already initialized"; break;
-			case RT_UNSUPPORTED_PLATFORM: error_name = "unsupported platform"; break;
-			case RT_NO_BACKEND: error_name = "no backend"; break;
-			case RT_UNSUPPORTED_FEATURE: error_name = "unsupported feature"; break;
-			case RT_INITIALIZATION_FAILED: error_name = "initialization failed"; break;
-			case RT_LAYER_NOT_PRESENT: error_name = "layer not present"; break;
-			case RT_EXTENSION_NOT_PRESENT: error_name = "extension not present"; break;
-			case RT_INCOMPATIBLE_DRIVER: error_name = "incompatible driver"; break;
-			case RT_SHADER_COMPILATION_FAILED: error_name = "shader compilation failed"; break;
-			case RT_SHADER_LINK_FAILED: error_name = "shader link failed"; break;
-			default: break;
-			}
-			return error(generic_errc::unknown, format("rtInit failed: {} ({})", error_name, static_cast<int>(init_error)));
+		}
+
+		if (headless) {
+			rtInit(nullptr, 0);
+		} else {
+			const char* features[] = { RT_FEATURE_PRESENTATION };
+			rtInit(features, 1);
+		}
+
+		error err = rutile_init_error();
+		if (err) {
+			rtUnload();
+			return err;
 		}
 		return error::no_error;
-
 	}
 
 	void exit_graphics() {

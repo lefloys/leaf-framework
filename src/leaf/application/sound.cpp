@@ -1,7 +1,7 @@
 #include "sound.hpp"
 
 #include <leaf/core/format.hpp>
-#include <leaf/core/messages.hpp>
+#include <leaf/logging/logging.hpp>
 #include <leaf/script/database.hpp>
 #include <leaf/script/settings.hpp>
 #include <leaf/script/sound_prototype.hpp>
@@ -157,7 +157,7 @@ namespace lf {
 		lua.set_function("play_sound", [](string_view name, sol::object type, f32 volume) {
 			identifier<SoundPrototype, u16, void> id = Database<SoundPrototype>::find(name);
 			if (!id) {
-				log_warning(format("[sound] missing sound prototype '{}'", name));
+				log::Warning("{}", format("[sound] missing sound prototype '{}'", name));
 				return false;
 			}
 
@@ -170,12 +170,12 @@ namespace lf {
 			f32 final_volume = clamp_volume(volume) * clamp_volume(sound.volume) * settings_volume_for_sound_type(type_id);
 			auto path = ResolveVirtualPathReport(sound.path);
 			if (!path) {
-				log_warning(format("[sound] {}", path.error().message));
+				log::Warning("{}", format("[sound] {}", path.error().message));
 				return false;
 			}
 
 			if (error err = PlaySoundFile(*path, final_volume)) {
-				log_warning(format("[sound] {}", err.message));
+				log::Warning("{}", format("[sound] {}", err.message));
 				return false;
 			}
 			return true;

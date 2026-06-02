@@ -33,7 +33,7 @@ namespace lf {
 		bool fullscreen = false;
 		bool fullscreen_change_requested = false;
 		bool requested_fullscreen = false;
-		bool vsync = true;
+		bool vsync = false;
 		input_modifiers modifiers;
 		mutable std::mutex input_mutex;
 

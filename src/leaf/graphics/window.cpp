@@ -4,6 +4,7 @@
 #include <leaf/core/exception.hpp>
 #include <leaf/core/profiler.hpp>
 #include <leaf/graphics/queue.hpp>
+#include <leaf/logging/logging.hpp>
 
 #include <memory>
 #include <utility>
@@ -230,6 +231,9 @@ namespace lf {
 		if (rt_rtSwapchainSetVsync) {
 			rtSwapchainSetVsync(window.value->swapchain, enabled);
 			detail::check_rutile_error("failed to set swapchain vsync");
+			log::Info("Vsync {}", enabled ? "enabled" : "disabled");
+		} else {
+			log::Warning("Swapchain does not support changing vsync");
 		}
 	}
 
@@ -427,8 +431,6 @@ namespace lf {
 			CommandBuffer::End(window.value->frame_command_buffer);
 			rendered = rtQueueSubmit(window.value->current_queue, window.value->frame_command_buffer.get().value);
 			detail::check_rutile_error("failed to submit swapchain frame");
-			rendered = rtQueueFlush(window.value->current_queue);
-			detail::check_rutile_error("failed to flush swapchain frame");
 		}
 		{
 			LF_PROFILE_SCOPE("Window::PresentSwapchain");

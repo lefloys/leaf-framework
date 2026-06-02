@@ -1,12 +1,12 @@
 #include "leaf/store/lifecycle.hpp"
 
-#include <iostream>
+#include <leaf/logging/logging.hpp>
 
 namespace lf {
 
 
 	error init_store(span<string_view>) {
-		std::cout << "store : none\n";
+		log::Debug("Store backend: none");
 		return error::no_error;
 	}
 

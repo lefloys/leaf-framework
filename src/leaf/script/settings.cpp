@@ -1,6 +1,5 @@
 #include "settings.hpp"
 
-#include <leaf/application/application_stats.hpp>
 #include <leaf/core/format.hpp>
 #include <leaf/script/localization.hpp>
 
