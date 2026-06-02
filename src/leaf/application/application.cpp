@@ -1,11 +1,10 @@
 #include "application.hpp"
 
 #include "application_stats.hpp"
-#include "rml_window.hpp"
 
 #include <leaf/core/filesystem.hpp>
 #include <leaf/core/format.hpp>
-#include <leaf/core/messages.hpp>
+#include <leaf/logging/logging.hpp>
 #include <leaf/core/profiler.hpp>
 #include <leaf/graphics/timepoint.hpp>
 #include <leaf/leaf.hpp>
@@ -50,7 +49,7 @@ namespace lf {
 		};
 
 		void log_render_profile(string_view message) {
-			log_info(message);
+			log::Debug("{}", message);
 			static std::ofstream file(fs::folder::appdata / "render_profile.log", std::ios::app);
 			if (file) {
 				file << message << '\n';
@@ -261,7 +260,6 @@ namespace lf {
 		if (!context) {
 			throw runtime_exception("failed to create RmlUi application context");
 		}
-		add_rml_element_installer(RegisterRmlWindowElement);
 	}
 
 	Application::Application(handle<lf::window> display)
@@ -282,7 +280,6 @@ namespace lf {
 		if (!context) {
 			throw runtime_exception("failed to create RmlUi application context");
 		}
-		add_rml_element_installer(RegisterRmlWindowElement);
 	}
 
 	Application::~Application() {
@@ -301,9 +298,6 @@ namespace lf {
 			return error::no_error;
 		}
 
-		for (const ElementInstaller& installer : rml_element_installers) {
-			installer();
-		}
 		load_scene(scene_source);
 		{
 			std::lock_guard lock(window_mutex);
@@ -332,7 +326,7 @@ namespace lf {
 
 	void Application::wait_for_render_idle() {
 		handle<queue> graphics_queue = Queue::Query(QueueCapability::Graphics);
-		Timepoint::Wait(Queue::Flush(graphics_queue));
+		Queue::Flush(graphics_queue);
 	}
 
 	handle<lf::window> Application::release_window() {
@@ -384,9 +378,8 @@ namespace lf {
 	}
 
 	void Application::set_updates_per_second(u32 value) {
-		u32 next = value ? value : DefaultApplicationUpdatesPerSecond;
-		stats.updates_per_second.store(next, std::memory_order_relaxed);
-		update_interval = update_interval_for(next);
+		stats.updates_per_second.store(value, std::memory_order_relaxed);
+		update_interval = update_interval_for(value);
 	}
 
 	u32 Application::updates_per_second() const {
@@ -442,15 +435,49 @@ namespace lf {
 	}
 
 	void Application::load_scene(string_view scene_source, string_view args_yaml) {
+		log::Trace("{}", format("[scene] loading scene ({} bytes, args {} bytes, installers {}, fixed updaters {})",
+								scene_source.size(),
+								args_yaml.size(),
+								scene_script_installers.size(),
+								scene_fixed_updaters.size()));
 		wait_for_render_idle();
 		std::vector<Scene::PersistentElement> persistent_elements;
 		if (loaded_scene) {
+			log::Trace("{}", "[scene] releasing current scene");
 			persistent_elements = loaded_scene->release_persistent_elements();
 			loaded_scene.reset();
 		}
-		loaded_scene = make_scene(*context, display, stats, scene_source, args_yaml, std::move(persistent_elements), scene_script_installers, scene_fixed_updaters);
+		for (const ElementInstaller& installer : rml_element_installers) {
+			installer();
+		}
+		std::vector<Scene::ScriptInstaller> script_installers;
+		script_installers.reserve(scene_script_installers.size() + 1);
+		script_installers.push_back([this](sol::state& lua, Rml::ElementDocument&) {
+			sol::object existing = lua.globals()["game"];
+			sol::table game = existing.is<sol::table>() ? existing.as<sol::table>() : lua.create_table();
+			lua.globals()["game"] = game;
+			lua["_G"]["game"] = game;
+			game["speed"] = [this](sol::object) -> f32 {
+				return stats.speed_multiplier.load(std::memory_order_relaxed);
+			};
+			game["set_speed"] = [this](sol::object, f32 value) {
+				stats.speed_multiplier.store(std::max(0.0f, value), std::memory_order_relaxed);
+			};
+		});
+		script_installers.insert(script_installers.end(), scene_script_installers.begin(), scene_script_installers.end());
+
+		loaded_scene = make_scene(
+			*context,
+			display,
+			stats,
+			scene_source,
+			args_yaml,
+			std::move(persistent_elements),
+			std::move(script_installers),
+			scene_fixed_updaters);
 		window_title = string(loaded_scene->title());
 		Window::SetTitle(display, window_title);
+		log::Trace("{}", format("[scene] loaded '{}'", window_title));
 	}
 
 	Scene* Application::scene() {
@@ -743,26 +770,27 @@ namespace lf {
 		auto next_update = std::chrono::steady_clock::now();
 		auto ups_sample_start = std::chrono::steady_clock::now();
 		u32 ups_sample_updates = 0;
+		f64 fixed_update_credit = 0.0;
 		while (!stop.stop_requested()) {
-			bool updated = false;
+			u32 fixed_updates_run = 0;
 			Rml::Context* context = app.rml_context();
 			if (context) {
 				std::lock_guard lock(app.rml_mutex);
 				Scene* scene = app.scene();
 				if (!scene) {
-					updated = false;
+					fixed_updates_run = 0;
 				} else {
 					if (std::optional<Scene::LoadRequest> request = scene->take_load_request()) {
 						report<string> scene_source = ReadVirtualTextFile(request->path);
 						if (!scene_source) {
-							log_error(format("[scene] {}: {}", request->path, scene_source.error().message));
+							log::Error("{}", format("[scene] {}: {}", request->path, scene_source.error().message));
 						} else {
 							app.load_scene(inject_scene_args(std::move(*scene_source), request->args_yaml), request->args_yaml);
 							scene = app.scene();
 						}
 					}
 					if (!scene) {
-						updated = false;
+						fixed_updates_run = 0;
 						continue;
 					}
 					scene->refresh_title();
@@ -784,22 +812,35 @@ namespace lf {
 							file.close();
 							std::filesystem::remove(lua_console_path);
 							if (!script.empty()) {
-								log_info(format("[lua-console] executing {}", lua_console_path.string()));
+								log::Debug("{}", format("[lua-console] executing {}", lua_console_path.string()));
 								scene->queue_script(std::move(script), "lua-console");
 							}
 						}
 					}
 					LF_PROFILE_SCOPE("Scene::Update");
 					scene->update();
-					{
+					const f32 speed_multiplier = std::max(0.0f, app.stats.speed_multiplier.load(std::memory_order_relaxed));
+					const bool fixed_updates_enabled = app.stats.updates_per_second.load(std::memory_order_relaxed) > 0 && speed_multiplier > 0.0f;
+					if (fixed_updates_enabled) {
 						LF_PROFILE_SCOPE("Scene::FixedUpdate");
-						scene->fixed_update();
+						fixed_update_credit += static_cast<f64>(speed_multiplier);
+						const u32 max_updates_per_loop = 256;
+						while (fixed_update_credit >= 1.0 && fixed_updates_run < max_updates_per_loop) {
+							scene->fixed_update();
+							++fixed_updates_run;
+							fixed_update_credit -= 1.0;
+						}
+						if (fixed_updates_run == max_updates_per_loop) {
+							fixed_update_credit = 0.0;
+						}
+					} else {
+						fixed_update_credit = 0.0;
+						app.stats.current_ups.store(0.0f, std::memory_order_relaxed);
 					}
-					updated = true;
 				}
 			}
-			if (updated) {
-				++ups_sample_updates;
+			if (fixed_updates_run > 0) {
+				ups_sample_updates += fixed_updates_run;
 				auto now = std::chrono::steady_clock::now();
 				f64 elapsed = std::chrono::duration<f64>(now - ups_sample_start).count();
 				if (elapsed >= 0.25) {

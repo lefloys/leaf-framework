@@ -32,6 +32,16 @@ namespace lf {
 	error Init(span<string_view> args);
 
 	/*!
+	** @brief Initializes Leaf without headed window/RML application support.
+	** @param args Command line arguments passed to the process.
+	** @return An error when initialization fails, or an empty error on success.
+	**
+	** Headless mode still initializes Rutile/graphics resources; it only skips
+	** platform windows and swapchain-backed UI systems.
+	*/
+	error InitHeadless(span<string_view> args);
+
+	/*!
 	** @brief Advances framework-level work for one host iteration.
 	** @return True while the framework should continue running.
 	*/
@@ -43,4 +53,9 @@ namespace lf {
 	** Call this after application shutdown to release framework-level resources.
 	*/
 	void Exit();
+
+	/*!
+	** @brief Shuts down systems initialized by InitHeadless.
+	*/
+	void ExitHeadless();
 } // namespace lf

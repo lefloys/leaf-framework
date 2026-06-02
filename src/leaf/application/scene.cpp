@@ -11,6 +11,7 @@
 #include <leaf/core/profiler.hpp>
 #include <leaf/graphics/graphics.hpp>
 #include <leaf/graphics/window.hpp>
+#include <leaf/logging/logging.hpp>
 #include <leaf/script/localization.hpp>
 #include <leaf/script/prototype_inspector_script.hpp>
 #include <leaf/script/settings.hpp>
@@ -139,6 +140,27 @@ namespace lf {
 			parameters["mouse_y"] = Rml::Variant(y);
 			parameters["button"] = Rml::Variant(button);
 			return parameters;
+		}
+
+		string lua_event_table(string_view type, std::initializer_list<std::pair<string_view, string>> fields) {
+			string script = format("event={{type=\"{}\"", lua_escape(type));
+			for (const auto& [name, value] : fields) {
+				script += format(",{}={}", name, value);
+			}
+			script += "};";
+			return script;
+		}
+
+		string lua_event_number(f32 value) {
+			return format("{}", value);
+		}
+
+		string lua_event_number(i32 value) {
+			return format("{}", value);
+		}
+
+		string lua_event_string(string_view value) {
+			return format("\"{}\"", lua_escape(value));
 		}
 
 		bool element_has_script_event(Rml::Element* start, string_view attribute) {
@@ -270,7 +292,7 @@ namespace lf {
 			fs::path path = AppSettingsPath();
 			auto settings = LoadAppSettings(path);
 			if (!settings) {
-				log_warning(format("[settings] {}", settings.error().message));
+				log::Warning("{}", format("[settings] {}", settings.error().message));
 				return DefaultAppSettings();
 			}
 			return *settings;
@@ -352,11 +374,11 @@ namespace lf {
 					continue;
 				}
 
-				string event_script = format(
-					"event_mouse_x={};event_mouse_y={};event_button={};",
-					event.GetParameter<f32>("mouse_x", 0.0f),
-					event.GetParameter<f32>("mouse_y", 0.0f),
-					event.GetParameter<int>("button", -1));
+				string event_script = lua_event_table(attribute, {
+					{ "mouse_x", lua_event_number(event.GetParameter<f32>("mouse_x", 0.0f)) },
+					{ "mouse_y", lua_event_number(event.GetParameter<f32>("mouse_y", 0.0f)) },
+					{ "button", lua_event_number(event.GetParameter<int>("button", -1)) },
+				});
 				event_script += script;
 				scene.pending_scripts.push_back({ "event", std::move(event_script) });
 				return;
@@ -393,7 +415,7 @@ namespace lf {
 				}
 				message += lua_value_to_string(arg);
 			}
-			log_info(message);
+			log::Info("{}", message);
 		});
 
 		string document_source = install_rml_window_defaults(strip_inline_scripts(initial));
@@ -452,7 +474,7 @@ namespace lf {
 		lua.set_function("ui_click_selector", [this](string_view selector, sol::optional<i32> index) -> bool {
 			Rml::Element* element = find_selector(selector, index.value_or(1));
 			if (!element) {
-				log_error(format("[ui] missing selector '{}' at {}", selector, index.value_or(1)));
+				log::Error("{}", format("[ui] missing selector '{}' at {}", selector, index.value_or(1)));
 				return false;
 			}
 			return run_element_script_event(element, "click", mouse_parameters(*element, -1.0f, -1.0f, 0), "ui-click-selector");
@@ -465,7 +487,7 @@ namespace lf {
 		lua.set_function("ui_event_selector", [this](string_view selector, string_view event_name, sol::optional<i32> index, sol::optional<sol::table> table) -> bool {
 			Rml::Element* element = find_selector(selector, index.value_or(1));
 			if (!element) {
-				log_error(format("[ui] missing selector '{}' at {}", selector, index.value_or(1)));
+				log::Error("{}", format("[ui] missing selector '{}' at {}", selector, index.value_or(1)));
 				return false;
 			}
 			return run_element_script_event(element, event_name, lua_event_parameters(table), "ui-event-selector");
@@ -577,7 +599,7 @@ namespace lf {
 		lua.set_function("ui_dump", [this](sol::optional<string_view> id, sol::optional<i32> depth) -> bool {
 			Rml::Element* root = id ? find_element(*id) : document;
 			if (!root) {
-				log_error(format("[ui] missing element '{}'", id ? string(*id) : string("<document>")));
+				log::Error("{}", format("[ui] missing element '{}'", id ? string(*id) : string("<document>")));
 				return false;
 			}
 
@@ -591,7 +613,7 @@ namespace lf {
 				string class_names = string(element->GetClassNames());
 				string id_text = element_id.empty() ? "" : format("#{}", element_id);
 				string class_text = class_names.empty() ? "" : format(".{}", class_names);
-				log_info(format("[ui] {}{}{}{} {}x{} at {},{}",
+				log::Info("{}", format("[ui] {}{}{}{} {}x{} at {},{}",
 								indent,
 								string(element->GetTagName()),
 								id_text,
@@ -613,16 +635,105 @@ namespace lf {
 			refresh_title();
 		});
 
-		lua.set_function("quit_game", [this]() {
+		sol::table game = lua.create_table();
+		lua.globals()["game"] = game;
+		lua["_G"]["game"] = game;
+		game["load"] = [this](sol::object, string_view path, sol::optional<string_view> args_yaml) -> bool {
+			pending_load_request = LoadRequest{ string(path), string(args_yaml.value_or("")) };
+			return true;
+		};
+		game["exit"] = [this](sol::object) {
 			if (this->display) {
 				Window::SetShouldClose(this->display, true);
 			}
-		});
-
-		lua.set_function("load_scene", [this](string_view path, sol::optional<string_view> args_yaml) -> bool {
-			pending_load_request = LoadRequest{ string(path), string(args_yaml.value_or("")) };
-			return true;
-		});
+		};
+		game["scene"] = [this](sol::this_state state, sol::object) {
+			sol::state_view lua(state);
+			sol::table scene = lua.create_table();
+			scene["set_rml"] = [this](sol::object, string_view id, string_view rml) {
+				if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
+					Rml::String next(rml);
+					if (element->GetInnerRML() != next) {
+						element->SetInnerRML(next);
+					}
+				}
+			};
+			scene["set_text"] = [this](sol::object, string_view id, string_view text) {
+				if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
+					Rml::String next(rml_escape(text));
+					if (element->GetInnerRML() != next) {
+						element->SetInnerRML(next);
+					}
+				}
+			};
+			scene["set_property"] = [this](sol::object, string_view id, string_view name, string_view value) {
+				if (Rml::Element* element = find_element(id)) {
+					element->SetProperty(Rml::String(name), Rml::String(value));
+				}
+			};
+			scene["set_attribute"] = [this](sol::object, string_view id, string_view name, sol::object value) {
+				Rml::Element* element = find_element(id);
+				if (element) {
+					if (value.is<f32>()) {
+						set_attribute(id, name, value.as<f32>());
+					} else if (value.is<f64>()) {
+						set_attribute(id, name, static_cast<f32>(value.as<f64>()));
+					} else {
+						set_attribute(id, name, lua_value_to_string(value));
+					}
+				}
+			};
+			scene["remove_element"] = [this](sol::object, string_view id) {
+				Rml::Element* element = find_element(id);
+				if (!element) {
+					return;
+				}
+				if (Rml::Element* parent = element->GetParentNode()) {
+					parent->RemoveChild(element);
+				}
+			};
+			scene["element_exists"] = [this](sol::object, string_view tag_or_id, sol::optional<string_view> maybe_id) -> bool {
+				Rml::Element* element = document->GetElementById(Rml::String(maybe_id.value_or(tag_or_id)));
+				if (!element) {
+					return false;
+				}
+				if (!maybe_id) {
+					return true;
+				}
+				return element->GetTagName() == Rml::String(tag_or_id);
+			};
+			scene["element_left"] = [this](sol::object, string_view id) -> f32 {
+				if (Rml::Element* element = find_element(id)) {
+					return element->GetAbsoluteLeft();
+				}
+				return 0.0f;
+			};
+			scene["element_top"] = [this](sol::object, string_view id) -> f32 {
+				if (Rml::Element* element = find_element(id)) {
+					return element->GetAbsoluteTop();
+				}
+				return 0.0f;
+			};
+			scene["element_width"] = [this](sol::object, string_view id) -> f32 {
+				if (Rml::Element* element = find_element(id)) {
+					return element->GetOffsetWidth();
+				}
+				return 0.0f;
+			};
+			scene["element_height"] = [this](sol::object, string_view id) -> f32 {
+				if (Rml::Element* element = find_element(id)) {
+					return element->GetOffsetHeight();
+				}
+				return 0.0f;
+			};
+			scene["context_width"] = [this](sol::object) -> i32 {
+				return document->GetContext()->GetDimensions().x;
+			};
+			scene["context_height"] = [this](sol::object) -> i32 {
+				return document->GetContext()->GetDimensions().y;
+			};
+			return scene;
+		};
 
 		lua.set_function("rml_escape", [](string_view value) {
 			return rml_escape(value);
@@ -697,7 +808,7 @@ namespace lf {
 
 		lua.set_function("set_language", [](string_view language) -> bool {
 			if (error err = SetLanguage(language)) {
-				log_error(format("[settings] {}", err.message));
+				log::Error("{}", format("[settings] {}", err.message));
 				return false;
 			}
 			return true;
@@ -723,6 +834,28 @@ namespace lf {
 			return load_scene_settings().graphics.vsync;
 		});
 
+		lua.set_function("settings", [](sol::this_state state) -> sol::table {
+			sol::state_view lua(state);
+			AppSettings settings = load_scene_settings();
+
+			sol::table sound = lua.create_table();
+			sound["master"] = settings.sound.master;
+			sound["music"] = settings.sound.music;
+			sound["effects"] = settings.sound.effects;
+
+			sol::table graphics = lua.create_table();
+			graphics["fullscreen"] = settings.graphics.fullscreen;
+			graphics["vsync"] = settings.graphics.vsync;
+			graphics["max_fps"] = settings.graphics.max_fps;
+
+			sol::table result = lua.create_table();
+			result["language"] = settings.language;
+			result["last_saved_world"] = settings.last_saved_world;
+			result["sound"] = sound;
+			result["graphics"] = graphics;
+			return result;
+		});
+
 		lua.set_function("settings_max_fps", [this]() -> f32 {
 			return this->stats.max_fps.load(std::memory_order_relaxed);
 		});
@@ -731,7 +864,7 @@ namespace lf {
 			fs::path path = AppSettingsPath();
 			auto save_name = LoadLastSavedWorldSetting(path);
 			if (!save_name) {
-				log_error(format("[settings] {}", save_name.error().message));
+				log::Error("{}", format("[settings] {}", save_name.error().message));
 				return {};
 			}
 			return *save_name;
@@ -740,7 +873,7 @@ namespace lf {
 		lua.set_function("save_last_saved_world", [](string_view save_name) -> bool {
 			fs::path path = AppSettingsPath();
 			if (error err = SaveLastSavedWorldSetting(path, save_name)) {
-				log_error(format("[settings] {}", err.message));
+				log::Error("{}", format("[settings] {}", err.message));
 				return false;
 			}
 			return true;
@@ -748,6 +881,17 @@ namespace lf {
 
 		lua.set_function("graphics_backend", []() -> string_view {
 			return graphics_backend_name();
+		});
+
+		lua.set_function("include", [this](string_view path) {
+			string include_path(path);
+			report<string> script = ReadVirtualTextFile(include_path);
+			if (!script) {
+				throw runtime_exception(format("include '{}': {}", include_path, script.error().message));
+			}
+			if (!execute_script(*script, include_path)) {
+				throw runtime_exception(format("include '{}' failed", include_path));
+			}
 		});
 
 		lua.set_function("set_max_fps", [this](f32 value) {
@@ -792,7 +936,7 @@ namespace lf {
 			fs::path path = AppSettingsPath();
 			auto settings = LoadAppSettings(path);
 			if (!settings) {
-				log_error(format("[settings] {}", settings.error().message));
+				log::Error("{}", format("[settings] {}", settings.error().message));
 				return false;
 			}
 			f32 max_fps = settings->graphics.max_fps;
@@ -811,7 +955,7 @@ namespace lf {
 			settings->graphics.vsync = vsync;
 			settings->graphics.max_fps = max_fps;
 			if (error err = SaveAppSettings(path, *settings)) {
-				log_error(format("[settings] {}", err.message));
+				log::Error("{}", format("[settings] {}", err.message));
 				return false;
 			}
 			this->stats.max_fps.store(max_fps, std::memory_order_relaxed);
@@ -824,109 +968,14 @@ namespace lf {
 			return true;
 		});
 
-		lua.set_function("set_rml", [this](string_view id, string_view rml) {
-			if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
-				Rml::String next(rml);
-				if (element->GetInnerRML() != next) {
-					element->SetInnerRML(next);
-				}
-			}
-		});
-
-		lua.set_function("set_text", [this](string_view id, string_view text) {
-			if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
-				Rml::String next(rml_escape(text));
-				if (element->GetInnerRML() != next) {
-					element->SetInnerRML(next);
-				}
-			}
-		});
-
-		lua.set_function("set_property", [this](string_view id, string_view name, string_view value) {
-			if (Rml::Element* element = find_element(id)) {
-				element->SetProperty(Rml::String(name), Rml::String(value));
-			}
-		});
-
-		lua.set_function("element_exists", [this](string_view tag_or_id, sol::optional<string_view> maybe_id) -> bool {
-			Rml::Element* element = document->GetElementById(Rml::String(maybe_id.value_or(tag_or_id)));
-			if (!element) {
-				return false;
-			}
-			if (!maybe_id) {
-				return true;
-			}
-			return element->GetTagName() == Rml::String(tag_or_id);
-		});
-
-		lua.set_function("remove_element", [this](string_view id) {
-			Rml::Element* element = find_element(id);
-			if (!element) {
-				return;
-			}
-			if (Rml::Element* parent = element->GetParentNode()) {
-				parent->RemoveChild(element);
-			}
-		});
-
-		lua.set_function("element_left", [this](string_view id) -> f32 {
-			if (Rml::Element* element = find_element(id)) {
-				return element->GetAbsoluteLeft();
-			}
-			return 0.0f;
-		});
-
-		lua.set_function("element_top", [this](string_view id) -> f32 {
-			if (Rml::Element* element = find_element(id)) {
-				return element->GetAbsoluteTop();
-			}
-			return 0.0f;
-		});
-
-		lua.set_function("element_width", [this](string_view id) -> f32 {
-			if (Rml::Element* element = find_element(id)) {
-				return element->GetOffsetWidth();
-			}
-			return 0.0f;
-		});
-
-		lua.set_function("element_height", [this](string_view id) -> f32 {
-			if (Rml::Element* element = find_element(id)) {
-				return element->GetOffsetHeight();
-			}
-			return 0.0f;
-		});
-
-		lua.set_function("context_width", [this]() -> i32 {
-			return document->GetContext()->GetDimensions().x;
-		});
-
-		lua.set_function("context_height", [this]() -> i32 {
-			return document->GetContext()->GetDimensions().y;
-		});
-
-		lua.set_function("set_attribute", [this](string_view id, string_view name, sol::object value) {
-			Rml::Element* element = find_element(id);
-			if (element) {
-				if (value.is<f32>()) {
-					set_attribute(id, name, value.as<f32>());
-				} else if (value.is<f64>()) {
-					set_attribute(id, name, static_cast<f32>(value.as<f64>()));
-				} else {
-					set_attribute(id, name, lua_value_to_string(value));
-				}
-			}
-		});
-
-		for (const ScriptInstaller& installer : script_installers) {
+		for (const ScriptInstaller& installer : this->script_installers) {
 			installer(lua, *document);
 		}
 		install_ui_automation_helpers();
 
 		script_events = std::make_unique<ScriptEventListener>(*this);
-		bind_script_events();
-
 		run_inline_scripts(initial);
+		bind_script_events();
 		document->Show();
 	}
 
@@ -1039,7 +1088,7 @@ namespace lf {
 			if (!src.empty()) {
 				report<string> script = ReadVirtualTextFile(src);
 				if (!script) {
-					log_error(format("[scene] {}: {}", src, script.error().message));
+					log::Error("{}", format("[scene] {}: {}", src, script.error().message));
 				} else {
 					run_script(*script, src);
 				}
@@ -1058,7 +1107,7 @@ namespace lf {
 		sol::protected_function_result result = lua.safe_script(string(script), sol::script_pass_on_error);
 		if (!result.valid()) {
 			sol::error error = result;
-			log_error(format("[scene] {}: {}", source_name, error.what()));
+			log::Error("{}", format("[scene] {}: {}", source_name, error.what()));
 			return false;
 		}
 		return true;
@@ -1225,7 +1274,7 @@ end
 		sol::protected_function_result result = update(elapsed);
 		if (!result.valid()) {
 			sol::error error = result;
-			log_error(format("[scene] ui-automation: {}", error.what()));
+			log::Error("{}", format("[scene] ui-automation: {}", error.what()));
 		}
 	}
 
@@ -1297,7 +1346,7 @@ end
 	Rml::Element* Scene::require_element(string_view id, string_view api_name) const {
 		Rml::Element* element = find_element(id);
 		if (!element) {
-			log_error(format("[ui] {} missing element '{}'", api_name, id));
+			log::Error("{}", format("[ui] {} missing element '{}'", api_name, id));
 		}
 		return element;
 	}
@@ -1310,14 +1359,14 @@ end
 
 		auto* control = rmlui_dynamic_cast<Rml::ElementFormControl*>(element);
 		if (!control) {
-			log_error(format("[ui] {} element '{}' is not a form control", api_name, id));
+			log::Error("{}", format("[ui] {} element '{}' is not a form control", api_name, id));
 		}
 		return control;
 	}
 
 	bool Scene::run_element_script_event(Rml::Element* start, string_view attribute, const Rml::Dictionary& parameters, string_view source_name) {
 		if (!start) {
-			log_error("[ui] missing element");
+			log::Error("[ui] missing element");
 			return false;
 		}
 
@@ -1330,24 +1379,24 @@ end
 			auto mouse_x = parameters.find("mouse_x");
 			auto mouse_y = parameters.find("mouse_y");
 			auto button = parameters.find("button");
-			string event_script = format(
-				"event_mouse_x={};event_mouse_y={};event_button={};",
-				mouse_x != parameters.end() ? mouse_x->second.Get<f32>(0.0f) : 0.0f,
-				mouse_y != parameters.end() ? mouse_y->second.Get<f32>(0.0f) : 0.0f,
-				button != parameters.end() ? button->second.Get<i32>(-1) : -1);
+			string event_script = lua_event_table(attribute, {
+				{ "mouse_x", lua_event_number(mouse_x != parameters.end() ? mouse_x->second.Get<f32>(0.0f) : 0.0f) },
+				{ "mouse_y", lua_event_number(mouse_y != parameters.end() ? mouse_y->second.Get<f32>(0.0f) : 0.0f) },
+				{ "button", lua_event_number(button != parameters.end() ? button->second.Get<i32>(-1) : -1) },
+			});
 			event_script += script;
 			run_script(event_script, source_name);
 			return true;
 		}
 
-		log_error(format("[ui] element has no '{}' script", attribute));
+		log::Error("{}", format("[ui] element has no '{}' script", attribute));
 		return false;
 	}
 
 	bool Scene::run_element_script_event(string_view id, string_view attribute, const Rml::Dictionary& parameters, string_view source_name) {
 		Rml::Element* start = find_element(id);
 		if (!start) {
-			log_error(format("[ui] missing element '{}'", id));
+			log::Error("{}", format("[ui] missing element '{}'", id));
 			return false;
 		}
 		return run_element_script_event(start, attribute, parameters, source_name);
@@ -1371,7 +1420,7 @@ end
 		sol::protected_function_result result = update(elapsed);
 		if (!result.valid()) {
 			sol::error error = result;
-			log_error(format("[scene] {}", error.what()));
+			log::Error("{}", format("[scene] {}", error.what()));
 		}
 	}
 
@@ -1396,12 +1445,12 @@ end
 					continue;
 				}
 
-				string event_script = format(
-					"event_mouse_x={};event_mouse_y={};event_scroll_x={};event_scroll_y={};",
-					event.position.x,
-					event.position.y,
-					event.delta.x,
-					event.delta.y);
+				string event_script = lua_event_table("mousescroll", {
+					{ "mouse_x", lua_event_number(event.position.x) },
+					{ "mouse_y", lua_event_number(event.position.y) },
+					{ "scroll_x", lua_event_number(event.delta.x) },
+					{ "scroll_y", lua_event_number(event.delta.y) },
+				});
 				event_script += script;
 				pending_scripts.push_back({ "input-scroll", std::move(event_script) });
 				return;
@@ -1459,11 +1508,11 @@ end
 				continue;
 			}
 
-			string event_script = format(
-				"event_key=\"{}\";event_character={};event_modifiers={};",
-				lua_escape(event_key),
-				event_character,
-				static_cast<int>(event.modifiers.value));
+			string event_script = lua_event_table(attribute, {
+				{ "key", lua_event_string(event_key) },
+				{ "character", lua_event_number(static_cast<i32>(event_character)) },
+				{ "modifiers", lua_event_number(static_cast<i32>(event.modifiers.value)) },
+			});
 			event_script += script;
 			pending_scripts.push_back({ "input", std::move(event_script) });
 		}

@@ -30,6 +30,11 @@ namespace lf {
 		std::atomic<u32> updates_per_second = 60;
 
 		/*!
+		** @brief Multiplier applied to fixed simulation updates.
+		*/
+		std::atomic<f32> speed_multiplier = 1.0f;
+
+		/*!
 		** @brief Most recently measured frames per second.
 		*/
 		std::atomic<f32> current_fps = 0.0f;
