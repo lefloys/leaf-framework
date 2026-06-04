@@ -102,6 +102,10 @@ namespace lf {
 			file << "  fullscreen: " << format_bool(normalized.graphics.fullscreen) << "\n";
 			file << "  vsync: " << format_bool(normalized.graphics.vsync) << "\n";
 			file << "  max_fps: " << normalized.graphics.max_fps << "\n";
+			file << "input:\n";
+			for (const auto& [action, key] : normalized.input.bindings) {
+				file << "  " << action << ": " << key << "\n";
+			}
 			if (!file) {
 				return error(generic_errc::input_error, format("failed to write '{}'", path.string()));
 			}
@@ -179,6 +183,8 @@ namespace lf {
 					} else if (key == "vsync") {
 						settings.graphics.vsync = *boolean;
 					}
+				} else if (section == "input") {
+					settings.input.bindings[key] = unquote_setting_value(value);
 				}
 			}
 
@@ -192,8 +198,16 @@ namespace lf {
 		return settings;
 	}
 
+	fs::path AppSettingsFolder() {
+		return fs::folder::appdata / "settings";
+	}
+
 	fs::path AppSettingsPath() {
-		return fs::folder::appdata / "settings.yaml";
+		return AppSettingsFolder() / "core.yaml";
+	}
+
+	fs::path ModSettingsPath(string_view mod_name) {
+		return AppSettingsFolder() / (string(mod_name) + ".yaml");
 	}
 
 	report<AppSettings> LoadAppSettings(const fs::path& path) {
@@ -216,7 +230,7 @@ namespace lf {
 			error err = settings.error();
 			return unexpected(err.add_context(format("loading '{}'", path.string())));
 		}
-		if (text->find("sound:") == string::npos || text->find("graphics:") == string::npos || text->find("max_fps:") == string::npos || text->find("last_saved_world:") == string::npos) {
+		if (text->find("sound:") == string::npos || text->find("graphics:") == string::npos || text->find("input:") == string::npos || text->find("max_fps:") == string::npos || text->find("last_saved_world:") == string::npos) {
 			if (error err = write_settings_file(path, *settings)) {
 				return unexpected(err.add_context(format("updating '{}'", path.string())));
 			}

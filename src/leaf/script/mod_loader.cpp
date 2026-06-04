@@ -22,6 +22,11 @@ namespace lf {
 			static ModOptions options;
 			return options;
 		}
+
+		dict& loaded_startup_settings() {
+			static dict settings;
+			return settings;
+		}
 	}
 
 	class DataScriptRunner {
@@ -290,8 +295,23 @@ namespace lf {
 		}
 	}
 	f32 mod_stage_progress(u32 completed_stages) {
-		constexpr f32 stage_count = 5.0f;
+		constexpr f32 stage_count = 6.0f;
 		return static_cast<f32>(completed_stages) / stage_count;
+	}
+
+	void set_lua_value(sol::table table, string_view name, const object& value) {
+		string key(name);
+		if (value.is<bool>()) {
+			table[key] = value.get<bool>();
+		} else if (value.is<i64>()) {
+			table[key] = value.get<i64>();
+		} else if (value.is<u64>()) {
+			table[key] = value.get<u64>();
+		} else if (value.is<f64>()) {
+			table[key] = value.get<f64>();
+		} else if (value.is<string>()) {
+			table[key] = value.get<string>();
+		}
 	}
 
 	void initialize_prototype_lua(sol::state& lua) {
@@ -302,6 +322,9 @@ data["raw"] = {}
 function data:extend(prototypes)
 	for i = 1, #prototypes do
 		local prototype = prototypes[i]
+		if prototype.mod == nil then
+			prototype.mod = __leaf_current_mod
+		end
 		local type_table = self.raw[prototype.type]
 		if type_table == nil then
 			error("data.raw[" .. tostring(prototype.type) .. "] does not exist")
@@ -314,9 +337,17 @@ function data:extend(prototypes)
 end
 option = {}
 option["scene"] = {}
+settings = {}
+settings["startup"] = {}
 )");
 		for (auto& type : PrototypeTypeRegistry::functions) {
 			lua["data"]["raw"][type.type()] = lua.create_table();
+		}
+		sol::table startup = lua["settings"]["startup"];
+		for (const auto& [name, value] : loaded_startup_settings()) {
+			sol::table setting = lua.create_table();
+			set_lua_value(setting, "value", value);
+			startup[name] = setting;
 		}
 	}
 
@@ -340,6 +371,7 @@ option["scene"] = {}
 
 		try {
 			DataScriptRunner runner(lua);
+			lua["__leaf_current_mod"] = mod.name;
 			runner.run_file(mod.name + "/" + string(file_name), path, mod.location);
 			log::Trace("{}", format("[mod-loader] loaded: {}/{}", mod.name, file_name));
 			return error::no_error;
@@ -347,6 +379,129 @@ option["scene"] = {}
 			log::Error("{}", format("[mod-loader] error: {}/{}: {}", mod.name, file_name, e.what()));
 			return error(generic_errc::parse_error, "Failed to execute " + mod.name + "/" + string(file_name) + ": " + e.what());
 		}
+	}
+
+	void initialize_settings_lua(sol::state& lua, AppSettings& settings) {
+		lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
+		lua.set_function("__leaf_set_local_input_binding", [&settings](string_view action, string_view key) {
+			settings.input.bindings[string(action)] = string(key);
+		});
+		lua.set_function("__leaf_declare_setting", [&settings](string_view type, string_view name, string_view setting_type, sol::object default_value) {
+			if (name.empty()) {
+				throw runtime_exception(format("{} is missing name", type));
+			}
+			if (default_value.get_type() == sol::type::lua_nil) {
+				throw runtime_exception(format("{} '{}' is missing default_value", type, name));
+			}
+
+			object value = sol_to_object(default_value);
+			if (setting_type == "startup") {
+				loaded_startup_settings()[string(name)] = value;
+			}
+			if (type == "input-setting") {
+				if (setting_type != "runtime-per-user") {
+					throw runtime_exception(format("input-setting '{}' must use setting_type='runtime-per-user'", name));
+				}
+				settings.input.bindings[string(name)] = value.as<string>();
+			}
+		});
+		lua.script(R"(
+data = {}
+local setting_types = {
+	["bool-setting"] = true,
+	["int-setting"] = true,
+	["double-setting"] = true,
+	["string-setting"] = true,
+	["input-setting"] = true,
+}
+local setting_scopes = {
+	["startup"] = true,
+	["runtime-global"] = true,
+	["runtime-per-user"] = true,
+}
+
+function data:extend(settings)
+	for i = 1, #settings do
+		local setting = settings[i]
+		if setting_types[setting.type] ~= true then
+			error("unknown setting type '" .. tostring(setting.type) .. "'")
+		end
+		if setting.name == nil then
+			error(tostring(setting.type) .. " is missing name")
+		end
+		if setting.setting_type == nil then
+			error(tostring(setting.type) .. " '" .. tostring(setting.name) .. "' is missing setting_type")
+		end
+		if setting_scopes[setting.setting_type] ~= true then
+			error(tostring(setting.type) .. " '" .. tostring(setting.name) .. "' has invalid setting_type '" .. tostring(setting.setting_type) .. "'")
+		end
+		if setting.type == "int-setting" or setting.type == "double-setting" then
+			if setting.minimum_value ~= nil and setting.default_value < setting.minimum_value then
+				error(tostring(setting.type) .. " '" .. tostring(setting.name) .. "' default_value is below minimum_value")
+			end
+			if setting.maximum_value ~= nil and setting.default_value > setting.maximum_value then
+				error(tostring(setting.type) .. " '" .. tostring(setting.name) .. "' default_value is above maximum_value")
+			end
+		end
+		if setting.type == "string-setting" then
+			local default = tostring(setting.default_value)
+			if setting.minimum_length ~= nil and #default < setting.minimum_length then
+				error("string-setting '" .. tostring(setting.name) .. "' default_value is shorter than minimum_length")
+			end
+			if setting.maximum_length ~= nil and #default > setting.maximum_length then
+				error("string-setting '" .. tostring(setting.name) .. "' default_value is longer than maximum_length")
+			end
+			if setting.allowed_values ~= nil then
+				if type(setting.allowed_values) ~= "table" then
+					error("string-setting '" .. tostring(setting.name) .. "' allowed_values must be a table")
+				end
+				local allowed = false
+				for _, value in ipairs(setting.allowed_values) do
+					if default == tostring(value) then
+						allowed = true
+						break
+					end
+				end
+				if not allowed then
+					error("string-setting '" .. tostring(setting.name) .. "' default_value is not in allowed_values")
+				end
+			end
+		end
+		__leaf_declare_setting(tostring(setting.type), tostring(setting.name), tostring(setting.setting_type), setting.default_value)
+	end
+end
+)");
+	}
+
+	error sync_loaded_mod_settings(span<const ModInfo> mods) {
+		for (const ModInfo& mod : mods) {
+			AppSettings settings;
+			fs::path path = ModSettingsPath(mod.name);
+			if (fs::exists(path)) {
+				auto loaded = LoadAppSettings(path);
+				if (!loaded) {
+					return loaded.error().add_context(format("loading '{}'", path.string()));
+				}
+				settings = *loaded;
+			} else {
+				settings = DefaultAppSettings();
+			}
+
+			AppSettings defaults = DefaultAppSettings();
+			sol::state lua;
+			initialize_settings_lua(lua, defaults);
+			if (error err = load_prototype_script(lua, mod, "settings.lua")) {
+				return err.add_context("loading settings defaults");
+			}
+			for (const auto& [action, key] : defaults.input.bindings) {
+				settings.input.bindings.try_emplace(action, key);
+			}
+
+			if (error err = SaveAppSettings(path, settings)) {
+				return err.add_context(format("saving '{}'", path.string()));
+			}
+		}
+		return error::no_error;
 	}
 
 	bool version_compare(const version& a, const version& b, ModDependency::Operator op) {
@@ -570,6 +725,7 @@ option["scene"] = {}
 		ClearVirtualFileSpace();
 		ClearLocalization();
 		loaded_options() = {};
+		loaded_startup_settings().clear();
 
 		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "scanning-mod-directories", 0.0f);
 		vector<ModInfo> mods;
@@ -629,9 +785,16 @@ option["scene"] = {}
 
 		auto language_result = LoadSelectedLanguageSetting(AppSettingsPath());
 		if (!language_result) {
-			return language_result.error().add_context("loading settings.yaml");
+			return language_result.error().add_context("loading settings/core.yaml");
 		}
 		string selected_language = *language_result;
+
+		report_mod_progress(progress, "loading-settings", mod_stage_progress(1), "syncing-mod-settings", 0.0f);
+		if (error settings_err = sync_loaded_mod_settings(span<const ModInfo>(enabled_mod_list.data(), enabled_mod_list.size()))) {
+			return settings_err.add_context("syncing mod settings");
+		}
+		report_mod_progress(progress, "loading-settings", mod_stage_progress(2), "mod-settings-loaded", 1.0f);
+
 		report_mod_progress(progress, "loading-localization", mod_stage_progress(0), selected_language, 0.0f);
 		error locale_error = LoadLocaleFiles(span<const ModInfo>(enabled_mod_list.data(), enabled_mod_list.size()), selected_language);
 		if (locale_error) {
@@ -640,7 +803,7 @@ option["scene"] = {}
 
 		{
 			log::Trace("{}", "[mod-loader] loading unknown prototypes");
-			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "core/null.lua", 0.0f);
+		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "core/null.lua", 0.0f);
 			sol::state lua;
 			initialize_prototype_lua(lua);
 
@@ -651,12 +814,12 @@ option["scene"] = {}
 			if (error err = load_prototype_script(lua, *core, "null.lua", true)) {
 				return err;
 			}
-			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "core/null.lua", 0.2f);
+			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "core/null.lua", 0.2f);
 			auto err = LoadDataRaw(lua);
 			if (err) {
 				return err.add_context("loading null prototypes from core/null.lua");
 			}
-			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "registered-null-prototypes", 0.35f);
+			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "registered-null-prototypes", 0.35f);
 		}
 
 		sol::state lua;
@@ -666,14 +829,14 @@ option["scene"] = {}
 		for (size_t i = 0; i < enabled_mod_list.size(); ++i) {
 			const auto& mod = enabled_mod_list[i];
 			f32 progress_base = enabled_mod_list.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(enabled_mod_list.size());
-			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), mod.name + "/data.lua", 0.35f + progress_base * 0.45f);
+			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), mod.name + "/data.lua", 0.35f + progress_base * 0.45f);
 			if (error err = load_prototype_script(lua, mod, "data.lua")) {
 				return err;
 			}
 		}
 
-		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "data-lua-files-loaded", 0.8f);
-		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "loading-options", 0.85f);
+		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "data-lua-files-loaded", 0.8f);
+		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "loading-options", 0.85f);
 		auto option_err = LoadOptions(lua);
 		if (option_err) {
 			return option_err.add_context("loading options from mods' data.lua");
@@ -681,29 +844,29 @@ option["scene"] = {}
 		loaded_options().language = selected_language;
 		loaded_options().mods = enabled_mod_list;
 
-		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(1), "creating-prototypes", 0.9f);
+		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "creating-prototypes", 0.9f);
 		auto err = LoadDataRaw(lua);
 		if (err) {
 			return err.add_context("loading prototypes from mods' data.lua");
 		}
-		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "prototypes-loaded", 1.0f);
+		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(3), "prototypes-loaded", 1.0f);
 
 		for (size_t i = 0; i < PrototypeTypeRegistry::functions.size(); ++i) {
 			const auto& fn = PrototypeTypeRegistry::functions[i];
 			try {
 				f32 process_progress = PrototypeTypeRegistry::functions.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(PrototypeTypeRegistry::functions.size());
-				report_mod_progress(progress, "linking-prototypes", mod_stage_progress(2), string(fn.type()), process_progress);
+				report_mod_progress(progress, "linking-prototypes", mod_stage_progress(3), string(fn.type()), process_progress);
 				fn.resolve();
 			} catch (const lf::exception& e) {
 				return error(generic_errc::parse_error, e.what()).add_context("linking prototypes");
 			}
 		}
 
-		report_mod_progress(progress, "linking-prototypes", mod_stage_progress(3), "prototype-references-linked", 1.0f);
-		report_mod_progress(progress, "loading-assets", mod_stage_progress(3), "checking-asset-work", 0.0f);
-		report_mod_progress(progress, "loading-assets", mod_stage_progress(4), "assets-loaded", 1.0f);
-		report_mod_progress(progress, "finish", mod_stage_progress(4), "finalizing-startup", 0.0f);
-		report_mod_progress(progress, "finish", mod_stage_progress(5), "mods-loaded", 1.0f);
+		report_mod_progress(progress, "linking-prototypes", mod_stage_progress(4), "prototype-references-linked", 1.0f);
+		report_mod_progress(progress, "loading-assets", mod_stage_progress(4), "checking-asset-work", 0.0f);
+		report_mod_progress(progress, "loading-assets", mod_stage_progress(5), "assets-loaded", 1.0f);
+		report_mod_progress(progress, "finish", mod_stage_progress(5), "finalizing-startup", 0.0f);
+		report_mod_progress(progress, "finish", mod_stage_progress(6), "mods-loaded", 1.0f);
 		return error::no_error;
 	}
 

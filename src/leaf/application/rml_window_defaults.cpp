@@ -7,12 +7,9 @@ namespace lf::rml_window_detail {
 		return R"rml(
 <style id="rml-window-defaults">
 window {
-	display: block;
+	display: none;
 	position: absolute;
-	left: 32px;
-	top: 32px;
 	width: 640px;
-	height: 420px;
 	min-width: 180px;
 	min-height: 120px;
 	background: #120A14;
@@ -25,6 +22,14 @@ window {
 	border-radius: 6px;
 	color: #F4EEF2;
 	z-index: 1;
+}
+window.window-measuring,
+window.window-placed {
+	display: block;
+}
+window.window-measuring {
+	visibility: hidden;
+	pointer-events: none;
 }
 window.window-focused {
 	border-color: #C33A4A;
@@ -130,11 +135,8 @@ window.window-collapsed window-resize {
 }
 window-body {
 	display: block;
-	position: absolute;
-	left: 14px;
-	right: 14px;
-	top: 56px;
-	bottom: 14px;
+	position: relative;
+	margin: 14px;
 	overflow: auto;
 }
 window-resize {

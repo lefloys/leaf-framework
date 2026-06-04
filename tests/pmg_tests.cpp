@@ -19,6 +19,7 @@ const u32* as_indices(const lf::vector<u08>& bytes) {
 	return reinterpret_cast<const u32*>(bytes.data());
 }
 
+/// Verifies that pmg non-indexed writer stores new vertex bytes.
 TEST_CASE("pmg non-indexed writer stores new vertex bytes", "[pmg]") {
 	lf::vector<u08> vertices;
 	lf::pmg::writer<TestVertex> writer(vertices);
@@ -37,6 +38,7 @@ TEST_CASE("pmg non-indexed writer stores new vertex bytes", "[pmg]") {
 	REQUIRE(written[5].id == 6);
 }
 
+/// Verifies that pmg non-indexed repush copies previous vertex bytes.
 TEST_CASE("pmg non-indexed repush copies previous vertex bytes", "[pmg]") {
 	lf::vector<u08> vertices;
 	lf::pmg::writer<TestVertex> writer(vertices);
@@ -62,6 +64,7 @@ TEST_CASE("pmg non-indexed repush copies previous vertex bytes", "[pmg]") {
 	REQUIRE(written[5].id == 10);
 }
 
+/// Verifies that pmg indexed writer stores sequential indices.
 TEST_CASE("pmg indexed writer stores sequential indices", "[pmg]") {
 	lf::vector<u08> vertices;
 	lf::vector<u08> indices;
@@ -82,6 +85,7 @@ TEST_CASE("pmg indexed writer stores sequential indices", "[pmg]") {
 	REQUIRE(written_indices[2] == 2);
 }
 
+/// Verifies that pmg indexed repush emits indices without duplicating vertices.
 TEST_CASE("pmg indexed repush emits indices without duplicating vertices", "[pmg]") {
 	lf::vector<u08> vertices;
 	lf::vector<u08> indices;
@@ -110,6 +114,7 @@ TEST_CASE("pmg indexed repush emits indices without duplicating vertices", "[pmg
 	REQUIRE(written_indices[5] == 0);
 }
 
+/// Verifies that pmg auto-flush preserves order when staging overflows.
 TEST_CASE("pmg auto-flush preserves order when staging overflows", "[pmg]") {
 	lf::vector<u08> vertices;
 	lf::pmg::writer<TestVertex> writer(vertices, { .staging_capacity = 3 * sizeof(TestVertex) });
@@ -128,6 +133,7 @@ TEST_CASE("pmg auto-flush preserves order when staging overflows", "[pmg]") {
 	}
 }
 
+/// Verifies that pmg repush outside history throws.
 TEST_CASE("pmg repush outside history throws", "[pmg]") {
 	lf::vector<u08> vertices;
 	lf::pmg::writer<TestVertex> writer(vertices);
@@ -141,6 +147,7 @@ TEST_CASE("pmg repush outside history throws", "[pmg]") {
 					  lf::out_of_range_exception);
 }
 
+/// Verifies that pmg thread-local staging is isolated per thread.
 TEST_CASE("pmg thread-local staging is isolated per thread", "[pmg]") {
 	lf::vector<u08> first;
 	lf::vector<u08> second;

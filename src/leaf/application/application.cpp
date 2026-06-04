@@ -1,6 +1,7 @@
 #include "application.hpp"
 
 #include "application_stats.hpp"
+#include "rml_window.hpp"
 
 #include <leaf/core/filesystem.hpp>
 #include <leaf/core/format.hpp>
@@ -247,6 +248,7 @@ namespace lf {
 	Application::Application(const ApplicationCreateInfo& create_info)
 		: display(Window::Create()),
 		  update_interval(update_interval_for(create_info.updates_per_second)) {
+		RegisterRmlWindowElement();
 		set_updates_per_second(create_info.updates_per_second);
 		Window::SetTitle(display, create_info.title);
 		window_title = string(create_info.title);
@@ -268,6 +270,7 @@ namespace lf {
 	Application::Application(handle<lf::window> display, const ApplicationCreateInfo& create_info)
 		: display(display),
 		  update_interval(update_interval_for(create_info.updates_per_second)) {
+		RegisterRmlWindowElement();
 		set_updates_per_second(create_info.updates_per_second);
 		Window::SetShouldClose(this->display, false);
 		Window::SetTitle(this->display, create_info.title);

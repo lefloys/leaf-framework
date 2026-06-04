@@ -145,6 +145,7 @@ lf::error process(Stream& stream, PlayerType& player) {
 	);
 }
 
+/// Verifies that binary concepts accept streams and data cvref.
 TEST_CASE("binary concepts accept streams and data cvref", "[binary]") {
 	static_assert(lf::bin::byte_stream<lf::bin::read_stream>);
 	static_assert(lf::bin::byte_stream<lf::bin::fast_read_stream>);
@@ -172,6 +173,7 @@ TEST_CASE("binary concepts accept streams and data cvref", "[binary]") {
 	static_assert(std::same_as<decltype(lf::bin::write_to(std::declval<lf::span<lf::byte>>(), i32{})), lf::error>);
 }
 
+/// Verifies that binary versioned processing dispatches exact layouts and migrations.
 TEST_CASE("binary versioned processing dispatches exact layouts and migrations", "[binary]") {
 	BinaryVersionedValue exact_v1;
 	exact_v1.value = 7;
@@ -207,6 +209,7 @@ TEST_CASE("binary versioned processing dispatches exact layouts and migrations",
 	REQUIRE(migrated.extra == 99);
 }
 
+/// Verifies that binary versioned processing reports missing migration pieces.
 TEST_CASE("binary versioned processing reports missing migration pieces", "[binary]") {
 	lf::vector<lf::byte> empty;
 	lf::bin::read_stream missing_source_stream(empty);
@@ -234,6 +237,7 @@ TEST_CASE("binary versioned processing reports missing migration pieces", "[bina
 	REQUIRE(missing_migration.value == 42);
 }
 
+/// Verifies that binary fixed primitives round trip.
 TEST_CASE("binary fixed primitives round trip", "[binary]") {
 	require_round_trip(u08{ 42 });
 	require_round_trip(u16{ 1234 });
@@ -270,6 +274,7 @@ TEST_CASE("binary fixed primitives round trip", "[binary]") {
 	REQUIRE(!bool_value);
 }
 
+/// Verifies that binary size uses continuation bytes.
 TEST_CASE("binary size uses continuation bytes", "[binary]") {
 	lf::report<lf::vector<lf::byte>> single_byte = lf::bin::write(lf::bin::size{ 127 });
 	REQUIRE(single_byte);
@@ -304,6 +309,7 @@ TEST_CASE("binary size uses continuation bytes", "[binary]") {
 	require_round_trip(lf::bin::size{ std::numeric_limits<size_t>::max() });
 }
 
+/// Verifies that binary size reports truncated and overflowing reads.
 TEST_CASE("binary size reports truncated and overflowing reads", "[binary]") {
 	constexpr size_t payload_bits_per_byte = 7u;
 	constexpr size_t bit_count = sizeof(size_t) * 8u;
@@ -327,6 +333,7 @@ TEST_CASE("binary size reports truncated and overflowing reads", "[binary]") {
 	REQUIRE(!padded_value);
 }
 
+/// Verifies that binary strings and vectors round trip.
 TEST_CASE("binary strings and vectors round trip", "[binary]") {
 	require_round_trip(lf::string{});
 	require_round_trip(lf::string{ "outposts" });
@@ -392,6 +399,7 @@ TEST_CASE("binary strings and vectors round trip", "[binary]") {
 	REQUIRE(byte_at(*raw_bytes, 8) == 0x0a);
 }
 
+/// Verifies that binary enums round trip as their underlying type.
 TEST_CASE("binary enums round trip as their underlying type", "[binary]") {
 	lf::report<lf::vector<lf::byte>> bytes = lf::bin::write(BinaryEnum::Beta);
 	REQUIRE(bytes);
@@ -409,6 +417,7 @@ TEST_CASE("binary enums round trip as their underlying type", "[binary]") {
 	REQUIRE(!invalid);
 }
 
+/// Verifies that binary measure computes serialized byte size.
 TEST_CASE("binary measure computes serialized byte size", "[binary]") {
 	lf::vector<u32> values;
 	values.push_back(0x01020304u);
@@ -421,6 +430,7 @@ TEST_CASE("binary measure computes serialized byte size", "[binary]") {
 	REQUIRE(*size == bytes->size());
 }
 
+/// Verifies that binary fast mode and trivial binary data match normal output.
 TEST_CASE("binary fast mode and trivial binary data match normal output", "[binary]") {
 	lf::vector<BinaryTrivialRecord> records;
 	records.push_back(BinaryTrivialRecord{ 1, 2, 3, 4.0f });
@@ -452,6 +462,7 @@ TEST_CASE("binary fast mode and trivial binary data match normal output", "[bina
 	REQUIRE(*parsed_array == record_array);
 }
 
+/// Verifies that binary read stream can expose zero-copy byte spans.
 TEST_CASE("binary read stream can expose zero-copy byte spans", "[binary]") {
 	lf::byte storage[4]{
 		static_cast<lf::byte>(1),
@@ -467,6 +478,7 @@ TEST_CASE("binary read stream can expose zero-copy byte spans", "[binary]") {
 	REQUIRE(stream.cursor() == 3);
 }
 
+/// Verifies that binary vec2 and custom data round trip.
 TEST_CASE("binary vec2 and custom data round trip", "[binary]") {
 	require_round_trip(lf::vec2{ 4.0f, -9.5f });
 
@@ -484,6 +496,7 @@ TEST_CASE("binary vec2 and custom data round trip", "[binary]") {
 	REQUIRE(*parsed == player);
 }
 
+/// Verifies that binary fixed write stream writes into bounded storage.
 TEST_CASE("binary fixed write stream writes into bounded storage", "[binary]") {
 	lf::byte storage[4]{};
 	lf::error err = lf::bin::write_to(lf::span<lf::byte>(storage), u32{ 0x01020304u });
@@ -514,6 +527,7 @@ TEST_CASE("binary fixed write stream writes into bounded storage", "[binary]") {
 	REQUIRE(contextual_error.message.find("x") != lf::string::npos);
 }
 
+/// Verifies that binary truncated primitive read fails.
 TEST_CASE("binary truncated primitive read fails", "[binary]") {
 	lf::vector<lf::byte> bytes;
 	bytes.push_back(static_cast<lf::byte>(0x01));
@@ -521,6 +535,7 @@ TEST_CASE("binary truncated primitive read fails", "[binary]") {
 	REQUIRE(!parsed);
 }
 
+/// Verifies that binary read rejects trailing bytes.
 TEST_CASE("binary read rejects trailing bytes", "[binary]") {
 	lf::vector<lf::byte> bytes;
 	bytes.push_back(static_cast<lf::byte>(0x2a));

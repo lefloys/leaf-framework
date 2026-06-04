@@ -17,6 +17,8 @@
 #include <RmlUi/Core/Property.h>
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <limits>
 #include <mutex>
 #include <optional>
@@ -119,6 +121,54 @@ namespace lf {
 			return std::nullopt;
 		}
 
+		bool inline_style_has_property(const Rml::Element& element, string_view property) {
+			string style = element.GetAttribute<Rml::String>("style", "");
+			size_t offset = 0;
+			while ((offset = style.find(property, offset)) != string::npos) {
+				const size_t end = offset + property.size();
+				const bool valid_prefix = offset == 0 ||
+					style[offset - 1] == ';' ||
+					std::isspace(static_cast<unsigned char>(style[offset - 1]));
+				size_t cursor = end;
+				while (cursor < style.size() && std::isspace(static_cast<unsigned char>(style[cursor]))) {
+					++cursor;
+				}
+				if (valid_prefix && cursor < style.size() && style[cursor] == ':') {
+					return true;
+				}
+				offset = end;
+			}
+			return false;
+		}
+
+		bool manual_placement(const Rml::Element& element) {
+			string placement = element.GetAttribute<Rml::String>("placement", "");
+			std::transform(placement.begin(), placement.end(), placement.begin(), [](unsigned char ch) {
+				return static_cast<char>(std::tolower(ch));
+			});
+			return placement == "manual" ||
+				inline_style_has_property(element, "left") ||
+				inline_style_has_property(element, "top");
+		}
+
+		bool center_placement(const Rml::Element& element) {
+			string placement = element.GetAttribute<Rml::String>("placement", "");
+			std::transform(placement.begin(), placement.end(), placement.begin(), [](unsigned char ch) {
+				return static_cast<char>(std::tolower(ch));
+			});
+			return placement == "center";
+		}
+
+		void reveal(Rml::Element& element) {
+			element.SetClass("window-measuring", false);
+			element.SetClass("window-placed", true);
+		}
+
+		i32 next_window_z_index() {
+			static i32 next_z = 10;
+			return next_z++;
+		}
+
 		void restore_local_property(Rml::Element& element, string_view property, const std::optional<Rml::String>& value) {
 			Rml::String property_name(property);
 			if (value) {
@@ -126,6 +176,23 @@ namespace lf {
 			} else {
 				element.RemoveProperty(property_name);
 			}
+		}
+
+		void set_string_property(Rml::Element& element, string_view property, string_view value) {
+			element.SetProperty(Rml::String(property), Rml::String(value));
+		}
+
+		void style_chrome_button(Rml::Element& button, f32 right) {
+			set_string_property(button, "position", "absolute");
+			set_px(button, "right", right);
+			set_px(button, "top", 7.0f);
+			set_px(button, "width", 28.0f);
+			set_px(button, "height", 28.0f);
+			set_px(button, "margin", 0.0f);
+			set_px(button, "padding", 0.0f);
+			set_px(button, "font-size", 0.0f);
+			set_px(button, "line-height", 0.0f);
+			set_string_property(button, "text-align", "center");
 		}
 
 		f32 clamp_range(f32 value, f32 low, f32 high) {
@@ -229,6 +296,7 @@ namespace lf {
 
 		protected:
 			void OnChildAdd(Rml::Element* child) override;
+			void OnLayout() override;
 			void OnUpdate() override;
 
 		private:
@@ -253,22 +321,37 @@ namespace lf {
 				std::optional<Rml::String> max_height;
 			};
 
+			struct ContextSize {
+				i32 width = 0;
+				i32 height = 0;
+			};
+
 			std::optional<Interaction> interaction;
 			Rml::ElementDocument* bound_document = nullptr;
 			std::optional<pos2<f32>> normalized_position;
+			std::optional<ContextSize> normalized_context_size;
 			std::optional<ExpandedLayout> expanded_layout;
+			bool manually_resized = false;
+			bool default_position_applied = false;
+			bool initially_raised = false;
 
 			void bind_document_events();
 			void unbind_document_events();
+			void prepare_for_layout();
 			void install_chrome();
 			void install_handles();
+			bool closable() const;
 
+			void raise_when_visible();
+			void apply_default_position();
 			void context_dimensions(f32& width, f32& height);
 			f32 available_width(f32 context_width);
 			f32 available_height(f32 context_height);
 			void update_normalized_position();
 			void maintain_normalized_position();
+			void clamp_to_context();
 			void set_window_position(f32 left, f32 top);
+			void materialize_center_placement();
 
 			pos2<f32> event_position(Rml::Event& event) const;
 			void begin(Rml::Event& event);
@@ -285,6 +368,7 @@ namespace lf {
 		};
 
 		ElementWindow::ElementWindow(const Rml::String& tag) : Rml::Element(tag) {
+			SetClass("window-measuring", true);
 			AddEventListener("mousedown", this, true);
 			AddEventListener("click", this, true);
 		}
@@ -309,16 +393,40 @@ namespace lf {
 
 		void ElementWindow::OnChildAdd(Rml::Element* child) {
 			Rml::Element::OnChildAdd(child);
+			if (child && !same_tag(*child, "window-resize") && !interaction && !manual_placement(*this)) {
+				default_position_applied = false;
+				SetClass("window-placed", false);
+				normalized_position.reset();
+				normalized_context_size.reset();
+			}
+			prepare_for_layout();
 			install_chrome();
 			install_handles();
 		}
 
-		void ElementWindow::OnUpdate() {
-			Rml::Element::OnUpdate();
+		void ElementWindow::OnLayout() {
+			Rml::Element::OnLayout();
 			install_chrome();
 			install_handles();
 			if (!interaction) {
-				maintain_normalized_position();
+				apply_default_position();
+				if (default_position_applied) {
+					raise_when_visible();
+				}
+			}
+		}
+
+		void ElementWindow::OnUpdate() {
+			Rml::Element::OnUpdate();
+			prepare_for_layout();
+			install_chrome();
+			install_handles();
+			if (!interaction) {
+				if (normalized_position) {
+					maintain_normalized_position();
+				} else {
+					update_normalized_position();
+				}
 			}
 		}
 
@@ -348,16 +456,25 @@ namespace lf {
 			bound_document = nullptr;
 		}
 
+		void ElementWindow::prepare_for_layout() {
+			if (IsClassSet("window-placed") || IsClassSet("window-measuring")) {
+				return;
+			}
+			SetClass("window-measuring", true);
+		}
+
 		void ElementWindow::install_chrome() {
 			Rml::Element* title = find_child(*this, "window-title");
 			if (!title) {
 				return;
 			}
+			title->SetAttribute("window-drag", "");
 
-			if (HasAttribute("window-close") && !find_descendant_class(*title, "window-close-button")) {
+			if (closable() && !find_descendant_class(*title, "window-close-button")) {
 				Rml::ElementPtr close = Rml::Factory::InstanceElement(title, "*", "button", Rml::XMLAttributes());
 				if (close) {
 					close->SetClass("window-close-button", true);
+					style_chrome_button(*close, 10.0f);
 					close->SetInnerRML(Rml::String(rml_window_detail::close_icon_rml()));
 					title->AppendChild(std::move(close), true);
 				}
@@ -367,10 +484,15 @@ namespace lf {
 				Rml::ElementPtr collapse = Rml::Factory::InstanceElement(title, "*", "button", Rml::XMLAttributes());
 				if (collapse) {
 					collapse->SetClass("window-collapse-button", true);
+					style_chrome_button(*collapse, 45.0f);
 					collapse->SetInnerRML(Rml::String(rml_window_detail::collapse_down_icon_rml()));
 					title->AppendChild(std::move(collapse), true);
 				}
 			}
+		}
+
+		bool ElementWindow::closable() const {
+			return !false_attribute(*this, "closable") && !false_attribute(*this, "window-close");
 		}
 
 		void ElementWindow::install_handles() {
@@ -388,6 +510,46 @@ namespace lf {
 				handle->SetClass("window-resize", true);
 				AppendChild(std::move(handle), true);
 			}
+		}
+
+		void ElementWindow::raise_when_visible() {
+			if (initially_raised || GetOffsetWidth() <= 0.0f || GetOffsetHeight() <= 0.0f) {
+				return;
+			}
+
+			initially_raised = true;
+			focus();
+		}
+
+		void ElementWindow::apply_default_position() {
+			f32 context_width = 0.0f;
+			f32 context_height = 0.0f;
+			context_dimensions(context_width, context_height);
+			const bool should_center = center_placement(*this);
+
+			if (!should_center) {
+				if (default_position_applied) {
+					return;
+				}
+				if (manual_placement(*this)) {
+					default_position_applied = true;
+					reveal(*this);
+					return;
+				}
+			}
+
+			if (context_width <= 0.0f || context_height <= 0.0f ||
+				GetOffsetWidth() <= 0.0f || GetOffsetHeight() <= 0.0f) {
+				return;
+			}
+
+			default_position_applied = true;
+			const f32 left = std::max(8.0f, (context_width - GetOffsetWidth()) * 0.5f);
+			const f32 top = std::max(8.0f, (context_height - GetOffsetHeight()) * 0.5f);
+			set_px(*this, "left", left);
+			set_px(*this, "top", top);
+			update_normalized_position();
+			reveal(*this);
 		}
 
 		void ElementWindow::context_dimensions(f32& width, f32& height) {
@@ -422,6 +584,10 @@ namespace lf {
 				GetOffsetLeft() / available_width(context_width),
 				GetOffsetTop() / available_height(context_height),
 			};
+			if (GetContext()) {
+				Rml::Vector2i size = GetContext()->GetDimensions();
+				normalized_context_size = ContextSize{ .width = size.x, .height = size.y };
+			}
 		}
 
 		void ElementWindow::maintain_normalized_position() {
@@ -436,14 +602,44 @@ namespace lf {
 				return;
 			}
 
-			set_px(*this, "left", normalized_position->x * available_width(context_width));
-			set_px(*this, "top", normalized_position->y * available_height(context_height));
+			Rml::Vector2i context_size = GetContext()->GetDimensions();
+			if (!normalized_context_size ||
+				normalized_context_size->width != context_size.x ||
+				normalized_context_size->height != context_size.y) {
+				set_px(*this, "left", normalized_position->x * available_width(context_width));
+				set_px(*this, "top", normalized_position->y * available_height(context_height));
+				normalized_context_size = ContextSize{ .width = context_size.x, .height = context_size.y };
+			}
+			clamp_to_context();
+		}
+
+		void ElementWindow::clamp_to_context() {
+			f32 context_width = 0.0f;
+			f32 context_height = 0.0f;
+			context_dimensions(context_width, context_height);
+			if (context_width <= 0.0f || context_height <= 0.0f) {
+				return;
+			}
+			const f32 left = clamp_range(GetOffsetLeft(), 8.0f, std::max(8.0f, context_width - GetOffsetWidth() - 8.0f));
+			const f32 top = clamp_range(GetOffsetTop(), 8.0f, std::max(8.0f, context_height - GetOffsetHeight() - 8.0f));
+			if (std::abs(left - GetOffsetLeft()) > 0.5f || std::abs(top - GetOffsetTop()) > 0.5f) {
+				set_px(*this, "left", left);
+				set_px(*this, "top", top);
+				update_normalized_position();
+			}
 		}
 
 		void ElementWindow::set_window_position(f32 left, f32 top) {
 			set_px(*this, "left", left);
 			set_px(*this, "top", top);
 			update_normalized_position();
+		}
+
+		void ElementWindow::materialize_center_placement() {
+			if (!center_placement(*this)) {
+				return;
+			}
+			RemoveAttribute("placement");
 		}
 
 		pos2<f32> ElementWindow::event_position(Rml::Event& event) const {
@@ -467,6 +663,7 @@ namespace lf {
 			install_chrome();
 			install_handles();
 			focus();
+			materialize_center_placement();
 
 			if (Rml::Element* close = find_ancestor_class(target, "window-close-button")) {
 				if (find_window(close) == this) {
@@ -539,7 +736,11 @@ namespace lf {
 			Rml::Element* target = event.GetTargetElement();
 			if (Rml::Element* close = find_ancestor_class(target, "window-close-button")) {
 				if (find_window(close) == this) {
-					DispatchEvent("window-close", Rml::Dictionary());
+					if (HasAttribute("window-close") && !false_attribute(*this, "window-close")) {
+						DispatchEvent("window-close", Rml::Dictionary());
+					} else {
+						SetProperty("display", "none");
+					}
 					event.StopImmediatePropagation();
 					return;
 				}
@@ -636,6 +837,8 @@ namespace lf {
 			set_window_position(left, top);
 			set_px(*this, "width", std::max(0.0f, right - left - width_extra));
 			set_px(*this, "height", std::max(0.0f, bottom - top - height_extra));
+			manually_resized = true;
+			clamp_to_context();
 			update_normalized_position();
 			DispatchEvent("window-resize", Rml::Dictionary());
 		}
@@ -659,16 +862,20 @@ namespace lf {
 		}
 
 		void ElementWindow::focus() {
+			const i32 z_index = next_window_z_index();
 			if (Rml::ElementDocument* document = GetOwnerDocument()) {
 				Rml::ElementList windows;
 				document->GetElementsByTagName(windows, "window");
 				for (Rml::Element* item : windows) {
 					item->SetClass("window-focused", item == this);
 				}
+
+				for (Rml::Element* parent = GetParentNode(); parent && parent != document; parent = parent->GetParentNode()) {
+					parent->SetProperty("z-index", Rml::String(format("{}", z_index)));
+				}
 			}
 
-			static i32 next_z = 10;
-			SetProperty("z-index", Rml::String(format("{}", next_z++)));
+			SetProperty("z-index", Rml::String(format("{}", z_index)));
 		}
 	}
 

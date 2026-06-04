@@ -111,6 +111,7 @@ namespace lf {
 	}
 } // namespace lf
 
+/// Verifies that mod loader data:extend adds prototypes to existing raw tables.
 TEST_CASE("mod loader data:extend adds prototypes to existing raw tables", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;
@@ -131,6 +132,7 @@ data:extend({
 	REQUIRE(lf::Database<TestModPrototype>::prototypes[2].value == "two");
 }
 
+/// Verifies that mod loader assigns deterministic prototype ids independent of directory iteration.
 TEST_CASE("mod loader assigns deterministic prototype ids independent of directory iteration", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;
@@ -151,6 +153,7 @@ data:extend({{ type = "test", name = "alpha", value = "first" }})
 	REQUIRE(lf::Database<TestModPrototype>::find("zeta").get() == 2);
 }
 
+/// Verifies that enabled mods file is written in deterministic name order.
 TEST_CASE("enabled mods file is written in deterministic name order", "[mod-loader]") {
 	TestModWorkspace workspace;
 	std::unordered_map<lf::string, lf::ModEnabledInfo> mods;
@@ -167,6 +170,7 @@ TEST_CASE("enabled mods file is written in deterministic name order", "[mod-load
 	REQUIRE(text.find("alpha:") < text.find("zeta:"));
 }
 
+/// Verifies that mod loader data:extend rejects unknown prototype types.
 TEST_CASE("mod loader data:extend rejects unknown prototype types", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;
@@ -180,6 +184,7 @@ data:extend({{ type = "missing-type", name = "alpha" }})
 	REQUIRE(err.message.find("data.raw[missing-type]") != lf::string::npos);
 }
 
+/// Verifies that mod loader data:extend rejects duplicate prototypes.
 TEST_CASE("mod loader data:extend rejects duplicate prototypes", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;
@@ -194,6 +199,7 @@ data:extend({{ type = "test", name = "alpha" }})
 	REQUIRE(err.message.find("duplicate prototype 'test/alpha'") != lf::string::npos);
 }
 
+/// Verifies that mod loader keeps direct data.raw assignment behavior.
 TEST_CASE("mod loader keeps direct data.raw assignment behavior", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;
@@ -209,6 +215,7 @@ data.raw["test"]["alpha"] = { value = "second" }
 	REQUIRE(lf::Database<TestModPrototype>::prototypes[1].value == "second");
 }
 
+/// Verifies that mod loader include resolves relative and nested files.
 TEST_CASE("mod loader include resolves relative and nested files", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;
@@ -230,6 +237,7 @@ TEST_CASE("mod loader include resolves relative and nested files", "[mod-loader]
 	REQUIRE(lf::Database<TestModPrototype>::find("second"));
 }
 
+/// Verifies that mod loader include supports virtual paths.
 TEST_CASE("mod loader include supports virtual paths", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;
@@ -246,6 +254,7 @@ TEST_CASE("mod loader include supports virtual paths", "[mod-loader]") {
 	REQUIRE(lf::Database<TestModPrototype>::find("virtual"));
 }
 
+/// Verifies that mod loader null prototype script uses the regular include pipeline.
 TEST_CASE("mod loader null prototype script uses the regular include pipeline", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;
@@ -265,6 +274,7 @@ data:extend({{ type = "test", name = "alpha", value = "runtime" }})
 	REQUIRE(lf::Database<TestModPrototype>::prototypes[1].name == "alpha");
 }
 
+/// Verifies that mod loader include reports missing and escaping files.
 TEST_CASE("mod loader include reports missing and escaping files", "[mod-loader]") {
 	register_test_type_once();
 	{
@@ -287,6 +297,7 @@ TEST_CASE("mod loader include reports missing and escaping files", "[mod-loader]
 	}
 }
 
+/// Verifies that mod loader null prototype script reports include errors.
 TEST_CASE("mod loader null prototype script reports include errors", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;
@@ -298,6 +309,7 @@ TEST_CASE("mod loader null prototype script reports include errors", "[mod-loade
 	REQUIRE(err.message.find("missing-null.lua") != lf::string::npos);
 }
 
+/// Verifies that mod loader requires the core null prototype script.
 TEST_CASE("mod loader requires the core null prototype script", "[mod-loader]") {
 	register_test_type_once();
 	TestModWorkspace workspace;

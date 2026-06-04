@@ -5,6 +5,7 @@
 
 using namespace lf;
 
+/// Verifies that RML window defaults are injected into document head.
 TEST_CASE("RML window defaults are injected into document head", "[rml-window]") {
 	const string source = "<rml><head><title>Test</title></head><body></body></rml>";
 
@@ -14,6 +15,7 @@ TEST_CASE("RML window defaults are injected into document head", "[rml-window]")
 	REQUIRE(result.find("<head>\n<style id=\"rml-window-defaults\">") != string::npos);
 }
 
+/// Verifies that RML window defaults are not injected twice.
 TEST_CASE("RML window defaults are not injected twice", "[rml-window]") {
 	const string source = "<rml><head></head><body></body></rml>";
 
@@ -23,6 +25,7 @@ TEST_CASE("RML window defaults are not injected twice", "[rml-window]") {
 	REQUIRE(twice == once);
 }
 
+/// Verifies that RML window boolean opt-out values are recognized.
 TEST_CASE("RML window boolean opt-out values are recognized", "[rml-window]") {
 	using rml_window_detail::false_attribute_value;
 
@@ -38,6 +41,7 @@ TEST_CASE("RML window boolean opt-out values are recognized", "[rml-window]") {
 	REQUIRE_FALSE(false_attribute_value("yes"));
 }
 
+/// Verifies that RML window resize edge strings are parsed.
 TEST_CASE("RML window resize edge strings are parsed", "[rml-window]") {
 	using rml_window_detail::ResizeEdge;
 	using rml_window_detail::has_resize_edge;

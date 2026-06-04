@@ -13,6 +13,7 @@
 #include <leaf/graphics/window.hpp>
 #include <leaf/logging/logging.hpp>
 #include <leaf/script/localization.hpp>
+#include <leaf/script/mod_loader.hpp>
 #include <leaf/script/prototype_inspector_script.hpp>
 #include <leaf/script/settings.hpp>
 #include <leaf/script/virtual_filesystem.hpp>
@@ -32,9 +33,12 @@
 #include <cmath>
 #include <functional>
 #include <utility>
+#include <unordered_map>
 
 namespace lf {
 	namespace {
+		AppSettings load_scene_settings();
+
 		string rml_escape(string_view value) {
 			string escaped;
 			escaped.reserve(value.size());
@@ -190,6 +194,45 @@ namespace lf {
 			return normalized;
 		}
 
+		string normalized_action_name(string_view value) {
+			string normalized;
+			normalized.reserve(value.size());
+			for (char c : value) {
+				if (c == '-') {
+					normalized += '_';
+				} else if (c >= 'a' && c <= 'z') {
+					normalized += static_cast<char>(c - 'a' + 'A');
+				} else {
+					normalized += c;
+				}
+			}
+			return normalized;
+		}
+
+		string input_binding_for_action(string_view action) {
+			const string action_name(action);
+			AppSettings core_settings = load_scene_settings();
+			if (auto it = core_settings.input.bindings.find(action_name); it != core_settings.input.bindings.end()) {
+				return it->second;
+			}
+
+			for (const ModInfo& mod : LoadedMods()) {
+				if (mod.name == "core") {
+					continue;
+				}
+				auto settings = LoadAppSettings(ModSettingsPath(mod.name));
+				if (!settings) {
+					log::Warning("{}", format("[settings] {}", settings.error().message));
+					continue;
+				}
+				if (auto it = settings->input.bindings.find(action_name); it != settings->input.bindings.end()) {
+					return it->second;
+				}
+			}
+
+			return {};
+		}
+
 		string key_name(input_key key) {
 			if (key >= KEY_A && key <= KEY_Z) {
 				return string(1, static_cast<char>('a' + key - KEY_A));
@@ -266,6 +309,92 @@ namespace lf {
 
 			string actual = key_name(key);
 			return !actual.empty() && normalized_key_name(requested) == actual;
+		}
+
+		bool keybind_matches_action_name(const Rml::Element& keybind, string_view actual_key, string& out_action) {
+			string requested = keybind.GetAttribute<Rml::String>("action", "");
+			if (requested.empty()) {
+				return false;
+			}
+
+			const string action = normalized_action_name(requested);
+			const string bound_key = input_binding_for_action(action);
+			if (bound_key.empty()) {
+				return false;
+			}
+
+			if (actual_key.empty() || normalized_key_name(bound_key) != normalized_key_name(actual_key)) {
+				return false;
+			}
+			out_action = action;
+			return true;
+		}
+
+		bool keybind_matches_action(const Rml::Element& keybind, input_key key, string& out_action) {
+			return keybind_matches_action_name(keybind, key_name(key), out_action);
+		}
+
+		string text_key_name(u32 character) {
+			if (character == '#') {
+				return "hash";
+			}
+			if (character == ' ') {
+				return "space";
+			}
+			if (character > 0 && character <= 0x7f) {
+				return string(1, static_cast<char>(character));
+			}
+			return {};
+		}
+
+		void collect_keybinds(Rml::Element& root, Rml::ElementList& out) {
+			out.clear();
+			for (int index = 0; index < root.GetNumChildren(); ++index) {
+				Rml::Element* child = root.GetChild(index);
+				if (child && child->GetTagName() == "keybind") {
+					out.push_back(child);
+				}
+			}
+		}
+
+		void collect_focused_keybinds(Rml::Element& focused, Rml::ElementList& out) {
+			out.clear();
+			if (!focused.GetAttribute<Rml::String>("keydown", "").empty() ||
+				!focused.GetAttribute<Rml::String>("keyup", "").empty()) {
+				out.push_back(&focused);
+			}
+			for (int index = 0; index < focused.GetNumChildren(); ++index) {
+				Rml::Element* child = focused.GetChild(index);
+				if (child && child->GetTagName() == "keybind") {
+					out.push_back(child);
+				}
+			}
+		}
+
+		Rml::Element* keybind_owner(Rml::ElementDocument& document, Rml::Element& focused) {
+			for (Rml::Element* element = &focused; element; element = element->GetParentNode()) {
+				string owner_id = element->GetAttribute<Rml::String>("input-keybinds", "");
+				if (owner_id.empty()) {
+					continue;
+				}
+				if (!owner_id.empty() && owner_id.front() == '#') {
+					owner_id.erase(owner_id.begin());
+				}
+				if (Rml::Element* owner = document.GetElementById(Rml::String(owner_id))) {
+					return owner;
+				}
+			}
+			return &focused;
+		}
+
+		Rml::ElementList focused_keybinds(Rml::ElementDocument& document) {
+			Rml::ElementList keybinds;
+			Rml::Context* context = document.GetContext();
+			Rml::Element* focused = context ? context->GetFocusElement() : nullptr;
+			if (focused) {
+				collect_focused_keybinds(*keybind_owner(document, *focused), keybinds);
+			}
+			return keybinds;
 		}
 
 		string strip_inline_scripts(string_view source) {
@@ -447,11 +576,6 @@ namespace lf {
 				return string(control->GetValue());
 			}
 			return string(element->GetInnerRML());
-		});
-
-		lua.set_function("ui_focus", [this](string_view id) -> bool {
-			Rml::Element* element = find_element(id);
-			return element ? element->Focus(true) : false;
 		});
 
 		lua.set_function("ui_blur", [this](string_view id) -> bool {
@@ -636,27 +760,22 @@ namespace lf {
 		});
 
 		sol::table game = lua.create_table();
-		lua.globals()["game"] = game;
-		lua["_G"]["game"] = game;
-		game["load"] = [this](sol::object, string_view path, sol::optional<string_view> args_yaml) -> bool {
-			pending_load_request = LoadRequest{ string(path), string(args_yaml.value_or("")) };
-			return true;
+			lua.globals()["game"] = game;
+			lua["_G"]["game"] = game;
+			game["load"] = [this](sol::object, string_view path, sol::optional<string_view> args_yaml) -> bool {
+				pending_load_request = LoadRequest{ string(path), string(args_yaml.value_or("")) };
+				return true;
 		};
 		game["exit"] = [this](sol::object) {
 			if (this->display) {
 				Window::SetShouldClose(this->display, true);
 			}
 		};
-		game["scene"] = [this](sol::this_state state, sol::object) {
+			game["scene"] = [this](sol::this_state state, sol::object) {
 			sol::state_view lua(state);
 			sol::table scene = lua.create_table();
 			scene["set_rml"] = [this](sol::object, string_view id, string_view rml) {
-				if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
-					Rml::String next(rml);
-					if (element->GetInnerRML() != next) {
-						element->SetInnerRML(next);
-					}
-				}
+				set_rml(id, rml);
 			};
 			scene["set_text"] = [this](sol::object, string_view id, string_view text) {
 				if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
@@ -682,6 +801,18 @@ namespace lf {
 						set_attribute(id, name, lua_value_to_string(value));
 					}
 				}
+			};
+			scene["focus"] = [this](sol::object, string_view id) -> bool {
+				Rml::Element* element = find_element(id);
+				return element ? element->Focus(true) : false;
+			};
+			scene["focused"] = [this](sol::object) -> string {
+				if (!document) {
+					return {};
+				}
+				Rml::Context* context = document->GetContext();
+				Rml::Element* focused = context ? context->GetFocusElement() : nullptr;
+				return focused ? string(focused->GetId()) : string();
 			};
 			scene["remove_element"] = [this](sol::object, string_view id) {
 				Rml::Element* element = find_element(id);
@@ -1465,6 +1596,7 @@ end
 
 		string attribute;
 		string event_key;
+		string event_action;
 		u32 event_character = 0;
 
 		if (event.type == INPUT_EVENT_TEXT) {
@@ -1483,21 +1615,42 @@ end
 			return;
 		}
 
-		Rml::ElementList keybinds;
-		document->GetElementsByTagName(keybinds, "keybind");
+		Rml::Context* context = document->GetContext();
+		Rml::Element* focused = context ? context->GetFocusElement() : nullptr;
+		if (focused && !event_key.empty()) {
+			string focused_script = focused->GetAttribute<Rml::String>(Rml::String(format("{}-{}", attribute, event_key)), "");
+			if (!focused_script.empty()) {
+				string event_script = lua_event_table(attribute, {
+					{ "key", lua_event_string(event_key) },
+					{ "character", lua_event_number(static_cast<i32>(event_character)) },
+					{ "modifiers", lua_event_number(static_cast<i32>(event.modifiers.value)) },
+				});
+				event_script += focused_script;
+				pending_scripts.push_back({ "input", std::move(event_script) });
+			}
+		}
+
+		Rml::ElementList keybinds = focused_keybinds(*document);
 		for (Rml::Element* keybind : keybinds) {
 			if (!keybind) {
 				continue;
 			}
 
 			bool matched = false;
+			event_action.clear();
 			if (event.type == INPUT_EVENT_TEXT) {
-				matched = keybind_matches_text(*keybind, event.character);
+				matched = keybind_matches_action_name(*keybind, text_key_name(event.character), event_action);
+				if (!matched) {
+					matched = keybind_matches_text(*keybind, event.character);
+				}
 				if (matched && event_key.empty()) {
-					event_key = string(1, static_cast<char>(event.character));
+					event_key = text_key_name(event.character);
 				}
 			} else {
-				matched = keybind_matches_key(*keybind, static_cast<input_key>(event.control.value));
+				matched = keybind_matches_action(*keybind, static_cast<input_key>(event.control.value), event_action);
+				if (!matched) {
+					matched = keybind_matches_key(*keybind, static_cast<input_key>(event.control.value));
+				}
 			}
 			if (!matched) {
 				continue;
@@ -1531,7 +1684,26 @@ end
 		if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
 			Rml::String next(rml);
 			if (element->GetInnerRML() != next) {
+				string focused_id;
+				string focused_value;
+				Rml::Context* context = document->GetContext();
+				Rml::Element* focused = context ? context->GetFocusElement() : nullptr;
+				if (focused && !focused->GetId().empty()) {
+					focused_id = string(focused->GetId());
+					if (auto* input = rmlui_dynamic_cast<Rml::ElementFormControlInput*>(focused)) {
+						focused_value = string(input->GetValue());
+					}
+				}
 				element->SetInnerRML(next);
+				if (!focused_id.empty()) {
+					if (Rml::Element* restored = document->GetElementById(Rml::String(focused_id))) {
+						if (auto* input = rmlui_dynamic_cast<Rml::ElementFormControlInput*>(restored)) {
+							input->SetValue(Rml::String(focused_value));
+							restored->SetAttribute("value", Rml::String(focused_value));
+						}
+						restored->Focus(true);
+					}
+				}
 			}
 		}
 	}

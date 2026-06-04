@@ -6,6 +6,7 @@
 
 using namespace lf;
 
+/// Verifies that object numeric conversions.
 TEST_CASE("object numeric conversions", "[object]") {
 	object value = 42;
 
@@ -15,6 +16,7 @@ TEST_CASE("object numeric conversions", "[object]") {
 	REQUIRE(value.current_type_name() == "i64");
 }
 
+/// Verifies that dict-backed object access.
 TEST_CASE("dict-backed object access", "[dict]") {
 	dict entries;
 	entries["answer"] = 42;
@@ -27,6 +29,7 @@ TEST_CASE("dict-backed object access", "[dict]") {
 	REQUIRE(config["answer"].as<i64>() == 84);
 }
 
+/// Verifies that list-backed object can mutate entries.
 TEST_CASE("list-backed object can mutate entries", "[list]") {
 	list values;
 	values.push_back(1);
@@ -40,6 +43,7 @@ TEST_CASE("list-backed object can mutate entries", "[list]") {
 	REQUIRE(list_object[0].as<i64>() == 10);
 }
 
+/// Verifies that dict operations and iteration.
 TEST_CASE("dict operations and iteration", "[dict]") {
 	dict store;
 	REQUIRE(store.empty());
@@ -67,6 +71,7 @@ TEST_CASE("dict operations and iteration", "[dict]") {
 	REQUIRE(store.empty());
 }
 
+/// Verifies that list operations and bounds.
 TEST_CASE("list operations and bounds", "[list]") {
 	list sequence;
 	sequence.reserve(4);
@@ -91,6 +96,7 @@ TEST_CASE("list operations and bounds", "[list]") {
 	REQUIRE(sequence.begin() != sequence.end());
 }
 
+/// Verifies that object string and bool handling.
 TEST_CASE("object string and bool handling", "[object]") {
 	object text("hello");
 	REQUIRE(text.is<string>());

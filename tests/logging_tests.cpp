@@ -30,6 +30,7 @@ namespace lf::log::test {
 	};
 } // namespace lf::log::test
 
+/// Verifies that logging sink receives formatted filtered records.
 TEST_CASE("logging sink receives formatted filtered records", "[logging]") {
 	std::array<lf::string_view, 0> args{};
 	REQUIRE(!lf::init_logging(args));
