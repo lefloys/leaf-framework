@@ -140,6 +140,9 @@ namespace lf {
 			return object(node.as<i64>());
 		} catch (const YAML::Exception&) {}
 		try {
+			return object(node.as<u64>());
+		} catch (const YAML::Exception&) {}
+		try {
 			return object(node.as<f64>());
 		} catch (const YAML::Exception&) {}
 		return object(node.as<string>());

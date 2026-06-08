@@ -808,29 +808,17 @@ end
 					return error(generic_errc::type_mismatch, "data.raw." + string(fn.type()) + " must be a table/dict");
 				}
 				dict& type_table = it->second.get<dict>();
-				log::Debug("{}", format("[mod-loader] prototypes begin: type={} incoming={}", fn.type(), type_table.size()));
 				fn.reserve(type_table.size());
-				vector<string> names;
-				names.reserve(type_table.size());
 				for (const auto& [name, data] : type_table) {
-					names.emplace_back(name);
-				}
-				std::sort(names.begin(), names.end());
-				for (const string& name : names) {
-					auto prototype = type_table.find(name);
-					if (prototype == type_table.end()) {
-						continue;
-					}
-					if (!prototype->second.is<dict>()) {
+					if (!data.is<dict>()) {
 						return error(generic_errc::type_mismatch, lf::format("data.raw[{}][{}] must be a table/dict", fn.type(), name));
 					}
 					try {
-						fn.create(name, prototype->second.get<dict>());
+						fn.create(name, data.get<dict>());
 					} catch (const lf::exception& e) {
 						return error(generic_errc::parse_error, e.what()).add_context(lf::format("creating prototype '{}' (type:{})", name, fn.type()));
 					}
 				}
-				log::Debug("{}", format("[mod-loader] prototypes loaded: type={} total={}", fn.type(), fn.count()));
 			}
 		}
 		return error::no_error;
@@ -1027,27 +1015,27 @@ end
 		log::Info("{}", format("[mod-loader] main scene: {}", detail::loaded_main_scene_path));
 
 		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "creating-prototypes", 0.9f);
-		log::Debug("{}", "[mod-loader] creating prototypes from data.raw");
+		log::Info("{}", "[mod-loader] creating prototypes from data.raw");
 		auto err = LoadDataRaw(lua);
 		if (err) {
 			return err.add_context("loading prototypes from mods' data.lua");
 		}
+		log::Info("{}", "[mod-loader] prototypes created");
 		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(3), "prototypes-loaded", 1.0f);
 		log::Debug("{}", format("[mod-loader] prototypes: {}", prototype_counts_to_string()));
 
+		log::Info("{}", "[mod-loader] linking prototype references");
 		for (size_t i = 0; i < PrototypeTypeRegistry::functions.size(); ++i) {
 			const auto& fn = PrototypeTypeRegistry::functions[i];
 			try {
 				f32 process_progress = PrototypeTypeRegistry::functions.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(PrototypeTypeRegistry::functions.size());
 				report_mod_progress(progress, "linking-prototypes", mod_stage_progress(3), string(fn.type()), process_progress);
-				log::Debug("{}", format("[mod-loader] resolve begin: type={} count={}", fn.type(), fn.count()));
 				fn.resolve();
-				log::Debug("{}", format("[mod-loader] resolve complete: type={}", fn.type()));
 			} catch (const lf::exception& e) {
 				return error(generic_errc::parse_error, e.what()).add_context("linking prototypes");
 			}
 		}
-		log::Debug("{}", "[mod-loader] prototype references linked");
+		log::Info("{}", "[mod-loader] prototype references linked");
 
 		report_mod_progress(progress, "linking-prototypes", mod_stage_progress(4), "prototype-references-linked", 1.0f);
 		report_mod_progress(progress, "loading-assets", mod_stage_progress(4), "checking-asset-work", 0.0f);

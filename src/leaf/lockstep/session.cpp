@@ -12,7 +12,7 @@
 #include <utility>
 
 namespace lf::lockstep {
-	constexpr u32 protocol_version = 4;
+	constexpr u32 protocol_version = 6;
 
 	enum class packet_kind : u08 {
 		connect_request = 1,
@@ -38,11 +38,6 @@ namespace lf::lockstep {
 	struct tick_closure {
 		Tick tick = 0;
 		vector<wire_payload> commands;
-	};
-
-	struct sync_check {
-		Tick tick = 0;
-		u64 checksum = 0;
 	};
 
 	struct stored_payload {
@@ -112,7 +107,6 @@ namespace lf::lockstep {
 	struct server_to_client_heartbeat {
 		request_for_heartbeat requests;
 		vector<tick_closure> tick_closures;
-		vector<sync_check> sync_checks;
 	};
 
 	struct pending_payload {
@@ -163,64 +157,60 @@ namespace lf::lockstep {
 	};
 
 	struct Session::Impl {
-		Impl(lockstep::mode initial_mode, lockstep::state initial_state, Simulation& simulation, Options options);
+		Impl(lockstep::mode initial_mode, lockstep::state initial_state, Options options);
 		virtual ~Impl() = default;
 
 		virtual void update() = 0;
 		virtual void advance() = 0;
 		virtual void disconnect() = 0;
+		virtual PayloadId submit(span<const byte> bytes) = 0;
 		virtual bool waiting_for_response() const;
 
+		stored_payload make_payload(span<const byte> bytes, SessionId source, bool track_pending);
 		void rebuild_pending_views();
+		void push_ready_tick(Tick tick, vector<stored_payload>& commands);
+		void push_event(SessionEvent event);
 
 		lockstep::mode session_mode = lockstep::mode::offline;
 		lockstep::state session_state = lockstep::state::disconnected;
-		Simulation* simulation = nullptr;
 		Options options;
 		Tick current_tick = 0;
 		SessionId local_session = 0;
 		PayloadId next_payload_id = 1;
 		vector<pending_payload> pending_payloads;
 		vector<PendingPayload> pending_views;
-		vector<Command> command_views;
-	};
-
-	struct collect_submitter final : Submitter::Impl {
-		collect_submitter(Session::Impl& session, vector<stored_payload>& out, SessionId source, bool track_pending);
-
-		PayloadId submit(span<const byte> bytes) override;
-
-		Session::Impl& session;
-		vector<stored_payload>& out;
-		SessionId source = 0;
-		bool track_pending = false;
+		vector<ReadyTick> ready_ticks;
+		vector<SessionEvent> events;
+		vector<byte> login_payload;
 	};
 
 	struct offline_session final : Session::Impl {
-		offline_session(Simulation& simulation, Options options);
+		explicit offline_session(Options options);
 
 		void update() override;
 		void advance() override;
 		void disconnect() override;
-		void collect_local();
+		PayloadId submit(span<const byte> bytes) override;
 
 		vector<stored_payload> staged_commands;
 	};
 
 	struct host_session final : Session::Impl {
-		host_session(net::Socket socket, Simulation& simulation, Options options);
+		host_session(net::Socket socket, Options options);
 
 		void update() override;
 		void advance() override;
 		void disconnect() override;
-		void collect_local();
+		PayloadId submit(span<const byte> bytes) override;
 		void poll_socket();
 		void receive_message(const net::Message& message);
 		host_connection& find_or_create_connection(const net::Peer& peer);
 		host_connection* find_connection(const net::Peer& peer, SessionId session_id);
 		void send_connect_accept(host_connection& connection);
-		void request_snapshot(host_connection& connection);
-		void process_snapshot_requests();
+		void accept_login(SessionId session_id, span<const byte> snapshot);
+		void reject_login(SessionId session_id);
+		void disconnect_peer(SessionId session_id);
+		void continue_snapshots();
 		void begin_snapshot(host_connection& connection);
 		void continue_snapshot(host_connection& connection);
 		void send_snapshot_chunk(host_connection& connection, u32 chunk_index);
@@ -247,16 +237,16 @@ namespace lf::lockstep {
 	};
 
 	struct client_session final : Session::Impl {
-		client_session(net::Socket socket, net::Peer host, Simulation& simulation, Options options);
+		client_session(net::Socket socket, net::Peer host, Options options);
 
 		void update() override;
 		void advance() override;
 		void disconnect() override;
+		PayloadId submit(span<const byte> bytes) override;
+		void finish_snapshot_load();
 		void poll_socket();
 		void receive_message(const net::Message& message);
-		void collect_local();
 		void buffer_tick(const tick_closure& closure);
-		void buffer_sync_check(const sync_check& check);
 		bool drain_buffered_ticks();
 		void try_finish_snapshot();
 		bool valid_session(SessionId packet_session_id) const;
@@ -287,7 +277,6 @@ namespace lf::lockstep {
 		vector<heartbeat_request_record> requested_heartbeats;
 		vector<stored_payload> outgoing_commands;
 		vector<stored_tick> buffered_ticks;
-		vector<sync_check> buffered_sync_checks;
 		snapshot_download snapshot;
 		instant last_connect_activity = now();
 		instant next_connect_request = now();
@@ -324,11 +313,36 @@ namespace lf::lockstep {
 	host_connection::host_connection(const net::Peer& peer, SessionId session_id)
 		: peer(peer), session_id(session_id) {}
 
-	Session::Impl::Impl(lockstep::mode initial_mode, lockstep::state initial_state, Simulation& simulation, Options options)
-		: session_mode(initial_mode), session_state(initial_state), simulation(&simulation), options(options) {}
+	Session::Impl::Impl(lockstep::mode initial_mode, lockstep::state initial_state, Options options)
+		: session_mode(initial_mode), session_state(initial_state), options(options) {}
 
 	bool Session::Impl::waiting_for_response() const {
 		return false;
+	}
+
+	stored_payload Session::Impl::make_payload(span<const byte> bytes, SessionId source, bool track_pending) {
+		const PayloadId id = next_payload_id;
+		++next_payload_id;
+
+		stored_payload payload;
+		payload.id = id;
+		payload.source = source;
+		payload.hash = 14695981039346656037ull;
+		payload.bytes.assign(bytes.begin(), bytes.end());
+		for (byte value : bytes) {
+			payload.hash ^= static_cast<u64>(std::to_integer<u08>(value));
+			payload.hash *= 1099511628211ull;
+		}
+
+		if (track_pending) {
+			pending_payloads.emplace_back(pending_payload {
+				.id = payload.id,
+				.hash = payload.hash,
+				.bytes = payload.bytes,
+			});
+			rebuild_pending_views();
+		}
+		return payload;
 	}
 
 	void Session::Impl::rebuild_pending_views() {
@@ -343,33 +357,23 @@ namespace lf::lockstep {
 		}
 	}
 
-	collect_submitter::collect_submitter(Session::Impl& session, vector<stored_payload>& out, SessionId source, bool track_pending)
-		: session(session), out(out), source(source), track_pending(track_pending) {}
-
-	PayloadId collect_submitter::submit(span<const byte> bytes) {
-		const PayloadId id = session.next_payload_id;
-		++session.next_payload_id;
-
-		stored_payload payload;
-		payload.id = id;
-		payload.source = source;
-		payload.hash = 14695981039346656037ull;
-		payload.bytes.assign(bytes.begin(), bytes.end());
-		for (byte value : bytes) {
-			payload.hash ^= static_cast<u64>(std::to_integer<u08>(value));
-			payload.hash *= 1099511628211ull;
-		}
-
-		out.emplace_back(payload);
-		if (track_pending) {
-			session.pending_payloads.emplace_back(pending_payload {
-				.id = payload.id,
-				.hash = payload.hash,
-				.bytes = payload.bytes,
+	void Session::Impl::push_ready_tick(Tick tick, vector<stored_payload>& commands) {
+		ReadyTick ready;
+		ready.tick = tick;
+		ready.commands.reserve(commands.size());
+		for (stored_payload& command : commands) {
+			ready.commands.emplace_back(Command {
+				.id = command.id,
+				.source = command.source,
+				.hash = command.hash,
+				.bytes = std::move(command.bytes),
 			});
-			session.rebuild_pending_views();
 		}
-		return id;
+		ready_ticks.emplace_back(std::move(ready));
+	}
+
+	void Session::Impl::push_event(SessionEvent event) {
+		events.emplace_back(std::move(event));
 	}
 
 	template<bin::byte_stream Stream>
@@ -426,18 +430,6 @@ namespace lf::lockstep {
 	error process(Stream& stream, const tick_closure& closure) {
 		IF_ERROR_RETURN_ERROR(stream_tick(stream, "tick", closure.tick));
 		return stream(bin::field("commands", closure.commands));
-	}
-
-	template<bin::byte_stream Stream>
-	error process(Stream& stream, sync_check& check) {
-		IF_ERROR_RETURN_ERROR(stream_tick(stream, "tick", check.tick));
-		return stream(bin::field("checksum", check.checksum));
-	}
-
-	template<bin::byte_stream Stream>
-	error process(Stream& stream, const sync_check& check) {
-		IF_ERROR_RETURN_ERROR(stream_tick(stream, "tick", check.tick));
-		return stream(bin::field("checksum", check.checksum));
 	}
 
 	template<bin::byte_stream Stream>
@@ -516,8 +508,7 @@ namespace lf::lockstep {
 	error process(Stream& stream, server_to_client_heartbeat& heartbeat) {
 		return stream(
 			bin::field("requests", heartbeat.requests),
-			bin::field("tick_closures", heartbeat.tick_closures),
-			bin::field("sync_checks", heartbeat.sync_checks)
+			bin::field("tick_closures", heartbeat.tick_closures)
 		);
 	}
 
@@ -525,8 +516,7 @@ namespace lf::lockstep {
 	error process(Stream& stream, const server_to_client_heartbeat& heartbeat) {
 		return stream(
 			bin::field("requests", heartbeat.requests),
-			bin::field("tick_closures", heartbeat.tick_closures),
-			bin::field("sync_checks", heartbeat.sync_checks)
+			bin::field("tick_closures", heartbeat.tick_closures)
 		);
 	}
 
@@ -536,19 +526,6 @@ namespace lf::lockstep {
 
 	span<const byte> bytes_view(const vector<byte>& bytes) {
 		return span<const byte>(bytes.data(), bytes.size());
-	}
-
-	void build_command_views(vector<Command>& out, const vector<stored_payload>& commands) {
-		out.clear();
-		out.reserve(commands.size());
-		for (const stored_payload& command : commands) {
-			out.emplace_back(Command {
-				.id = command.id,
-				.source = command.source,
-				.hash = command.hash,
-				.bytes = bytes_view(command.bytes),
-			});
-		}
 	}
 
 	void sort_commands(vector<stored_payload>& commands) {
@@ -825,7 +802,11 @@ namespace lf::lockstep {
 				return {};
 			}
 			if (connection->connection_state == state::joined) {
-				session.request_snapshot(*connection);
+				session.push_event(SessionEvent{
+					.kind = SessionEventKind::login_requested,
+					.session_id = session_id,
+					.bytes = std::move(login_payload),
+				});
 				return {};
 			}
 			if (connection->connection_state == state::downloading_snapshot) {
@@ -838,18 +819,14 @@ namespace lf::lockstep {
 				}
 			}
 			if (session.options.max_clients != 0 && joined_clients >= session.options.max_clients) {
-				session.send_connected(*connection, packet_kind::disconnect, [](bin::write_stream&) -> error {
-					return {};
-				});
+				session.reject_login(session_id);
 				return {};
 			}
-			if (!session.simulation->accept_login(session_id, span<const byte>(login_payload.data(), login_payload.size()))) {
-				session.send_connected(*connection, packet_kind::disconnect, [](bin::write_stream&) -> error {
-					return {};
-				});
-				return {};
-			}
-			session.request_snapshot(*connection);
+			session.push_event(SessionEvent{
+				.kind = SessionEventKind::login_requested,
+				.session_id = session_id,
+				.bytes = std::move(login_payload),
+			});
 			return {};
 		}
 		case packet_kind::client_heartbeat: {
@@ -904,6 +881,10 @@ namespace lf::lockstep {
 
 			for (size_t index = 0; index < session.connections.size();) {
 				if (session.connections[index].session_id == session_id && same_peer(session.connections[index].peer, peer)) {
+					session.push_event(SessionEvent{
+						.kind = SessionEventKind::peer_disconnected,
+						.session_id = session_id,
+					});
 					session.connections.erase(session.connections.begin() + static_cast<i64>(index));
 				} else {
 					++index;
@@ -947,7 +928,7 @@ namespace lf::lockstep {
 			if (version != protocol_version) {
 				session.socket.disconnect();
 				session.session_state = state::disconnected;
-				session.simulation->disconnected();
+				session.push_event(SessionEvent{ .kind = SessionEventKind::disconnected });
 				return {};
 			}
 			IF_ERROR_RETURN_ERROR(stream(bin::field("session_id", wire_session_id)));
@@ -1064,9 +1045,6 @@ namespace lf::lockstep {
 			for (const tick_closure& closure : heartbeat.tick_closures) {
 				session.buffer_tick(closure);
 			}
-			for (const sync_check& check : heartbeat.sync_checks) {
-				session.buffer_sync_check(check);
-			}
 			if (session.session_state != state::connecting &&
 				session.session_state != state::logging_in &&
 				session.session_state != state::downloading_snapshot) {
@@ -1075,7 +1053,6 @@ namespace lf::lockstep {
 				}
 			}
 			if (session.session_state == state::joined) {
-				session.collect_local();
 				session.resend_pending_payloads();
 				session.send_client_heartbeat();
 			}
@@ -1091,7 +1068,7 @@ namespace lf::lockstep {
 				});
 				session.socket.disconnect();
 				session.session_state = state::disconnected;
-				session.simulation->disconnected();
+				session.push_event(SessionEvent{ .kind = SessionEventKind::disconnected });
 			}
 			return {};
 		}
@@ -1100,13 +1077,12 @@ namespace lf::lockstep {
 		}
 	}
 
-	offline_session::offline_session(Simulation& simulation, Options options)
-		: Impl(mode::offline, state::joined, simulation, options) {
+	offline_session::offline_session(Options options)
+		: Impl(mode::offline, state::joined, options) {
 		local_session = host_session_id;
 	}
 
 	void offline_session::update() {
-		collect_local();
 	}
 
 	void offline_session::advance() {
@@ -1115,10 +1091,9 @@ namespace lf::lockstep {
 		}
 		++current_tick;
 		sort_commands(staged_commands);
-		build_command_views(command_views, staged_commands);
-		simulation->step(current_tick, span<const Command>(command_views.data(), command_views.size()));
 		erase_confirmed_pending(pending_payloads, host_session_id, staged_commands);
 		rebuild_pending_views();
+		push_ready_tick(current_tick, staged_commands);
 		staged_commands.clear();
 	}
 
@@ -1127,19 +1102,21 @@ namespace lf::lockstep {
 			return;
 		}
 		session_state = state::disconnected;
-		simulation->disconnected();
+		push_event(SessionEvent{ .kind = SessionEventKind::disconnected });
 	}
 
-	void offline_session::collect_local() {
+	PayloadId offline_session::submit(span<const byte> bytes) {
 		if (session_state != state::joined) {
-			return;
+			throw runtime_exception("lockstep session is not joined");
 		}
-		Submitter submitter(make_unique<collect_submitter>(*this, staged_commands, host_session_id, true));
-		simulation->collect(submitter);
+		stored_payload payload = make_payload(bytes, host_session_id, true);
+		const PayloadId id = payload.id;
+		staged_commands.emplace_back(std::move(payload));
+		return id;
 	}
 
-	host_session::host_session(net::Socket socket, Simulation& simulation, Options options)
-		: Impl(mode::host, state::joined, simulation, options), socket(std::move(socket)) {
+	host_session::host_session(net::Socket socket, Options options)
+		: Impl(mode::host, state::joined, options), socket(std::move(socket)) {
 		local_session = host_session_id;
 	}
 
@@ -1147,9 +1124,8 @@ namespace lf::lockstep {
 		if (session_state == state::disconnected) {
 			return;
 		}
-		process_snapshot_requests();
+		continue_snapshots();
 		poll_socket();
-		collect_local();
 		flush_send_queue();
 	}
 
@@ -1172,20 +1148,11 @@ namespace lf::lockstep {
 			scheduled_commands.erase(scheduled_commands.begin() + static_cast<i64>(index));
 		}
 		sort_commands(staged_commands);
-		build_command_views(command_views, staged_commands);
-		simulation->step(current_tick, span<const Command>(command_views.data(), command_views.size()));
 		erase_confirmed_pending(pending_payloads, host_session_id, staged_commands);
 		rebuild_pending_views();
 
 		tick_closure closure;
 		closure.tick = current_tick;
-		vector<sync_check> sync_checks;
-		if (options.checksum_interval_ticks != 0 && current_tick % options.checksum_interval_ticks == 0) {
-			sync_checks.emplace_back(sync_check {
-				.tick = current_tick,
-				.checksum = simulation->checksum(current_tick),
-			});
-		}
 		for (const stored_payload& command : staged_commands) {
 			closure.commands.emplace_back(to_wire_payload(command));
 		}
@@ -1199,11 +1166,11 @@ namespace lf::lockstep {
 				server_to_client_heartbeat heartbeat;
 				heartbeat.requests.sequences = take_heartbeat_requests(connection.pending_heartbeat_requests);
 				heartbeat.tick_closures.emplace_back(closure);
-				heartbeat.sync_checks = sync_checks;
 				return stream(bin::field("heartbeat", heartbeat));
 			});
 			remember_sent_packet(connection.sent_heartbeats, heartbeat_sequence, send_queue.back().bytes);
 		}
+		push_ready_tick(current_tick, staged_commands);
 		staged_commands.clear();
 	}
 
@@ -1211,7 +1178,6 @@ namespace lf::lockstep {
 		if (session_state == state::disconnected) {
 			return;
 		}
-		bool was_sending_snapshot = false;
 		auto all_disconnects_acknowledged = [&] {
 			for (const host_connection& connection : connections) {
 				if (!connection.disconnect_acknowledged) {
@@ -1235,7 +1201,6 @@ namespace lf::lockstep {
 		};
 
 		for (host_connection& connection : connections) {
-			was_sending_snapshot = was_sending_snapshot || connection.snapshot_sending;
 			connection.disconnect_acknowledged = false;
 		}
 
@@ -1256,17 +1221,18 @@ namespace lf::lockstep {
 		}
 		socket.disconnect();
 		session_state = state::disconnected;
-		if (was_sending_snapshot) {
-			simulation->snapshot_save_finished();
-		}
-		simulation->disconnected();
+		push_event(SessionEvent{ .kind = SessionEventKind::disconnected });
 	}
 
-	void host_session::collect_local() {
+	PayloadId host_session::submit(span<const byte> bytes) {
+		if (session_state != state::joined) {
+			throw runtime_exception("lockstep session is not joined");
+		}
 		vector<stored_payload> collected;
-		Submitter submitter(make_unique<collect_submitter>(*this, collected, host_session_id, true));
-		simulation->collect(submitter);
+		collected.emplace_back(make_payload(bytes, host_session_id, true));
+		const PayloadId id = collected.back().id;
 		schedule_commands(std::move(collected));
+		return id;
 	}
 
 	void host_session::poll_socket() {
@@ -1326,13 +1292,40 @@ namespace lf::lockstep {
 		remember_sent_packet(connection.sent_packets, packet_sequence, bytes);
 	}
 
-	void host_session::request_snapshot(host_connection& connection) {
-		connection.connection_state = state::downloading_snapshot;
-		connection.snapshot_requested = true;
-		simulation->snapshot_save_started();
+	void host_session::accept_login(SessionId session_id, span<const byte> snapshot) {
+		for (host_connection& connection : connections) {
+			if (connection.session_id != session_id) {
+				continue;
+			}
+			connection.connection_state = state::downloading_snapshot;
+			connection.snapshot_requested = true;
+			connection.snapshot_bytes.assign(snapshot.begin(), snapshot.end());
+			return;
+		}
 	}
 
-	void host_session::process_snapshot_requests() {
+	void host_session::reject_login(SessionId session_id) {
+		disconnect_peer(session_id);
+	}
+
+	void host_session::disconnect_peer(SessionId session_id) {
+		for (host_connection& connection : connections) {
+			if (connection.session_id != session_id) {
+				continue;
+			}
+			send_connected(connection, packet_kind::disconnect, [](bin::write_stream&) -> error {
+				return {};
+			});
+			connection.connection_state = state::disconnected;
+			push_event(SessionEvent{
+				.kind = SessionEventKind::peer_disconnected,
+				.session_id = session_id,
+			});
+			return;
+		}
+	}
+
+	void host_session::continue_snapshots() {
 		for (host_connection& connection : connections) {
 			if (connection.snapshot_sending) {
 				continue_snapshot(connection);
@@ -1349,7 +1342,6 @@ namespace lf::lockstep {
 				connection.connection_state = state::disconnected;
 				connection.snapshot_sending = false;
 				connection.snapshot_bytes.clear();
-				simulation->snapshot_save_finished();
 				throw;
 			}
 			return;
@@ -1357,7 +1349,6 @@ namespace lf::lockstep {
 	}
 
 	void host_session::begin_snapshot(host_connection& connection) {
-		connection.snapshot_bytes = simulation->save_snapshot();
 		const u16 chunk_size = options.snapshot_chunk_bytes == 0 ? 1000 : options.snapshot_chunk_bytes;
 		const u32 chunk_count = static_cast<u32>((connection.snapshot_bytes.size() + chunk_size - 1u) / chunk_size);
 		connection.snapshot_id = next_snapshot_id;
@@ -1395,7 +1386,6 @@ namespace lf::lockstep {
 		send_snapshot_end(connection);
 		connection.snapshot_sending = false;
 		connection.connection_state = state::joined;
-		simulation->snapshot_save_finished();
 	}
 
 	void host_session::send_snapshot_chunk(host_connection& connection, u32 chunk_index) {
@@ -1497,8 +1487,8 @@ namespace lf::lockstep {
 		remember_sent_packet(connection.sent_packets, sequence, bytes);
 	}
 
-	client_session::client_session(net::Socket socket, net::Peer host, Simulation& simulation, Options options)
-		: Impl(mode::client, state::connecting, simulation, options), socket(std::move(socket)), host(std::move(host)) {}
+	client_session::client_session(net::Socket socket, net::Peer host, Options options)
+		: Impl(mode::client, state::connecting, options), socket(std::move(socket)), host(std::move(host)) {}
 
 	void client_session::update() {
 		if (session_state == state::disconnected) {
@@ -1523,7 +1513,7 @@ namespace lf::lockstep {
 			time_since_activity >= options.connect_timeout) {
 			socket.disconnect();
 			session_state = state::disconnected;
-			simulation->disconnected();
+			push_event(SessionEvent{ .kind = SessionEventKind::disconnected });
 			return;
 		}
 		if (session_state == state::joined &&
@@ -1531,7 +1521,7 @@ namespace lf::lockstep {
 			time_since_activity >= options.connect_timeout) {
 			socket.disconnect();
 			session_state = state::disconnected;
-			simulation->disconnected();
+			push_event(SessionEvent{ .kind = SessionEventKind::disconnected });
 			return;
 		}
 		if (session_state == state::connecting && current_time >= next_connect_request) {
@@ -1564,7 +1554,31 @@ namespace lf::lockstep {
 		}
 		socket.disconnect();
 		session_state = state::disconnected;
-		simulation->disconnected();
+		push_event(SessionEvent{ .kind = SessionEventKind::disconnected });
+	}
+
+	PayloadId client_session::submit(span<const byte> bytes) {
+		if (session_state != state::joined || session_id == 0) {
+			throw runtime_exception("lockstep session is not joined");
+		}
+		stored_payload payload = make_payload(bytes, session_id, true);
+		const PayloadId id = payload.id;
+		outgoing_commands.emplace_back(std::move(payload));
+		return id;
+	}
+
+	void client_session::finish_snapshot_load() {
+		if (!snapshot.active || !snapshot.load_started) {
+			return;
+		}
+		current_tick = snapshot.baseline_tick;
+		pending_payloads.clear();
+		rebuild_pending_views();
+		snapshot = {};
+		session_state = state::catching_up;
+		if (drain_buffered_ticks() && session_state == state::catching_up) {
+			session_state = state::joined;
+		}
 	}
 
 	void client_session::poll_socket() {
@@ -1590,11 +1604,6 @@ namespace lf::lockstep {
 		}
 	}
 
-	void client_session::collect_local() {
-		Submitter submitter(make_unique<collect_submitter>(*this, outgoing_commands, session_id, true));
-		simulation->collect(submitter);
-	}
-
 	void client_session::buffer_tick(const tick_closure& closure) {
 		if (closure.tick <= current_tick) {
 			return;
@@ -1613,19 +1622,6 @@ namespace lf::lockstep {
 		buffered_ticks.emplace_back(std::move(tick));
 	}
 
-	void client_session::buffer_sync_check(const sync_check& check) {
-		if (check.tick <= current_tick || check.checksum == 0) {
-			return;
-		}
-		for (sync_check& existing : buffered_sync_checks) {
-			if (existing.tick == check.tick) {
-				existing.checksum = check.checksum;
-				return;
-			}
-		}
-		buffered_sync_checks.emplace_back(check);
-	}
-
 	bool client_session::drain_buffered_ticks() {
 		u32 stepped = 0;
 		while (stepped < options.max_tick_steps_per_update) {
@@ -1642,24 +1638,10 @@ namespace lf::lockstep {
 			}
 			stored_tick tick = std::move(buffered_ticks[found_index]);
 			buffered_ticks.erase(buffered_ticks.begin() + static_cast<i64>(found_index));
-			build_command_views(command_views, tick.commands);
-			simulation->step(tick.tick, span<const Command>(command_views.data(), command_views.size()));
-			for (size_t check_index = 0; check_index < buffered_sync_checks.size();) {
-				if (buffered_sync_checks[check_index].tick != tick.tick) {
-					++check_index;
-					continue;
-				}
-				const u64 expected_checksum = buffered_sync_checks[check_index].checksum;
-				buffered_sync_checks.erase(buffered_sync_checks.begin() + static_cast<i64>(check_index));
-				const u64 local_checksum = simulation->checksum(tick.tick);
-				if (local_checksum != expected_checksum) {
-					simulation->desync_detected(tick.tick, expected_checksum, local_checksum);
-				}
-				break;
-			}
 			erase_confirmed_pending(pending_payloads, session_id, tick.commands);
 			rebuild_pending_views();
 			current_tick = tick.tick;
+			push_ready_tick(tick.tick, tick.commands);
 			++stepped;
 		}
 		const Tick next_tick = current_tick + 1;
@@ -1677,19 +1659,12 @@ namespace lf::lockstep {
 		}
 		if (!snapshot.load_started) {
 			snapshot.load_started = true;
-			simulation->start_load_snapshot(bytes_view(snapshot.bytes));
+			push_event(SessionEvent{
+				.kind = SessionEventKind::snapshot_received,
+				.tick = snapshot.baseline_tick,
+				.bytes = snapshot.bytes,
+			});
 			return;
-		}
-		if (!simulation->snapshot_load_finished()) {
-			return;
-		}
-		current_tick = snapshot.baseline_tick;
-		pending_payloads.clear();
-		rebuild_pending_views();
-		snapshot = {};
-		session_state = state::catching_up;
-		if (drain_buffered_ticks() && session_state == state::catching_up) {
-			session_state = state::joined;
 		}
 	}
 
@@ -1713,8 +1688,7 @@ namespace lf::lockstep {
 			return;
 		}
 		send_connected(packet_kind::join_request, [&](bin::write_stream& stream) -> error {
-			vector<byte> payload = simulation->login_payload();
-			return stream(bin::field("login_payload", payload));
+			return stream(bin::field("login_payload", login_payload));
 		});
 	}
 
@@ -1847,18 +1821,6 @@ namespace lf::lockstep {
 		remember_sent_packet(sent_packets, sequence, bytes);
 	}
 
-	Submitter::Submitter(unique_ptr<Impl> impl) : impl(std::move(impl)) {}
-	Submitter::Submitter(Submitter&& other) noexcept = default;
-	Submitter& Submitter::operator=(Submitter&& other) noexcept = default;
-	Submitter::~Submitter() = default;
-
-	PayloadId Submitter::submit(span<const byte> bytes) {
-		if (!impl) {
-			throw runtime_exception("lockstep submitter is not active");
-		}
-		return impl->submit(bytes);
-	}
-
 	void Session::ImplDeleter::operator()(Impl* impl) const noexcept {
 		if (impl) {
 			try {
@@ -1877,16 +1839,16 @@ namespace lf::lockstep {
 		impl.reset();
 	}
 
-	Session Session::Offline(Simulation& simulation, Options options) {
-		return Session(make_unique<offline_session>(simulation, options));
+	Session Session::Offline(Options options) {
+		return Session(make_unique<offline_session>(options));
 	}
 
-	Session Session::Host(net::Socket socket, Simulation& simulation, Options options) {
-		return Session(make_unique<host_session>(std::move(socket), simulation, options));
+	Session Session::Host(net::Socket socket, Options options) {
+		return Session(make_unique<host_session>(std::move(socket), options));
 	}
 
-	Session Session::Client(net::Socket socket, net::Peer host, Simulation& simulation, Options options) {
-		return Session(make_unique<client_session>(std::move(socket), std::move(host), simulation, options));
+	Session Session::Client(net::Socket socket, net::Peer host, Options options) {
+		return Session(make_unique<client_session>(std::move(socket), std::move(host), options));
 	}
 
 	Session::operator bool() const noexcept {
@@ -1911,6 +1873,66 @@ namespace lf::lockstep {
 		if (impl) {
 			impl->disconnect();
 		}
+	}
+
+	void Session::disconnect_peer(SessionId session_id) {
+		if (!impl || impl->session_mode != mode::host) {
+			throw runtime_exception("only host lockstep sessions can disconnect peers");
+		}
+		static_cast<host_session&>(*impl).disconnect_peer(session_id);
+	}
+
+	PayloadId Session::submit(span<const byte> bytes) {
+		if (!impl) {
+			throw runtime_exception("lockstep session is not open");
+		}
+		return impl->submit(bytes);
+	}
+
+	vector<ReadyTick> Session::take_ready_ticks() {
+		if (!impl) {
+			return {};
+		}
+		vector<ReadyTick> ticks = std::move(impl->ready_ticks);
+		impl->ready_ticks.clear();
+		return ticks;
+	}
+
+	vector<SessionEvent> Session::take_events() {
+		if (!impl) {
+			return {};
+		}
+		vector<SessionEvent> events = std::move(impl->events);
+		impl->events.clear();
+		return events;
+	}
+
+	void Session::set_login_payload(span<const byte> bytes) {
+		if (!impl) {
+			throw runtime_exception("lockstep session is not open");
+		}
+		impl->login_payload.assign(bytes.begin(), bytes.end());
+	}
+
+	void Session::accept_login(SessionId session_id, span<const byte> snapshot) {
+		if (!impl || impl->session_mode != mode::host) {
+			throw runtime_exception("only host lockstep sessions can accept logins");
+		}
+		static_cast<host_session&>(*impl).accept_login(session_id, snapshot);
+	}
+
+	void Session::reject_login(SessionId session_id) {
+		if (!impl || impl->session_mode != mode::host) {
+			throw runtime_exception("only host lockstep sessions can reject logins");
+		}
+		static_cast<host_session&>(*impl).reject_login(session_id);
+	}
+
+	void Session::finish_snapshot_load() {
+		if (!impl || impl->session_mode != mode::client) {
+			throw runtime_exception("only client lockstep sessions load snapshots");
+		}
+		static_cast<client_session&>(*impl).finish_snapshot_load();
 	}
 
 	mode Session::mode() const {

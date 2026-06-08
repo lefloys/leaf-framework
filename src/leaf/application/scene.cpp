@@ -358,14 +358,13 @@ namespace lf {
 			}
 		}
 
-		void collect_focused_keybinds(Rml::Element& focused, Rml::ElementList& out) {
-			out.clear();
-			if (!focused.GetAttribute<Rml::String>("keydown", "").empty() ||
-				!focused.GetAttribute<Rml::String>("keyup", "").empty()) {
-				out.push_back(&focused);
+		void append_direct_keybinds(Rml::Element& root, Rml::ElementList& out) {
+			if (!root.GetAttribute<Rml::String>("keydown", "").empty() ||
+				!root.GetAttribute<Rml::String>("keyup", "").empty()) {
+				out.push_back(&root);
 			}
-			for (int index = 0; index < focused.GetNumChildren(); ++index) {
-				Rml::Element* child = focused.GetChild(index);
+			for (int index = 0; index < root.GetNumChildren(); ++index) {
+				Rml::Element* child = root.GetChild(index);
 				if (child && child->GetTagName() == "keybind") {
 					out.push_back(child);
 				}
@@ -373,6 +372,9 @@ namespace lf {
 		}
 
 		bool input_scope_candidate(const Rml::Element& element) {
+			if (element.GetAttribute<Rml::String>("input-scope", "") == "parent") {
+				return false;
+			}
 			return element.GetTagName() == "window" ||
 				element.GetTagName() == "body" ||
 				element.HasAttribute("tabindex");
@@ -398,7 +400,8 @@ namespace lf {
 			Rml::Context* context = document.GetContext();
 			Rml::Element* focused = context ? context->GetFocusElement() : nullptr;
 			if (focused) {
-				collect_focused_keybinds(*containing_input_scope(document, *focused), keybinds);
+				Rml::Element& scope = *containing_input_scope(document, *focused);
+				append_direct_keybinds(scope, keybinds);
 			}
 			return keybinds;
 		}

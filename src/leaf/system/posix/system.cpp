@@ -4,6 +4,7 @@
 #include <cstring>
 #include <filesystem>
 #include <limits.h>
+#include <vector>
 #include <unistd.h>
 
 namespace lf {
@@ -12,7 +13,23 @@ namespace lf {
 		string install_dir;
 	};
 
+	struct ShutdownHandlerEntry {
+		ShutdownHandlerId id = 0;
+		ShutdownHandler handler = nullptr;
+		void* user_data = nullptr;
+	};
+
 	static SystemData system_data;
+	static std::vector<ShutdownHandlerEntry> shutdown_handlers;
+	static ShutdownHandlerId next_shutdown_handler_id = 1;
+
+	void RequestShutdown() {
+		for (const ShutdownHandlerEntry& entry : shutdown_handlers) {
+			if (entry.handler) {
+				entry.handler(entry.user_data);
+			}
+		}
+	}
 
 	error init_system(span<string_view> args) {
 		install_crash_handler();
@@ -50,6 +67,26 @@ namespace lf {
 #else
 		return "POSIX";
 #endif
+	}
+
+	ShutdownHandlerId AddShutdownHandler(ShutdownHandler handler, void* user_data) {
+		const ShutdownHandlerId id = next_shutdown_handler_id++;
+		shutdown_handlers.push_back(ShutdownHandlerEntry{
+			.id = id,
+			.handler = handler,
+			.user_data = user_data,
+		});
+		return id;
+	}
+
+	void RemoveShutdownHandler(ShutdownHandlerId id) {
+		for (size_t index = 0; index < shutdown_handlers.size(); ++index) {
+			if (shutdown_handlers[index].id != id) {
+				continue;
+			}
+			shutdown_handlers.erase(shutdown_handlers.begin() + static_cast<std::ptrdiff_t>(index));
+			break;
+		}
 	}
 
 	string_view GetAppdataDir() {

@@ -33,7 +33,12 @@ namespace lf::lockstep {
 		PayloadId id = 0;
 		SessionId source = 0;
 		u64 hash = 0;
-		span<const byte> bytes;
+		vector<byte> bytes;
+	};
+
+	struct ReadyTick {
+		Tick tick = 0;
+		vector<Command> commands;
 	};
 
 	struct PendingPayload {
@@ -42,44 +47,18 @@ namespace lf::lockstep {
 		span<const byte> bytes;
 	};
 
-	class Submitter {
-	  public:
-		struct Impl {
-			virtual ~Impl() = default;
-			virtual PayloadId submit(span<const byte> bytes) = 0;
-		};
-
-		explicit Submitter(unique_ptr<Impl> impl);
-
-		Submitter(const Submitter&) = delete;
-		Submitter& operator=(const Submitter&) = delete;
-		Submitter(Submitter&& other) noexcept;
-		Submitter& operator=(Submitter&& other) noexcept;
-		~Submitter();
-
-		PayloadId submit(span<const byte> bytes);
-
-	  private:
-		unique_ptr<Impl> impl;
+	enum class SessionEventKind : u08 {
+		login_requested = 1,
+		snapshot_received = 2,
+		peer_disconnected = 3,
+		disconnected = 4,
 	};
 
-	class Simulation {
-	  public:
-		virtual ~Simulation() = default;
-
-		virtual vector<byte> save_snapshot() = 0;
-		virtual void load_snapshot(span<const byte> bytes) = 0;
-		virtual void start_load_snapshot(span<const byte> bytes) { load_snapshot(bytes); }
-		virtual bool snapshot_load_finished() { return true; }
-		virtual void snapshot_save_started() {}
-		virtual void snapshot_save_finished() {}
-		virtual vector<byte> login_payload() { return {}; }
-		virtual bool accept_login(SessionId, span<const byte>) { return true; }
-		virtual u64 checksum(Tick) { return 0; }
-		virtual void desync_detected(Tick, u64, u64) {}
-		virtual void collect(Submitter& submitter) = 0;
-		virtual void step(Tick tick, span<const Command> commands) = 0;
-		virtual void disconnected() {}
+	struct SessionEvent {
+		SessionEventKind kind = SessionEventKind::disconnected;
+		SessionId session_id = 0;
+		Tick tick = 0;
+		vector<byte> bytes;
 	};
 
 	struct Options {
@@ -99,7 +78,6 @@ namespace lf::lockstep {
 		u32 snapshot_request_window = 32;
 		u32 snapshot_request_retry_delay = 4;
 		u32 command_latency_ticks = 2;
-		u32 checksum_interval_ticks = 60;
 		u32 max_tick_steps_per_update = 4;
 	};
 
@@ -112,9 +90,9 @@ namespace lf::lockstep {
 
 		Session() = default;
 
-		static Session Offline(Simulation& simulation, Options options = {});
-		static Session Host(net::Socket socket, Simulation& simulation, Options options = {});
-		static Session Client(net::Socket socket, net::Peer host, Simulation& simulation, Options options = {});
+		static Session Offline(Options options = {});
+		static Session Host(net::Socket socket, Options options = {});
+		static Session Client(net::Socket socket, net::Peer host, Options options = {});
 
 		Session(const Session&) = delete;
 		Session& operator=(const Session&) = delete;
@@ -127,6 +105,14 @@ namespace lf::lockstep {
 		void update();
 		void advance();
 		void disconnect();
+		void disconnect_peer(SessionId session_id);
+		PayloadId submit(span<const byte> bytes);
+		vector<ReadyTick> take_ready_ticks();
+		vector<SessionEvent> take_events();
+		void set_login_payload(span<const byte> bytes);
+		void accept_login(SessionId session_id, span<const byte> snapshot);
+		void reject_login(SessionId session_id);
+		void finish_snapshot_load();
 
 		lockstep::mode mode() const;
 		lockstep::state state() const;

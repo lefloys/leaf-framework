@@ -2,6 +2,7 @@
 #include "leaf/system/socket.hpp"
 #include <Shlobj.h>
 #include <cstring>
+#include <vector>
 #include <windows.h>
 
 namespace lf {
@@ -10,7 +11,37 @@ namespace lf {
 		char install_dir[MAX_PATH] = { 0 };
 	};
 
+	struct ShutdownHandlerEntry {
+		ShutdownHandlerId id = 0;
+		ShutdownHandler handler = nullptr;
+		void* user_data = nullptr;
+	};
+
 	static SystemData system_data;
+	static std::vector<ShutdownHandlerEntry> shutdown_handlers;
+	static ShutdownHandlerId next_shutdown_handler_id = 1;
+
+	void RequestShutdown() {
+		for (const ShutdownHandlerEntry& entry : shutdown_handlers) {
+			if (entry.handler) {
+				entry.handler(entry.user_data);
+			}
+		}
+	}
+
+	static BOOL WINAPI console_shutdown_handler(DWORD control_type) {
+		switch (control_type) {
+		case CTRL_C_EVENT:
+		case CTRL_BREAK_EVENT:
+		case CTRL_CLOSE_EVENT:
+		case CTRL_LOGOFF_EVENT:
+		case CTRL_SHUTDOWN_EVENT:
+			RequestShutdown();
+			return TRUE;
+		default:
+			return FALSE;
+		}
+	}
 
 	error init_system(span<string_view> args) {
 		install_crash_handler();
@@ -39,6 +70,30 @@ namespace lf {
 
 	string_view system_backend_name() {
 		return "Windows";
+	}
+
+	ShutdownHandlerId AddShutdownHandler(ShutdownHandler handler, void* user_data) {
+		const ShutdownHandlerId id = next_shutdown_handler_id++;
+		shutdown_handlers.push_back(ShutdownHandlerEntry{
+			.id = id,
+			.handler = handler,
+			.user_data = user_data,
+		});
+		SetConsoleCtrlHandler(console_shutdown_handler, TRUE);
+		return id;
+	}
+
+	void RemoveShutdownHandler(ShutdownHandlerId id) {
+		for (size_t index = 0; index < shutdown_handlers.size(); ++index) {
+			if (shutdown_handlers[index].id != id) {
+				continue;
+			}
+			shutdown_handlers.erase(shutdown_handlers.begin() + static_cast<std::ptrdiff_t>(index));
+			break;
+		}
+		if (shutdown_handlers.empty()) {
+			SetConsoleCtrlHandler(console_shutdown_handler, FALSE);
+		}
 	}
 
 	string_view GetAppdataDir() {

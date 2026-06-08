@@ -2,7 +2,6 @@
 
 #include <leaf/core/exception.hpp>
 #include <leaf/core/filesystem.hpp>
-#include <leaf/logging/logging.hpp>
 #include <leaf/graphics/queue.hpp>
 #include <leaf/script/database.hpp>
 

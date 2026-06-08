@@ -1,4 +1,5 @@
 #include "crash_handler.hpp"
+#include "system.hpp"
 
 #include <csignal>
 #include <cstdlib>
@@ -24,6 +25,10 @@ namespace lf {
 	}
 
 	static void crash_signal_handler(int signal) {
+		if (signal == SIGINT || signal == SIGTERM) {
+			RequestShutdown();
+			return;
+		}
 		std::cerr << "[crash] fatal signal: " << signal_name(signal) << " (" << signal << ")\n";
 		std::cerr.flush();
 		std::_Exit(128 + signal);

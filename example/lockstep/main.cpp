@@ -218,10 +218,10 @@ struct shared_demo_state {
 
 shared_demo_state* active_demo_state = nullptr;
 
-struct demo_simulation final : lf::lockstep::Simulation {
+struct demo_simulation {
 	demo_simulation(toy_world& world, shared_demo_state& state) : world(world), state(state) {}
 
-	lf::vector<lf::byte> save_snapshot() override {
+	lf::vector<lf::byte> save_snapshot() {
 		lf::report<lf::vector<lf::byte>> bytes = lf::bin::write(world.save());
 		if (!bytes) {
 			throw lf::runtime_exception(bytes.error().message);
@@ -230,7 +230,7 @@ struct demo_simulation final : lf::lockstep::Simulation {
 		return std::move(*bytes);
 	}
 
-	void load_snapshot(lf::span<const lf::byte> bytes) override {
+	void load_snapshot(lf::span<const lf::byte> bytes) {
 		lf::report<snapshot> loaded = lf::bin::read<snapshot>(bytes);
 		if (!loaded) {
 			throw lf::runtime_exception(loaded.error().message);
@@ -241,18 +241,21 @@ struct demo_simulation final : lf::lockstep::Simulation {
 		state.push_log(lf::format("loaded snapshot at tick {}", world.tick));
 	}
 
-	void collect(lf::lockstep::Submitter& submitter) override {
+	void submit_pending(lf::lockstep::Session& session) {
+		if (!session.joined()) {
+			return;
+		}
 		lf::vector<action> actions = state.take_actions();
 		for (const action& action : actions) {
 			lf::report<lf::vector<lf::byte>> bytes = lf::bin::write(action);
 			if (!bytes) {
 				throw lf::runtime_exception(bytes.error().message);
 			}
-			submitter.submit(lf::span<const lf::byte>(bytes->data(), bytes->size()));
+			session.submit(lf::span<const lf::byte>(bytes->data(), bytes->size()));
 		}
 	}
 
-	void step(Tick tick, lf::span<const lf::lockstep::Command> commands) override {
+	void step(Tick tick, const lf::vector<lf::lockstep::Command>& commands) {
 		world.tick = tick;
 		for (const lf::lockstep::Command& command : commands) {
 			lf::report<action> read_action = lf::bin::read<action>(command.bytes);
@@ -267,13 +270,40 @@ struct demo_simulation final : lf::lockstep::Simulation {
 		state.push_log(lf::format("stepped tick {} with {} command(s)", world.tick, commands.size()));
 	}
 
-	void disconnected() override {
+	void disconnected() {
 		state.mark_disconnected();
 	}
 
 	toy_world& world;
 	shared_demo_state& state;
 };
+
+void service_session(lf::lockstep::Session& session, demo_simulation& simulation) {
+	lf::vector<lf::lockstep::SessionEvent> events = session.take_events();
+	for (const lf::lockstep::SessionEvent& event : events) {
+		switch (event.kind) {
+		case lf::lockstep::SessionEventKind::login_requested: {
+			lf::vector<lf::byte> snapshot = simulation.save_snapshot();
+			session.accept_login(event.session_id, lf::span<const lf::byte>(snapshot.data(), snapshot.size()));
+			break;
+		}
+		case lf::lockstep::SessionEventKind::snapshot_received:
+			simulation.load_snapshot(lf::span<const lf::byte>(event.bytes.data(), event.bytes.size()));
+			session.finish_snapshot_load();
+			break;
+		case lf::lockstep::SessionEventKind::peer_disconnected:
+			break;
+		case lf::lockstep::SessionEventKind::disconnected:
+			simulation.disconnected();
+			break;
+		}
+	}
+
+	lf::vector<lf::lockstep::ReadyTick> ready_ticks = session.take_ready_ticks();
+	for (const lf::lockstep::ReadyTick& ready_tick : ready_ticks) {
+		simulation.step(ready_tick.tick, ready_tick.commands);
+	}
+}
 
 lf::string html_escape(std::string_view text) {
 	lf::string result;
@@ -490,11 +520,11 @@ int main(int argc, char* argv[]) {
 
 	lf::lockstep::Session session;
 	if (host_mode) {
-		session = lf::lockstep::Session::Host(std::move(socket), simulation, options);
+		session = lf::lockstep::Session::Host(std::move(socket), options);
 		state.push_log(lf::format("host listening on port {}", server_port));
 	} else {
 		lf::net::Peer peer = lf::net::Peer::Address(host, server_port);
-		session = lf::lockstep::Session::Client(std::move(socket), peer, simulation, options);
+		session = lf::lockstep::Session::Client(std::move(socket), peer, options);
 		state.push_log(lf::format("client connecting to {}:{}", host, server_port));
 	}
 
@@ -514,10 +544,13 @@ int main(int argc, char* argv[]) {
 			running = app->update();
 		}
 		lf::Update();
+		simulation.submit_pending(session);
 		session.update();
+		service_session(session, simulation);
 
 		if (host_mode && lf::now() >= next_host_tick) {
 			session.advance();
+			service_session(session, simulation);
 			next_host_tick = next_host_tick + lf::duration::from_quantum(500'000'000);
 		}
 
