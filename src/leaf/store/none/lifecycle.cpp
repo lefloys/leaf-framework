@@ -10,6 +10,10 @@ namespace lf {
 		return error::no_error;
 	}
 
+	string_view store_backend_name() {
+		return "none";
+	}
+
 	void update_store() {
 	}
 

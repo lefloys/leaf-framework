@@ -127,18 +127,18 @@ static f32 clamp_volume(f32 value) {
 }
 
 static f32 settings_volume_for_sound_type(lf::string_view type) {
-	auto settings = lf::LoadAppSettings(lf::AppSettingsPath());
-	if (!settings) {
-		return 1.0f;
-	}
-
-	f32 type_volume = settings->sound.effects;
+	auto master_setting = lf::LoadSetting("core", "sound.master", 1.0);
+	auto effects_setting = lf::LoadSetting("core", "sound.effects", 1.0);
+	f32 master = master_setting ? master_setting->as<f32>() : 1.0f;
+	f32 type_volume = effects_setting ? effects_setting->as<f32>() : 1.0f;
 	if (type == "music") {
-		type_volume = settings->sound.music;
+		if (auto music_setting = lf::LoadSetting("core", "sound.music", 0.8)) {
+			type_volume = music_setting->as<f32>();
+		}
 	} else if (type == "master") {
 		type_volume = 1.0f;
 	}
-	return clamp_volume(settings->sound.master) * clamp_volume(type_volume);
+	return clamp_volume(master) * clamp_volume(type_volume);
 }
 
 namespace lf {

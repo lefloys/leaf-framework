@@ -1,6 +1,6 @@
 #include "scene.hpp"
 #include "cursor.hpp"
-#include "rml_window.hpp"
+#include "elements/window.hpp"
 
 #include <leaf/application/application_stats.hpp>
 #include <leaf/application/sound.hpp>
@@ -37,8 +37,6 @@
 
 namespace lf {
 	namespace {
-		AppSettings load_scene_settings();
-
 		string rml_escape(string_view value) {
 			string escaped;
 			escaped.reserve(value.size());
@@ -211,22 +209,25 @@ namespace lf {
 
 		string input_binding_for_action(string_view action) {
 			const string action_name(action);
-			AppSettings core_settings = load_scene_settings();
-			if (auto it = core_settings.input.bindings.find(action_name); it != core_settings.input.bindings.end()) {
-				return it->second;
+			auto core_binding = LoadInputSetting("core", action_name);
+			if (core_binding && !core_binding->empty()) {
+				return *core_binding;
+			}
+			if (!core_binding) {
+				log::Warning("{}", format("[settings] {}", core_binding.error().message));
 			}
 
 			for (const ModInfo& mod : LoadedMods()) {
 				if (mod.name == "core") {
 					continue;
 				}
-				auto settings = LoadAppSettings(ModSettingsPath(mod.name));
-				if (!settings) {
-					log::Warning("{}", format("[settings] {}", settings.error().message));
+				auto binding = LoadInputSetting(mod.name, action_name);
+				if (!binding) {
+					log::Warning("{}", format("[settings] {}", binding.error().message));
 					continue;
 				}
-				if (auto it = settings->input.bindings.find(action_name); it != settings->input.bindings.end()) {
-					return it->second;
+				if (!binding->empty()) {
+					return *binding;
 				}
 			}
 
@@ -371,20 +372,25 @@ namespace lf {
 			}
 		}
 
-		Rml::Element* keybind_owner(Rml::ElementDocument& document, Rml::Element& focused) {
+		bool input_scope_candidate(const Rml::Element& element) {
+			return element.GetTagName() == "window" ||
+				element.GetTagName() == "body" ||
+				element.HasAttribute("tabindex");
+		}
+
+		Rml::Element* containing_input_scope(Rml::ElementDocument& document, Rml::Element& focused) {
+			if (input_scope_candidate(focused)) {
+				return &focused;
+			}
 			for (Rml::Element* element = &focused; element; element = element->GetParentNode()) {
-				string owner_id = element->GetAttribute<Rml::String>("input-keybinds", "");
-				if (owner_id.empty()) {
+				if (element == &focused) {
 					continue;
 				}
-				if (!owner_id.empty() && owner_id.front() == '#') {
-					owner_id.erase(owner_id.begin());
-				}
-				if (Rml::Element* owner = document.GetElementById(Rml::String(owner_id))) {
-					return owner;
+				if (input_scope_candidate(*element)) {
+					return element;
 				}
 			}
-			return &focused;
+			return &document;
 		}
 
 		Rml::ElementList focused_keybinds(Rml::ElementDocument& document) {
@@ -392,7 +398,7 @@ namespace lf {
 			Rml::Context* context = document.GetContext();
 			Rml::Element* focused = context ? context->GetFocusElement() : nullptr;
 			if (focused) {
-				collect_focused_keybinds(*keybind_owner(document, *focused), keybinds);
+				collect_focused_keybinds(*containing_input_scope(document, *focused), keybinds);
 			}
 			return keybinds;
 		}
@@ -417,14 +423,31 @@ namespace lf {
 			}
 		}
 
-		AppSettings load_scene_settings() {
-			fs::path path = AppSettingsPath();
-			auto settings = LoadAppSettings(path);
-			if (!settings) {
-				log::Warning("{}", format("[settings] {}", settings.error().message));
-				return DefaultAppSettings();
+		string load_core_setting(string_view name, string_view fallback = {}) {
+			auto value = LoadSetting("core", name, object(fallback));
+			if (!value) {
+				log::Warning("{}", format("[settings] {}", value.error().message));
+				return string(fallback);
 			}
-			return *settings;
+			return value->as<string>();
+		}
+
+		f32 load_core_setting_f32(string_view name, f32 fallback) {
+			auto value = LoadSetting("core", name, object(static_cast<f64>(fallback)));
+			if (!value) {
+				log::Warning("{}", format("[settings] {}", value.error().message));
+				return fallback;
+			}
+			return value->as<f32>();
+		}
+
+		bool load_core_setting_bool(string_view name, bool fallback) {
+			auto value = LoadSetting("core", name, object(fallback));
+			if (!value) {
+				log::Warning("{}", format("[settings] {}", value.error().message));
+				return fallback;
+			}
+			return value->as<bool>();
 		}
 
 		string script_attribute(string_view tag, string_view name) {
@@ -547,7 +570,7 @@ namespace lf {
 			log::Info("{}", message);
 		});
 
-		string document_source = install_rml_window_defaults(strip_inline_scripts(initial));
+		string document_source = install_window_defaults(strip_inline_scripts(initial));
 		document = context.LoadDocumentFromMemory(Rml::String(document_source));
 		if (!document) {
 			throw runtime_exception("failed to load RML document from scene source");
@@ -946,42 +969,40 @@ namespace lf {
 		});
 
 		lua.set_function("settings_master_volume", []() -> f32 {
-			return load_scene_settings().sound.master;
+			return load_core_setting_f32("sound.master", 1.0f);
 		});
 
 		lua.set_function("settings_music_volume", []() -> f32 {
-			return load_scene_settings().sound.music;
+			return load_core_setting_f32("sound.music", 0.8f);
 		});
 
 		lua.set_function("settings_effects_volume", []() -> f32 {
-			return load_scene_settings().sound.effects;
+			return load_core_setting_f32("sound.effects", 1.0f);
 		});
 
 		lua.set_function("settings_fullscreen", []() -> bool {
-			return load_scene_settings().graphics.fullscreen;
+			return load_core_setting_bool("graphics.fullscreen", false);
 		});
 
 		lua.set_function("settings_vsync", []() -> bool {
-			return load_scene_settings().graphics.vsync;
+			return load_core_setting_bool("graphics.vsync", false);
 		});
 
 		lua.set_function("settings", [](sol::this_state state) -> sol::table {
 			sol::state_view lua(state);
-			AppSettings settings = load_scene_settings();
 
 			sol::table sound = lua.create_table();
-			sound["master"] = settings.sound.master;
-			sound["music"] = settings.sound.music;
-			sound["effects"] = settings.sound.effects;
+			sound["master"] = load_core_setting_f32("sound.master", 1.0f);
+			sound["music"] = load_core_setting_f32("sound.music", 0.8f);
+			sound["effects"] = load_core_setting_f32("sound.effects", 1.0f);
 
 			sol::table graphics = lua.create_table();
-			graphics["fullscreen"] = settings.graphics.fullscreen;
-			graphics["vsync"] = settings.graphics.vsync;
-			graphics["max_fps"] = settings.graphics.max_fps;
+			graphics["fullscreen"] = load_core_setting_bool("graphics.fullscreen", false);
+			graphics["vsync"] = load_core_setting_bool("graphics.vsync", false);
+			graphics["max_fps"] = load_core_setting_f32("graphics.max-fps", 60.0f);
 
 			sol::table result = lua.create_table();
-			result["language"] = settings.language;
-			result["last_saved_world"] = settings.last_saved_world;
+			result["language"] = load_core_setting("language", default_language);
 			result["sound"] = sound;
 			result["graphics"] = graphics;
 			return result;
@@ -989,25 +1010,6 @@ namespace lf {
 
 		lua.set_function("settings_max_fps", [this]() -> f32 {
 			return this->stats.max_fps.load(std::memory_order_relaxed);
-		});
-
-		lua.set_function("settings_last_saved_world", []() -> string {
-			fs::path path = AppSettingsPath();
-			auto save_name = LoadLastSavedWorldSetting(path);
-			if (!save_name) {
-				log::Error("{}", format("[settings] {}", save_name.error().message));
-				return {};
-			}
-			return *save_name;
-		});
-
-		lua.set_function("save_last_saved_world", [](string_view save_name) -> bool {
-			fs::path path = AppSettingsPath();
-			if (error err = SaveLastSavedWorldSetting(path, save_name)) {
-				log::Error("{}", format("[settings] {}", err.message));
-				return false;
-			}
-			return true;
 		});
 
 		lua.set_function("graphics_backend", []() -> string_view {
@@ -1064,13 +1066,7 @@ namespace lf {
 		});
 
 		lua.set_function("save_settings", [this](f32 master, f32 music, f32 effects, bool fullscreen, bool vsync, sol::object max_fps_value) -> bool {
-			fs::path path = AppSettingsPath();
-			auto settings = LoadAppSettings(path);
-			if (!settings) {
-				log::Error("{}", format("[settings] {}", settings.error().message));
-				return false;
-			}
-			f32 max_fps = settings->graphics.max_fps;
+			f32 max_fps = load_core_setting_f32("graphics.max-fps", 60.0f);
 			if (max_fps_value.is<f32>()) {
 				max_fps = max_fps_value.as<f32>();
 			} else if (max_fps_value.is<f64>()) {
@@ -1078,14 +1074,28 @@ namespace lf {
 			} else if (max_fps_value.is<i32>()) {
 				max_fps = static_cast<f32>(max_fps_value.as<i32>());
 			}
-			bool fullscreen_changed = settings->graphics.fullscreen != fullscreen;
-			settings->sound.master = master;
-			settings->sound.music = music;
-			settings->sound.effects = effects;
-			settings->graphics.fullscreen = fullscreen;
-			settings->graphics.vsync = vsync;
-			settings->graphics.max_fps = max_fps;
-			if (error err = SaveAppSettings(path, *settings)) {
+			bool fullscreen_changed = load_core_setting_bool("graphics.fullscreen", false) != fullscreen;
+			if (error err = SaveSetting("core", "sound.master", object(static_cast<f64>(master)))) {
+				log::Error("{}", format("[settings] {}", err.message));
+				return false;
+			}
+			if (error err = SaveSetting("core", "sound.music", object(static_cast<f64>(music)))) {
+				log::Error("{}", format("[settings] {}", err.message));
+				return false;
+			}
+			if (error err = SaveSetting("core", "sound.effects", object(static_cast<f64>(effects)))) {
+				log::Error("{}", format("[settings] {}", err.message));
+				return false;
+			}
+			if (error err = SaveSetting("core", "graphics.fullscreen", object(fullscreen))) {
+				log::Error("{}", format("[settings] {}", err.message));
+				return false;
+			}
+			if (error err = SaveSetting("core", "graphics.vsync", object(vsync))) {
+				log::Error("{}", format("[settings] {}", err.message));
+				return false;
+			}
+			if (error err = SaveSetting("core", "graphics.max-fps", object(static_cast<f64>(max_fps)))) {
 				log::Error("{}", format("[settings] {}", err.message));
 				return false;
 			}
@@ -1114,7 +1124,7 @@ namespace lf {
 		SetCursorPrototype(display, {});
 		if (document) {
 			Rml::Context* context = document->GetContext();
-			ReleaseRmlWindowDocumentEvents(*document);
+			ReleaseWindowDocumentEvents(*document);
 			clear_script_events();
 			context->UnloadDocument(document);
 			document = nullptr;

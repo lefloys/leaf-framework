@@ -42,6 +42,16 @@ namespace lf {
 		sys::exit_udp_sockets();
 	}
 
+	string_view system_backend_name() {
+#if defined(__APPLE__)
+		return "macOS";
+#elif defined(__linux__)
+		return "Linux";
+#else
+		return "POSIX";
+#endif
+	}
+
 	string_view GetAppdataDir() {
 		return system_data.appdata_dir;
 	}

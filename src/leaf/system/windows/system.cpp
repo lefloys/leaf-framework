@@ -37,6 +37,10 @@ namespace lf {
 		sys::exit_udp_sockets();
 	}
 
+	string_view system_backend_name() {
+		return "Windows";
+	}
+
 	string_view GetAppdataDir() {
 		return system_data.appdata_dir;
 	}

@@ -2,45 +2,14 @@
 
 #include <leaf/core/error.hpp>
 #include <leaf/core/filesystem.hpp>
+#include <leaf/core/dynamic_object.hpp>
 #include <leaf/core/string.hpp>
 #include <leaf/core/types.hpp>
 
-#include <unordered_map>
-
 namespace lf {
-	struct SoundSettings {
-		f32 master = 1.0f;
-		f32 music = 0.8f;
-		f32 effects = 1.0f;
-	};
-
-	struct GraphicsSettings {
-		bool fullscreen = false;
-		bool vsync = false;
-		f32 max_fps = 60.0f;
-	};
-
-	struct InputSettings {
-		std::unordered_map<string, string> bindings;
-	};
-
-	struct AppSettings {
-		string language = "en-US";
-		string last_saved_world;
-		SoundSettings sound;
-		GraphicsSettings graphics;
-		InputSettings input;
-	};
-
-	AppSettings DefaultAppSettings();
-
-	fs::path AppSettingsFolder();
-	fs::path AppSettingsPath();
-	fs::path ModSettingsPath(string_view mod_name);
-	report<AppSettings> LoadAppSettings(const fs::path& path);
-	error SaveAppSettings(const fs::path& path, const AppSettings& settings);
-	report<string> LoadSelectedLanguageSetting(const fs::path& path);
-	error SaveSelectedLanguageSetting(const fs::path& path, string_view language);
-	report<string> LoadLastSavedWorldSetting(const fs::path& path);
-	error SaveLastSavedWorldSetting(const fs::path& path, string_view save_name);
+	report<object> LoadSetting(string_view mod_name, string_view name, object fallback = {});
+	error SaveSetting(string_view mod_name, string_view name, object value);
+	error EnsureSetting(string_view mod_name, string_view name, object value);
+	report<string> LoadInputSetting(string_view mod_name, string_view action);
+	error EnsureInputSetting(string_view mod_name, string_view action, string_view key);
 }

@@ -1,7 +1,4 @@
-#include "rml_window.hpp"
-
-#include "rml_window_defaults.hpp"
-#include "rml_window_internal.hpp"
+#include "window.hpp"
 
 #include <leaf/core/format.hpp>
 #include <leaf/math/pos.hpp>
@@ -24,13 +21,17 @@
 #include <optional>
 #include <utility>
 
-namespace lf {
-	namespace {
-		using rml_window_detail::ResizeEdge;
+namespace lf::detail {
+		constexpr bool false_attribute_value(string_view value) {
+			return value == "false" ||
+				value == "0" ||
+				value == "disabled" ||
+				value == "no" ||
+				value == "off";
+		}
 
 		constexpr f32 default_min_width = 180.0f;
 		constexpr f32 default_min_height = 120.0f;
-		constexpr f32 resize_hit_size = 8.0f;
 		constexpr f32 unbounded_size = std::numeric_limits<f32>::max() / 8.0f;
 
 		struct ResizeLimits {
@@ -40,13 +41,199 @@ namespace lf {
 			f32 max_height = unbounded_size;
 		};
 
+		string_view default_window_styles() {
+			return R"rml(
+<style id="window-defaults">
+window {
+	display: none;
+	position: absolute;
+	width: 640px;
+	min-width: 180px;
+	min-height: 120px;
+	background: #120A14;
+	border-width: 3px;
+	border-color: #3B1F2D;
+	border-top-color: #C33A4A;
+	border-left-color: #3B1F2D;
+	border-right-color: #050407;
+	border-bottom-color: #050407;
+	color: #F4EEF2;
+	z-index: 1;
+}
+window.window-measuring,
+window.window-placed {
+	display: block;
+}
+window.window-measuring {
+	visibility: hidden;
+	pointer-events: none;
+}
+window.window-focused {
+	border-color: #C33A4A;
+	border-top-color: #E06A5F;
+	border-left-color: #C33A4A;
+	border-right-color: #050407;
+	border-bottom-color: #050407;
+}
+window.window-collapsed {
+	min-height: 0px;
+	max-height: none;
+}
+window-title {
+	display: block;
+	height: 36px;
+	padding: 8px 86px 0px 16px;
+	background: #1D101F;
+	border-width: 0px 0px 2px 0px;
+	border-bottom-color: #3B1F2D;
+	color: #F4EEF2;
+	font-size: 18px;
+	overflow: hidden;
+}
+window.window-focused window-title {
+	background: #1D101F;
+	border-bottom-color: #E06A5F;
+	color: #F4EEF2;
+}
+window-title button {
+	position: absolute;
+	right: 10px;
+	top: 7px;
+	width: 28px;
+	height: 28px;
+	padding: 0px;
+	margin: 0px;
+	background: #0B070D;
+	background-color: #0B070D;
+	decorator: none;
+	border-width: 3px;
+	border-color: #3B1F2D;
+	border-top-color: #C33A4A;
+	border-left-color: #C33A4A;
+	border-right-color: #050407;
+	border-bottom-color: #050407;
+	color: #F4EEF2;
+	font-size: 0px;
+	line-height: 0px;
+	text-align: center;
+}
+window-title button:hover {
+	background: #5B1F32;
+	background-color: #5B1F32;
+	border-top-color: #E06A5F;
+	border-left-color: #E06A5F;
+	color: #F4EEF2;
+}
+window-title button:active,
+window-title button.window-button-pressed {
+	background: #E06A5F;
+	background-color: #E06A5F;
+	border-top-color: #050407;
+	border-left-color: #050407;
+	border-right-color: #C33A4A;
+	border-bottom-color: #F4EEF2;
+	color: #050407;
+}
+window-title button.window-collapse-button {
+	right: 45px;
+	padding: 0px;
+}
+window-icon {
+	display: block;
+	position: absolute;
+	left: 4px;
+	top: 4px;
+	width: 20px;
+	height: 20px;
+}
+window-pixel {
+	display: block;
+	position: absolute;
+	width: 4px;
+	height: 4px;
+	background: #F4EEF2;
+	background-color: #F4EEF2;
+}
+window-title button:hover window-pixel {
+	background: #F4EEF2;
+	background-color: #F4EEF2;
+}
+window-title button:active window-pixel,
+window-title button.window-button-pressed window-pixel {
+	background: #050407;
+	background-color: #050407;
+}
+window.window-collapsed window-body,
+window.window-collapsed window-resize {
+	display: none;
+}
+window-body {
+	display: block;
+	position: relative;
+	margin: 12px;
+	overflow: auto;
+}
+window-resize {
+	display: block;
+	position: absolute;
+	background: transparent;
+}
+window-resize[direction=se] {
+	right: -5px;
+	bottom: -5px;
+	width: 16px;
+	height: 16px;
+	background: #C33A4A;
+}
+window[resizable=false] window-resize,
+window[resizable=0] window-resize,
+window[resizable=disabled] window-resize,
+window[resizable=no] window-resize,
+window[resizable=off] window-resize {
+	display: none;
+}
+keybind {
+	display: none;
+}
+</style>
+)rml";
+		}
+
+		string_view close_icon_rml() {
+			return R"rml(<window-icon><window-pixel style="left:4px; top:4px;"></window-pixel><window-pixel style="left:8px; top:8px;"></window-pixel><window-pixel style="left:12px; top:12px;"></window-pixel><window-pixel style="left:12px; top:4px;"></window-pixel><window-pixel style="left:4px; top:12px;"></window-pixel></window-icon>)rml";
+		}
+
+		string_view collapse_down_icon_rml() {
+			return R"rml(
+<window-icon>
+	<window-pixel style="left:0px; top:4px;"></window-pixel>
+	<window-pixel style="left:4px; top:8px;"></window-pixel>
+	<window-pixel style="left:8px; top:12px;"></window-pixel>
+	<window-pixel style="left:12px; top:8px;"></window-pixel>
+	<window-pixel style="left:16px; top:4px;"></window-pixel>
+</window-icon>
+)rml";
+		}
+
+		string_view collapse_up_icon_rml() {
+			return R"rml(
+<window-icon>
+	<window-pixel style="left:0px; top:12px;"></window-pixel>
+	<window-pixel style="left:4px; top:8px;"></window-pixel>
+	<window-pixel style="left:8px; top:4px;"></window-pixel>
+	<window-pixel style="left:12px; top:8px;"></window-pixel>
+	<window-pixel style="left:16px; top:12px;"></window-pixel>
+</window-icon>
+)rml";
+		}
+
 		bool same_tag(const Rml::Element& element, string_view tag) {
-			return element.GetTagName() == Rml::String(tag);
+			return element.GetTagName() == tag;
 		}
 
 		bool false_attribute(const Rml::Element& element, const Rml::String& name) {
 			string value = element.GetAttribute<Rml::String>(name, "");
-			return rml_window_detail::false_attribute_value(value);
+			return false_attribute_value(value);
 		}
 
 		bool interactive_element(const Rml::Element& element) {
@@ -141,22 +328,37 @@ namespace lf {
 			return false;
 		}
 
-		bool manual_placement(const Rml::Element& element) {
+		bool authored_position_property(const Rml::Element& element, string_view property) {
+			if (inline_style_has_property(element, property)) {
+				return true;
+			}
+
+			const Rml::ComputedValues& values = element.GetComputedValues();
+			if (property == "left") {
+				return values.left().type != Rml::Style::LengthPercentageAuto::Auto;
+			}
+			if (property == "top") {
+				return values.top().type != Rml::Style::LengthPercentageAuto::Auto;
+			}
+			return false;
+		}
+
+		string placement_value(const Rml::Element& element) {
 			string placement = element.GetAttribute<Rml::String>("placement", "");
 			std::transform(placement.begin(), placement.end(), placement.begin(), [](unsigned char ch) {
 				return static_cast<char>(std::tolower(ch));
 			});
-			return placement == "manual" ||
-				inline_style_has_property(element, "left") ||
-				inline_style_has_property(element, "top");
+			return placement;
+		}
+
+		bool manual_placement(const Rml::Element& element) {
+			return placement_value(element) == "manual" ||
+				authored_position_property(element, "left") ||
+				authored_position_property(element, "top");
 		}
 
 		bool center_placement(const Rml::Element& element) {
-			string placement = element.GetAttribute<Rml::String>("placement", "");
-			std::transform(placement.begin(), placement.end(), placement.begin(), [](unsigned char ch) {
-				return static_cast<char>(std::tolower(ch));
-			});
-			return placement == "center";
+			return placement_value(element) == "center";
 		}
 
 		void reveal(Rml::Element& element) {
@@ -199,12 +401,52 @@ namespace lf {
 			return std::clamp(value, low, std::max(low, high));
 		}
 
+		void descendant_extent(Rml::Element& root, Rml::Element& element, f32& width, f32& height) {
+			for (int i = 0; i < element.GetNumChildren(); ++i) {
+				if (Rml::Element* child = element.GetChild(i)) {
+					if (same_tag(*child, "scrollbarvertical") || same_tag(*child, "scrollbarhorizontal")) {
+						continue;
+					}
+					const Rml::Box& box = child->GetBox();
+					const Rml::Vector2f margin_position = box.GetPosition(Rml::BoxArea::Margin);
+					const Rml::Vector2f margin_size = box.GetSize(Rml::BoxArea::Margin);
+					const f32 child_left = child->GetAbsoluteLeft() - root.GetAbsoluteLeft() + margin_position.x;
+					const f32 child_top = child->GetAbsoluteTop() - root.GetAbsoluteTop() + margin_position.y;
+					width = std::max(width, child_left + margin_size.x);
+					height = std::max(height, child_top + margin_size.y);
+					descendant_extent(root, *child, width, height);
+				}
+			}
+		}
+
+		f32 child_extent_width(Rml::Element& element) {
+			f32 width = 0.0f;
+			f32 height = 0.0f;
+			descendant_extent(element, element, width, height);
+			return width;
+		}
+
+		f32 child_extent_height(Rml::Element& element) {
+			f32 width = 0.0f;
+			f32 height = 0.0f;
+			descendant_extent(element, element, width, height);
+			return height;
+		}
+
 		f32 width_outside_content(Rml::Element& element) {
 			return std::max(0.0f, element.GetOffsetWidth() - element.GetBox().GetSize(Rml::BoxArea::Content).x);
 		}
 
 		f32 height_outside_content(Rml::Element& element) {
 			return std::max(0.0f, element.GetOffsetHeight() - element.GetBox().GetSize(Rml::BoxArea::Content).y);
+		}
+
+		f32 margin_width_outside_content(Rml::Element& element) {
+			return std::max(0.0f, element.GetBox().GetSize(Rml::BoxArea::Margin).x - element.GetBox().GetSize(Rml::BoxArea::Content).x);
+		}
+
+		f32 margin_height_outside_content(Rml::Element& element) {
+			return std::max(0.0f, element.GetBox().GetSize(Rml::BoxArea::Margin).y - element.GetBox().GetSize(Rml::BoxArea::Content).y);
 		}
 
 		f32 max_size_with_chrome(f32 max_content_size, f32 chrome_size) {
@@ -243,34 +485,6 @@ namespace lf {
 			return same_tag(target, "window-title") || find_ancestor(target.GetParentNode(), "window-title");
 		}
 
-		bool is_title_or_chrome_target(Rml::Element* target) {
-			return find_ancestor_class(target, "window-close-button") ||
-				find_ancestor_class(target, "window-collapse-button") ||
-				find_ancestor(target, "window-title");
-		}
-
-		ResizeEdge hit_collapsed_resize_edge(Rml::Element& window, pos2<f32> mouse) {
-			Rml::Element* title = find_child(window, "window-title");
-			if (!title) {
-				return ResizeEdge::None;
-			}
-
-			f32 local_x = mouse.x - window.GetAbsoluteLeft();
-			f32 local_y = mouse.y - window.GetAbsoluteTop();
-			if (local_y < -resize_hit_size || local_y > title->GetOffsetHeight() + resize_hit_size) {
-				return ResizeEdge::None;
-			}
-
-			f32 width = window.GetOffsetWidth();
-			if (local_x <= resize_hit_size) {
-				return ResizeEdge::West;
-			}
-			if (local_x >= width - resize_hit_size) {
-				return ResizeEdge::East;
-			}
-			return ResizeEdge::None;
-		}
-
 		void set_collapse_label(Rml::Element& window, bool collapsed) {
 			Rml::Element* title = find_child(window, "window-title");
 			if (!title) {
@@ -282,8 +496,8 @@ namespace lf {
 			}
 
 			button->SetInnerRML(Rml::String(collapsed ?
-				rml_window_detail::collapse_up_icon_rml() :
-				rml_window_detail::collapse_down_icon_rml()));
+				collapse_up_icon_rml() :
+				collapse_down_icon_rml()));
 		}
 
 		class ElementWindow final : public Rml::Element, public Rml::EventListener {
@@ -307,7 +521,6 @@ namespace lf {
 
 			struct Interaction {
 				Operation operation;
-				ResizeEdge resize_edge = ResizeEdge::None;
 				pos2<f32> grab{};
 				f32 start_left = 0.0f;
 				f32 start_top = 0.0f;
@@ -341,6 +554,7 @@ namespace lf {
 			void install_chrome();
 			void install_handles();
 			bool closable() const;
+			void fit_to_content();
 
 			void raise_when_visible();
 			void apply_default_position();
@@ -368,6 +582,7 @@ namespace lf {
 		};
 
 		ElementWindow::ElementWindow(const Rml::String& tag) : Rml::Element(tag) {
+			SetAttribute("tabindex", "0");
 			SetClass("window-measuring", true);
 			AddEventListener("mousedown", this, true);
 			AddEventListener("click", this, true);
@@ -408,6 +623,7 @@ namespace lf {
 			Rml::Element::OnLayout();
 			install_chrome();
 			install_handles();
+			fit_to_content();
 			if (!interaction) {
 				apply_default_position();
 				if (default_position_applied) {
@@ -422,6 +638,10 @@ namespace lf {
 			install_chrome();
 			install_handles();
 			if (!interaction) {
+				if (center_placement(*this)) {
+					apply_default_position();
+					return;
+				}
 				if (normalized_position) {
 					maintain_normalized_position();
 				} else {
@@ -475,7 +695,7 @@ namespace lf {
 				if (close) {
 					close->SetClass("window-close-button", true);
 					style_chrome_button(*close, 10.0f);
-					close->SetInnerRML(Rml::String(rml_window_detail::close_icon_rml()));
+					close->SetInnerRML(Rml::String(close_icon_rml()));
 					title->AppendChild(std::move(close), true);
 				}
 			}
@@ -485,7 +705,7 @@ namespace lf {
 				if (collapse) {
 					collapse->SetClass("window-collapse-button", true);
 					style_chrome_button(*collapse, 45.0f);
-					collapse->SetInnerRML(Rml::String(rml_window_detail::collapse_down_icon_rml()));
+					collapse->SetInnerRML(Rml::String(collapse_down_icon_rml()));
 					title->AppendChild(std::move(collapse), true);
 				}
 			}
@@ -495,21 +715,53 @@ namespace lf {
 			return !false_attribute(*this, "closable") && !false_attribute(*this, "window-close");
 		}
 
+		void ElementWindow::fit_to_content() {
+			if (manually_resized || interaction || IsClassSet("window-collapsed")) {
+				return;
+			}
+
+			Rml::Element* title = find_child(*this, "window-title");
+			Rml::Element* body = find_child(*this, "window-body");
+			if (!title || !body || body->GetNumChildren() == 0) {
+				return;
+			}
+
+			const f32 body_width = child_extent_width(*body);
+			const f32 body_height = child_extent_height(*body);
+			if (body_width <= 0.0f || body_height <= 0.0f) {
+				return;
+			}
+
+			const f32 content_width = body_width + margin_width_outside_content(*body);
+			const f32 content_height = title->GetOffsetHeight() + body_height + margin_height_outside_content(*body);
+			const ResizeLimits limits = resize_limits(*this);
+			const f32 width_extra = width_outside_content(*this);
+			const f32 height_extra = height_outside_content(*this);
+			const f32 width = clamp_range(content_width + width_extra, limits.min_width, limits.max_width);
+			const f32 height = clamp_range(content_height + height_extra, limits.min_height, limits.max_height);
+			const std::optional<Rml::String> authored_width = local_property(*this, "width");
+			const bool preserve_width = authored_width && authored_width->find('%') != Rml::String::npos;
+
+			if (!preserve_width && std::abs(width - GetOffsetWidth()) > 0.5f) {
+				set_px(*this, "width", std::max(0.0f, width - width_extra));
+			}
+			if (std::abs(height - GetOffsetHeight()) > 0.5f) {
+				set_px(*this, "height", std::max(0.0f, height - height_extra));
+			}
+		}
+
 		void ElementWindow::install_handles() {
 			if (find_child(*this, "window-resize")) {
 				return;
 			}
 
-			static constexpr string_view directions[] = { "n", "ne", "e", "se", "s", "sw", "w", "nw" };
-			for (string_view direction : directions) {
-				Rml::ElementPtr handle = Rml::Factory::InstanceElement(this, "*", "window-resize", Rml::XMLAttributes());
-				if (!handle) {
-					continue;
-				}
-				handle->SetAttribute("direction", Rml::String(direction));
-				handle->SetClass("window-resize", true);
-				AppendChild(std::move(handle), true);
+			Rml::ElementPtr handle = Rml::Factory::InstanceElement(this, "*", "window-resize", Rml::XMLAttributes());
+			if (!handle) {
+				return;
 			}
+			handle->SetAttribute("direction", "se");
+			handle->SetClass("window-resize", true);
+			AppendChild(std::move(handle), true);
 		}
 
 		void ElementWindow::raise_when_visible() {
@@ -527,15 +779,27 @@ namespace lf {
 			context_dimensions(context_width, context_height);
 			const bool should_center = center_placement(*this);
 
-			if (!should_center) {
-				if (default_position_applied) {
-					return;
+			if (should_center) {
+				if (context_width > 0.0f && context_height > 0.0f &&
+					GetOffsetWidth() > 0.0f && GetOffsetHeight() > 0.0f) {
+					const f32 left = std::max(8.0f, (context_width - GetOffsetWidth()) * 0.5f);
+					const f32 top = std::max(8.0f, (context_height - GetOffsetHeight()) * 0.5f);
+					set_px(*this, "left", left);
+					set_px(*this, "top", top);
 				}
-				if (manual_placement(*this)) {
-					default_position_applied = true;
-					reveal(*this);
-					return;
-				}
+				default_position_applied = true;
+				reveal(*this);
+				return;
+			}
+
+			if (default_position_applied) {
+				reveal(*this);
+				return;
+			}
+			if (manual_placement(*this)) {
+				default_position_applied = true;
+				reveal(*this);
+				return;
 			}
 
 			if (context_width <= 0.0f || context_height <= 0.0f ||
@@ -543,11 +807,11 @@ namespace lf {
 				return;
 			}
 
-			default_position_applied = true;
 			const f32 left = std::max(8.0f, (context_width - GetOffsetWidth()) * 0.5f);
 			const f32 top = std::max(8.0f, (context_height - GetOffsetHeight()) * 0.5f);
 			set_px(*this, "left", left);
 			set_px(*this, "top", top);
+			default_position_applied = true;
 			update_normalized_position();
 			reveal(*this);
 		}
@@ -639,7 +903,20 @@ namespace lf {
 			if (!center_placement(*this)) {
 				return;
 			}
+			Rml::Element* offset_parent = GetOffsetParent();
+			if (!offset_parent) {
+				offset_parent = GetParentNode();
+			}
+			const f32 parent_left = offset_parent ? offset_parent->GetAbsoluteLeft() : 0.0f;
+			const f32 parent_top = offset_parent ? offset_parent->GetAbsoluteTop() : 0.0f;
+			const f32 left = GetAbsoluteLeft() - parent_left;
+			const f32 top = GetAbsoluteTop() - parent_top;
+			set_string_property(*this, "position", "absolute");
+			set_px(*this, "left", left);
+			set_px(*this, "top", top);
+			SetOffset(Rml::Vector2f(left, top), offset_parent);
 			RemoveAttribute("placement");
+			update_normalized_position();
 		}
 
 		pos2<f32> ElementWindow::event_position(Rml::Event& event) const {
@@ -691,11 +968,9 @@ namespace lf {
 		}
 
 		void ElementWindow::begin_drag_or_resize(Rml::Element& target, pos2<f32> mouse) {
-			ResizeEdge target_resize_edge = ResizeEdge::None;
-			auto begin_interaction = [&](Operation operation, ResizeEdge resize_edge) {
+			auto begin_interaction = [&](Operation operation) {
 				interaction = Interaction{
 					operation,
-					resize_edge,
 					mouse,
 					GetOffsetLeft(),
 					GetOffsetTop(),
@@ -705,26 +980,19 @@ namespace lf {
 			};
 
 			if (IsClassSet("window-collapsed")) {
-				if (!false_attribute(*this, "resizable") && !has_interactive_ancestor(target)) {
-					target_resize_edge = hit_collapsed_resize_edge(*this, mouse);
-				}
-				if (target_resize_edge != ResizeEdge::None) {
-					begin_interaction(Operation::Resize, target_resize_edge);
-				} else if (is_title_drag_target(target)) {
-					begin_interaction(Operation::Drag, ResizeEdge::None);
+				if (is_title_drag_target(target)) {
+					begin_interaction(Operation::Drag);
 				}
 			} else if (!false_attribute(*this, "resizable")) {
 				if (Rml::Element* resize = find_ancestor(&target, "window-resize")) {
-					target_resize_edge = rml_window_detail::resize_edge_from_string(
-						resize->GetAttribute<Rml::String>("direction", ""));
-					if (target_resize_edge != ResizeEdge::None) {
-						begin_interaction(Operation::Resize, target_resize_edge);
+					if (resize->GetAttribute<Rml::String>("direction", "") == "se") {
+						begin_interaction(Operation::Resize);
 					}
 				}
 			}
 
 			if (!interaction && is_title_drag_target(target)) {
-				begin_interaction(Operation::Drag, ResizeEdge::None);
+				begin_interaction(Operation::Drag);
 			}
 
 			if (interaction) {
@@ -816,27 +1084,11 @@ namespace lf {
 			const f32 height_extra = height_outside_content(*this);
 			const ResizeLimits limits = resize_limits(*this);
 
-			f32 left = interaction->start_left;
-			f32 top = interaction->start_top;
-			f32 right = left + interaction->start_width;
-			f32 bottom = top + interaction->start_height;
+			const f32 width = clamp_range(interaction->start_width + delta_x, limits.min_width, limits.max_width);
+			const f32 height = clamp_range(interaction->start_height + delta_y, limits.min_height, limits.max_height);
 
-			if (rml_window_detail::has_resize_edge(interaction->resize_edge, ResizeEdge::West)) {
-				left = right - clamp_range(interaction->start_width - delta_x, limits.min_width, limits.max_width);
-			}
-			if (rml_window_detail::has_resize_edge(interaction->resize_edge, ResizeEdge::East)) {
-				right = left + clamp_range(interaction->start_width + delta_x, limits.min_width, limits.max_width);
-			}
-			if (rml_window_detail::has_resize_edge(interaction->resize_edge, ResizeEdge::North)) {
-				top = bottom - clamp_range(interaction->start_height - delta_y, limits.min_height, limits.max_height);
-			}
-			if (rml_window_detail::has_resize_edge(interaction->resize_edge, ResizeEdge::South)) {
-				bottom = top + clamp_range(interaction->start_height + delta_y, limits.min_height, limits.max_height);
-			}
-
-			set_window_position(left, top);
-			set_px(*this, "width", std::max(0.0f, right - left - width_extra));
-			set_px(*this, "height", std::max(0.0f, bottom - top - height_extra));
+			set_px(*this, "width", std::max(0.0f, width - width_extra));
+			set_px(*this, "height", std::max(0.0f, height - height_extra));
 			manually_resized = true;
 			clamp_to_context();
 			update_normalized_position();
@@ -862,6 +1114,7 @@ namespace lf {
 		}
 
 		void ElementWindow::focus() {
+			Focus(true);
 			const i32 z_index = next_window_z_index();
 			if (Rml::ElementDocument* document = GetOwnerDocument()) {
 				Rml::ElementList windows;
@@ -877,21 +1130,47 @@ namespace lf {
 
 			SetProperty("z-index", Rml::String(format("{}", z_index)));
 		}
+}
+
+namespace lf {
+	string install_window_defaults(string_view source) {
+		constexpr string_view marker = "window-defaults";
+		if (source.find(marker) != string_view::npos) {
+			return string(source);
+		}
+
+		constexpr string_view head_open = "<head>";
+		size_t insert_at = source.find(head_open);
+		if (insert_at != string_view::npos) {
+			insert_at += head_open.size();
+		} else {
+			insert_at = source.find("</head>");
+		}
+		if (insert_at == string_view::npos) {
+			return string(detail::default_window_styles()) + string(source);
+		}
+
+		string out;
+		out.reserve(source.size() + detail::default_window_styles().size());
+		out += source.substr(0, insert_at);
+		out += detail::default_window_styles();
+		out += source.substr(insert_at);
+		return out;
 	}
 
-	void RegisterRmlWindowElement() {
-		static Rml::ElementInstancerGeneric<ElementWindow> instancer;
+	void RegisterWindowElement() {
+		static Rml::ElementInstancerGeneric<detail::ElementWindow> instancer;
 		static std::once_flag registered;
 		std::call_once(registered, [] {
 			Rml::Factory::RegisterElementInstancer("window", &instancer);
 		});
 	}
 
-	void ReleaseRmlWindowDocumentEvents(Rml::ElementDocument& document) {
+	void ReleaseWindowDocumentEvents(Rml::ElementDocument& document) {
 		Rml::ElementList windows;
 		document.GetElementsByTagName(windows, "window");
 		for (Rml::Element* element : windows) {
-			if (auto* window = rmlui_dynamic_cast<ElementWindow*>(element)) {
+			if (auto* window = rmlui_dynamic_cast<detail::ElementWindow*>(element)) {
 				window->cancel_document_interaction();
 			}
 		}

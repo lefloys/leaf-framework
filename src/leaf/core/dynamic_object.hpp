@@ -13,6 +13,11 @@
 #include <utility>
 #include <variant>
 
+namespace YAML {
+	class Emitter;
+	class Node;
+}
+
 namespace lf {
 
 	template <typename T, typename Variant>
@@ -96,6 +101,9 @@ namespace lf {
 
 		template <typename T>
 		T parse() const;
+
+		template <typename Visitor>
+		decltype(auto) visit(Visitor&& visitor) const;
 	};
 
 	template <typename T>
@@ -186,6 +194,14 @@ namespace lf {
 	T object::parse() const {
 		return object_trait<T>::parse(*this);
 	}
+
+	template <typename Visitor>
+	decltype(auto) object::visit(Visitor&& visitor) const {
+		return std::visit(std::forward<Visitor>(visitor), *static_cast<const object_underlying*>(this));
+	}
+
+	void EmitYaml(YAML::Emitter& out, const object& value);
+	object ObjectFromYaml(const YAML::Node& node);
 } // namespace lf
 
 namespace lf {

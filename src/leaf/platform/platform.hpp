@@ -27,6 +27,7 @@ namespace lf {
 
 	error init_platform(span<string_view> args);
 	void exit_platform();
+	string_view platform_backend_name();
 
 	PlatformWindow* create_platform_window(const PlatformWindowCreateInfo& info);
 	void destroy_platform_window(PlatformWindow* window);

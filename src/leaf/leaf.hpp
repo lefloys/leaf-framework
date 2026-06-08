@@ -2,6 +2,7 @@
 
 #include "core/error.hpp"
 #include "core/span.hpp"
+#include "core/string.hpp"
 
 #include <leaf/application/application.hpp>
 #include <leaf/graphics/buffer.hpp>
@@ -21,6 +22,11 @@
 #include <leaf/pmg/pmg.hpp>
 
 namespace lf {
+	struct InitOptions {
+		bool portable_user_data = false;
+		string_view appdata_folder_name = {};
+	};
+
 	/*!
 	** @brief Initializes Leaf's global systems.
 	** @param args Command line arguments passed to the process.
@@ -30,6 +36,7 @@ namespace lf {
 	** framework-level setup.
 	*/
 	error Init(span<string_view> args);
+	error Init(span<string_view> args, InitOptions options);
 
 	/*!
 	** @brief Initializes Leaf without headed window/RML application support.
@@ -40,6 +47,7 @@ namespace lf {
 	** platform windows and swapchain-backed UI systems.
 	*/
 	error InitHeadless(span<string_view> args);
+	error InitHeadless(span<string_view> args, InitOptions options);
 
 	/*!
 	** @brief Advances framework-level work for one host iteration.

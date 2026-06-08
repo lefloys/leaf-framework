@@ -11,6 +11,11 @@
 #include <cstdlib>
 
 namespace lf {
+	namespace {
+		bool active_headless = false;
+		string active_layer_summary = "none";
+	}
+
 	void rutile_log_output(const char* message, void*) {
 		if (!message || !message[0]) {
 			return;
@@ -42,6 +47,24 @@ namespace lf {
 		const char* layers[2] = {};
 		u32 layer_count = 0;
 	};
+
+	string rutile_layer_summary(const RutileLoadOptions& options) {
+		string result;
+		for (u32 i = 0; i < options.layer_count; ++i) {
+			if (i != 0) {
+				result += ", ";
+			}
+			string_view layer = options.layers[i];
+			if (layer == "RT_VALIDATION") {
+				result += "validation";
+			} else if (layer == "RT_LOGGING_LAYER") {
+				result += "logging";
+			} else {
+				result += layer;
+			}
+		}
+		return result.empty() ? "none" : result;
+	}
 
 	error rutile_init_error() {
 		enum rt_error init_error = rtError();
@@ -112,40 +135,65 @@ namespace lf {
 			return options.error();
 		}
 
+		log::Debug("Graphics init: requested_backend='{}' headless={} layers={}",
+				   options->backend_name,
+				   headless ? "true" : "false",
+				   options->layer_count);
+		for (u32 i = 0; i < options->layer_count; ++i) {
+			log::Debug("Graphics layer[{}]='{}'", i, options->layers[i]);
+		}
 		if (rtLoad(options->backend_name, options->layers, options->layer_count) != RT_SUCCESS) {
+			log::Error("Failed to load graphics backend '{}'", options->backend_name);
 			return error(generic_errc::unknown, "rtLoad failed");
 		}
+		log::Debug("Loaded graphics backend '{}'", options->backend_name);
 		rtSetOutput(rutile_log_output, nullptr);
 		if (!rtLoad_RT_EXT_COMPUTE()) {
 			rtUnload();
 			return error(generic_errc::unknown, "required Rutile compute extension is not available");
 		}
+		log::Debug("Loaded Rutile compute extension");
 
 		if (!headless) {
 			if (!rtLoad_RT_EXT_SWAPCHAIN() || !rtLoad_RT_EXT_GLFW()) {
 				rtUnload();
 				return error(generic_errc::unknown, "required Rutile presentation extensions are not available");
 			}
+			log::Debug("Loaded Rutile swapchain and GLFW presentation extensions");
 		}
 
 		if (headless) {
+			log::Debug("Calling rtInit without presentation features");
 			rtInit(nullptr, 0);
 		} else {
 			const char* features[] = { RT_FEATURE_PRESENTATION };
+			log::Debug("Calling rtInit with presentation feature");
 			rtInit(features, 1);
 		}
 
 		error err = rutile_init_error();
 		if (err) {
+			log::Error("Graphics initialization failed: {}", err.message);
 			rtUnload();
 			return err;
 		}
+		active_headless = headless;
+		active_layer_summary = rutile_layer_summary(*options);
 		return error::no_error;
 	}
 
+	void LogGraphicsInfo() {
+		log::Info("[graphics] backend: {}", graphics_backend_name());
+		log::Info("[graphics] features: {}", active_headless ? "none" : "presentation");
+		log::Info("[graphics] extensions: compute");
+		log::Info("[graphics] layers: {}", active_layer_summary);
+	}
+
 	void exit_graphics() {
+		log::Debug("Shutting down graphics: {}", graphics_backend_name());
 		rtExit();
 		rtUnload();
+		log::Debug("Graphics shutdown complete");
 	}
 
 	string_view graphics_backend_name() {

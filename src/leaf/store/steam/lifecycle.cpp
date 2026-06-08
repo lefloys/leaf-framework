@@ -23,6 +23,10 @@ namespace lf {
 		return error::no_error;
 	}
 
+	string_view store_backend_name() {
+		return "steam";
+	}
+
 	void update_store() {
 		SteamAPI_RunCallbacks();
 	}

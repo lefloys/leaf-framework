@@ -150,9 +150,11 @@ namespace lf {
 	}
 
 	handle<window> Window::Create() {
+		log::Debug("Creating window title='{}' size={}x{}", detail::default_window_title, detail::default_window_size.width, detail::default_window_size.height);
 		std::unique_ptr<window_t> window = std::make_unique<window_t>();
 		window->swapchain = rtSwapchainCreate();
 		detail::check_rutile_error("failed to create swapchain");
+		log::Debug("Created swapchain {}", static_cast<const void*>(window->swapchain));
 
 		window->frame_command_buffer = unique<command_buffer>(CommandBuffer::Create());
 		window->platform = create_platform_window({
@@ -166,20 +168,33 @@ namespace lf {
 		platform_window_owner(window->platform, window.get());
 
 		bind_platform_window_swapchain(window->platform, window->swapchain);
+		log::Debug("Window created platform={} swapchain={} position={}x{} size={}x{}",
+				  static_cast<const void*>(window->platform),
+				  static_cast<const void*>(window->swapchain),
+				  window->windowed_position.x,
+				  window->windowed_position.y,
+				  window->windowed_size.width,
+				  window->windowed_size.height);
 		return { window.release() };
 	}
 
 	void Window::Destroy(handle<window> window) {
+		log::Debug("Destroying window platform={} swapchain={}",
+				  static_cast<const void*>(window.value->platform),
+				  static_cast<const void*>(window.value->swapchain));
 		window.value->current_framebuffer = {};
 		window.value->current_queue = {};
 		delete window.value;
 	}
 
 	void Window::SetTitle(view<window> window, string_view title) {
+		log::Debug("Window title set to '{}'", title);
 		platform_window_title(window.value->platform, title);
 	}
 
 	void Window::Show(view<window> window) {
+		dim2<u32> size = Size(window);
+		log::Debug("Showing window size={}x{} fullscreen={}", size.width, size.height, window.value->fullscreen ? "true" : "false");
 		platform_window_show(window.value->platform);
 	}
 
@@ -191,6 +206,7 @@ namespace lf {
 		}
 		window.value->resize(size);
 		platform_window_size(window.value->platform, size);
+		log::Debug("Window width set to {}; size={}x{}", width, size.width, size.height);
 	}
 
 	void Window::SetHeight(view<window> window, u32 height) {
@@ -204,12 +220,19 @@ namespace lf {
 		}
 		window.value->resize(size);
 		platform_window_size(window.value->platform, size);
+		log::Debug("Window height set to {}; size={}x{}", height, size.width, size.height);
 	}
 
 	void Window::SetFullscreen(view<window> window, bool fullscreen) {
 		if (window.value->fullscreen == fullscreen) {
 			return;
 		}
+		dim2<u32> before = platform_window_size(window.value->platform);
+		log::Debug("Changing fullscreen {} -> {} from size={}x{}",
+				  window.value->fullscreen ? "true" : "false",
+				  fullscreen ? "true" : "false",
+				  before.width,
+				  before.height);
 		if (fullscreen) {
 			window.value->windowed_position = platform_window_position(window.value->platform);
 			window.value->windowed_size = platform_window_size(window.value->platform);
@@ -221,6 +244,8 @@ namespace lf {
 			window.value->windowed_size);
 		window.value->resize(platform_window_size(window.value->platform));
 		window.value->fullscreen = fullscreen;
+		dim2<u32> after = Window::Size(window);
+		log::Debug("Fullscreen change applied; size={}x{}", after.width, after.height);
 	}
 
 	void Window::SetVsync(view<window> window, bool enabled) {
@@ -241,6 +266,7 @@ namespace lf {
 		std::lock_guard lock(window.value->input_mutex);
 		window.value->requested_fullscreen = fullscreen;
 		window.value->fullscreen_change_requested = true;
+		log::Debug("Fullscreen request queued: {}", fullscreen ? "true" : "false");
 	}
 
 	bool Window::FullscreenRequestPending(view<window> window) {
@@ -389,6 +415,7 @@ namespace lf {
 		}
 		if (resize.width != 0 && resize.height != 0) {
 			LF_PROFILE_SCOPE("Window::ResizeSwapchain");
+			log::Debug("Resizing swapchain to {}x{}", resize.width, resize.height);
 			rtSwapchainResize(window.value->swapchain, resize.width, resize.height);
 			detail::check_rutile_error("failed to resize swapchain");
 		}

@@ -1,30 +1,13 @@
 #pragma once
 
 #include "leaf/core/error.hpp"
+#include "leaf/core/dynamic_object.hpp"
 #include "leaf/script/localization.hpp"
 #include "leaf/script/mod_info.hpp"
 
 #include <functional>
 
 namespace lf {
-	/*!
-	** @ingroup modding
-	** @brief Scene entry point requested by loaded mod options.
-	*/
-	struct SceneOption {
-		string path;
-	};
-
-	/*!
-	** @ingroup modding
-	** @brief Runtime options assembled from loaded mod metadata.
-	*/
-	struct ModOptions {
-		SceneOption main_scene;
-		string language = string(default_language);
-		vector<ModInfo> mods;
-	};
-
 	/*!
 	** @ingroup modding
 	** @brief Optional progress callback used while loading mods.
@@ -44,9 +27,15 @@ namespace lf {
 
 	/*!
 	** @ingroup modding
-	** @brief Gets the options produced by the most recent successful mod load.
+	** @brief Gets the raw option table produced by the most recent successful mod load.
 	*/
-	const ModOptions& LoadedModOptions();
+	const object& LoadedModOptions();
+
+	/*!
+	** @ingroup modding
+	** @brief Gets the main menu scene path selected by loaded mod data.
+	*/
+	string_view LoadedMainScenePath();
 
 	/*!
 	** @ingroup modding

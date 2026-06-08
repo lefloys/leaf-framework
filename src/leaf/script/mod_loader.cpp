@@ -8,24 +8,96 @@
 #include <leaf/logging/logging.hpp>
 
 #include <sol/sol.hpp>
+#include <yaml-cpp/yaml.h>
 
 #include <cmath>
 #include <algorithm>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <unordered_map>
 #include <utility>
 
 namespace lf {
-	namespace {
-		ModOptions& loaded_options() {
-			static ModOptions options;
-			return options;
+	namespace detail {
+		struct ModSettings {
+			std::unordered_map<string, object> values;
+			std::unordered_map<string, string> input;
+		};
+
+		object loaded_options;
+		vector<ModInfo> loaded_mods;
+		string loaded_main_scene_path;
+		dict loaded_startup_settings;
+		std::unordered_map<string, ModSettings> loaded_settings;
+
+		fs::path settings_path(string_view mod_name) {
+			return fs::folder::appdata / "settings" / (string(mod_name.empty() ? "core" : mod_name) + ".yaml");
 		}
 
-		dict& loaded_startup_settings() {
-			static dict settings;
+		error write_mod_settings(string_view mod_name) {
+			const fs::path path = settings_path(mod_name);
+			std::error_code ec;
+			fs::create_directories(path.parent_path(), ec);
+			if (ec) {
+				return error(generic_errc::input_error, format("failed to create '{}': {}", path.parent_path().string(), ec.message()));
+			}
+
+			const ModSettings& settings = loaded_settings[string(mod_name)];
+			YAML::Emitter out;
+			out << YAML::BeginMap;
+			out << YAML::Key << "settings" << YAML::Value << YAML::BeginMap;
+			for (const auto& [name, value] : settings.values) {
+				out << YAML::Key << name << YAML::Value;
+				EmitYaml(out, value);
+			}
+			out << YAML::EndMap;
+			out << YAML::Key << "input" << YAML::Value << YAML::BeginMap;
+			for (const auto& [action, key] : settings.input) {
+				out << YAML::Key << action << YAML::Value << key;
+			}
+			out << YAML::EndMap;
+			out << YAML::EndMap;
+			std::ofstream file(path, std::ios::binary);
+			if (!file) {
+				return error(generic_errc::input_error, format("failed to write '{}'", path.string()));
+			}
+			file << out.c_str();
+			return file ? error::no_error : error(generic_errc::input_error, format("failed to write '{}'", path.string()));
+		}
+
+		report<ModSettings> read_mod_settings(string_view mod_name) {
+			ModSettings settings;
+			const fs::path path = settings_path(mod_name);
+			if (!fs::exists(path)) {
+				return settings;
+			}
+
+			try {
+				YAML::Node root = YAML::LoadFile(path.string());
+				if (YAML::Node values = root["settings"]) {
+					for (const auto& entry : values) {
+						settings.values[entry.first.as<string>()] = ObjectFromYaml(entry.second);
+					}
+				}
+				if (YAML::Node input = root["input"]) {
+					for (const auto& entry : input) {
+						settings.input[entry.first.as<string>()] = entry.second.as<string>();
+					}
+				}
+			} catch (const YAML::Exception& e) {
+				return unexpected(error(generic_errc::parse_error, format("loading '{}': {}", path.string(), e.what())));
+			}
 			return settings;
+		}
+
+		error load_mod_settings_cache(string_view mod_name) {
+			auto settings = read_mod_settings(mod_name);
+			if (!settings) {
+				return settings.error();
+			}
+			loaded_settings[string(mod_name)] = std::move(*settings);
+			return error::no_error;
 		}
 	}
 
@@ -203,6 +275,17 @@ namespace lf {
 		default: return format("<{}>", sol_type_name(v.get_type()));
 		}
 	}
+
+	string sol_setting_to_string(const sol::object& v) {
+		using sol::type;
+		switch (v.get_type()) {
+		case type::boolean: return v.as<bool>() ? "true" : "false";
+		case type::number: return format("{}", v.as<double>());
+		case type::string: return v.as<string>();
+		default: return sol_object_to_string(v);
+		}
+	}
+
 	object sol_to_object(const sol::object& v) {
 		using sol::type;
 		switch (v.get_type()) {
@@ -289,6 +372,60 @@ namespace lf {
 		}
 		return s;
 	}
+	const char* dependency_type_name(ModDependency::Type type) {
+		switch (type) {
+		case ModDependency::Type::Required: return "required";
+		case ModDependency::Type::Optional: return "optional";
+		case ModDependency::Type::Forbidden: return "forbidden";
+		default: return "unknown";
+		}
+	}
+	string dependency_to_string(const ModDependency& dependency) {
+		return format("{} {} {} {}", dependency_type_name(dependency.type),
+					  dependency.name,
+					  operator_to_string(dependency.op),
+					  version_to_string(dependency.required_version));
+	}
+	string dependencies_to_string(const vector<ModDependency>& dependencies) {
+		if (dependencies.empty()) {
+			return "none";
+		}
+		string result;
+		for (size_t i = 0; i < dependencies.size(); ++i) {
+			if (i != 0) {
+				result += "; ";
+			}
+			result += dependency_to_string(dependencies[i]);
+		}
+		return result;
+	}
+	string prototype_counts_to_string() {
+		string result;
+		for (const auto& fn : PrototypeTypeRegistry::functions) {
+			const size_t count = fn.count();
+			if (count == 0) {
+				continue;
+			}
+			if (!result.empty()) {
+				result += ", ";
+			}
+			result += string(fn.type()) + "=" + std::to_string(count);
+		}
+		return result.empty() ? "none" : result;
+	}
+	string mod_names_to_string(span<const ModInfo> mods) {
+		if (mods.empty()) {
+			return "none";
+		}
+		string result;
+		for (size_t i = 0; i < mods.size(); ++i) {
+			if (i != 0) {
+				result += ", ";
+			}
+			result += mods[i].name;
+		}
+		return result;
+	}
 	void report_mod_progress(ModLoadProgress* progress, string stage, f32 stage_progress, string process, f32 process_progress) {
 		if (progress && progress->report) {
 			progress->report(std::move(stage), stage_progress, std::move(process), process_progress);
@@ -344,7 +481,7 @@ settings["startup"] = {}
 			lua["data"]["raw"][type.type()] = lua.create_table();
 		}
 		sol::table startup = lua["settings"]["startup"];
-		for (const auto& [name, value] : loaded_startup_settings()) {
+		for (const auto& [name, value] : detail::loaded_startup_settings) {
 			sol::table setting = lua.create_table();
 			set_lua_value(setting, "value", value);
 			startup[name] = setting;
@@ -364,16 +501,19 @@ settings["startup"] = {}
 		fs::path path = mod.location / string(file_name);
 		if (!fs::exists(path)) {
 			if (required) {
+				log::Error("{}", format("[mod-loader] missing required script: {}/{} ({})", mod.name, file_name, path.string()));
 				return error(generic_errc::input_error, "Missing required prototype script " + mod.name + "/" + string(file_name));
 			}
+			log::Debug("{}", format("[mod-loader] script skipped: {}/{} (missing optional)", mod.name, file_name));
 			return error::no_error;
 		}
 
 		try {
 			DataScriptRunner runner(lua);
 			lua["__leaf_current_mod"] = mod.name;
+			log::Debug("{}", format("[mod-loader] script begin: {}/{} ({})", mod.name, file_name, path.string()));
 			runner.run_file(mod.name + "/" + string(file_name), path, mod.location);
-			log::Trace("{}", format("[mod-loader] loaded: {}/{}", mod.name, file_name));
+			log::Info("{}", format("[mod-loader] script: \"{}\"/{}", mod.name, file_name));
 			return error::no_error;
 		} catch (const lf::exception& e) {
 			log::Error("{}", format("[mod-loader] error: {}/{}: {}", mod.name, file_name, e.what()));
@@ -381,12 +521,15 @@ settings["startup"] = {}
 		}
 	}
 
-	void initialize_settings_lua(sol::state& lua, AppSettings& settings) {
+	void initialize_settings_lua(
+		sol::state& lua,
+		vector<std::pair<string, object>>& setting_defaults,
+		vector<std::pair<string, string>>& input_defaults) {
 		lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
-		lua.set_function("__leaf_set_local_input_binding", [&settings](string_view action, string_view key) {
-			settings.input.bindings[string(action)] = string(key);
+		lua.set_function("__leaf_set_local_input_binding", [&input_defaults](string_view action, string_view key) {
+			input_defaults.emplace_back(string(action), string(key));
 		});
-		lua.set_function("__leaf_declare_setting", [&settings](string_view type, string_view name, string_view setting_type, sol::object default_value) {
+		lua.set_function("__leaf_declare_setting", [&setting_defaults, &input_defaults](string_view type, string_view name, string_view setting_type, sol::object default_value) {
 			if (name.empty()) {
 				throw runtime_exception(format("{} is missing name", type));
 			}
@@ -396,13 +539,15 @@ settings["startup"] = {}
 
 			object value = sol_to_object(default_value);
 			if (setting_type == "startup") {
-				loaded_startup_settings()[string(name)] = value;
+				detail::loaded_startup_settings[string(name)] = value;
 			}
 			if (type == "input-setting") {
 				if (setting_type != "runtime-per-user") {
 					throw runtime_exception(format("input-setting '{}' must use setting_type='runtime-per-user'", name));
 				}
-				settings.input.bindings[string(name)] = value.as<string>();
+				input_defaults.emplace_back(string(name), value.as<string>());
+			} else if (setting_type == "runtime-per-user") {
+				setting_defaults.emplace_back(string(name), sol_to_object(default_value));
 			}
 		});
 		lua.script(R"(
@@ -475,30 +620,25 @@ end
 
 	error sync_loaded_mod_settings(span<const ModInfo> mods) {
 		for (const ModInfo& mod : mods) {
-			AppSettings settings;
-			fs::path path = ModSettingsPath(mod.name);
-			if (fs::exists(path)) {
-				auto loaded = LoadAppSettings(path);
-				if (!loaded) {
-					return loaded.error().add_context(format("loading '{}'", path.string()));
-				}
-				settings = *loaded;
-			} else {
-				settings = DefaultAppSettings();
+			if (error err = detail::load_mod_settings_cache(mod.name)) {
+				return err.add_context(format("loading settings for '{}'", mod.name));
 			}
-
-			AppSettings defaults = DefaultAppSettings();
+			log::Debug("{}", format("[mod-loader] settings sync: {}", mod.name));
+			vector<std::pair<string, object>> setting_defaults;
+			vector<std::pair<string, string>> input_defaults;
 			sol::state lua;
-			initialize_settings_lua(lua, defaults);
+			initialize_settings_lua(lua, setting_defaults, input_defaults);
 			if (error err = load_prototype_script(lua, mod, "settings.lua")) {
 				return err.add_context("loading settings defaults");
 			}
-			for (const auto& [action, key] : defaults.input.bindings) {
-				settings.input.bindings.try_emplace(action, key);
+			for (const auto& [action, key] : input_defaults) {
+				detail::loaded_settings[mod.name].input.try_emplace(action, key);
 			}
-
-			if (error err = SaveAppSettings(path, settings)) {
-				return err.add_context(format("saving '{}'", path.string()));
+			for (const auto& [name, value] : setting_defaults) {
+				detail::loaded_settings[mod.name].values.try_emplace(name, value);
+			}
+			if (error err = detail::write_mod_settings(mod.name)) {
+				return err.add_context(format("saving settings for '{}'", mod.name));
 			}
 		}
 		return error::no_error;
@@ -533,9 +673,14 @@ end
 		}
 	}
 	error sort_mods_by_dependency(vector<ModInfo>& mods) {
+		log::Debug("{}", format("[mod-loader] dependency resolution begin: {} enabled mod(s)", mods.size()));
 		std::unordered_map<string, size_t> mod_index;
 		for (size_t i = 0; i < mods.size(); ++i) {
 			mod_index[mods[i].name] = i;
+			log::Debug("{}", format("[mod-loader] dependency input: {} v{} deps=[{}]",
+									mods[i].name,
+									version_to_string(mods[i].mod_version),
+									dependencies_to_string(mods[i].dependencies)));
 		}
 
 		std::vector<std::vector<size_t>> graph(mods.size());
@@ -573,6 +718,7 @@ end
 						}
 						// Reverse edge: dependency -> mod
 						graph[it->second].push_back(i);
+						log::Debug("{}", format("[mod-loader] dependency edge: {} -> {}", dep.name, mods[i].name));
 					} else if (dep.type == ModDependency::Type::Required) {
 						// Required dependency missing
 						string msg = "Mod '" + mods[i].name + "' requires mod '" + dep.name +
@@ -587,6 +733,7 @@ end
 		if (!errors.empty()) {
 			string all_errors;
 			for (const auto& e : errors) {
+				log::Error("{}", format("[mod-loader] dependency error: {}", e));
 				all_errors += e + "\n";
 			}
 			return error(generic_errc::unknown, all_errors);
@@ -640,6 +787,10 @@ end
 			sorted.push_back(std::move(mods[idx]));
 		}
 		mods = std::move(sorted);
+		log::Debug("{}", "[mod-loader] dependency resolution complete");
+		for (size_t i = 0; i < mods.size(); ++i) {
+			log::Debug("{}", format("[mod-loader] load-order[{}]: {} v{}", i + 1, mods[i].name, version_to_string(mods[i].mod_version)));
+		}
 		return error::no_error;
 	}
 
@@ -657,6 +808,7 @@ end
 					return error(generic_errc::type_mismatch, "data.raw." + string(fn.type()) + " must be a table/dict");
 				}
 				dict& type_table = it->second.get<dict>();
+				log::Debug("{}", format("[mod-loader] prototypes begin: type={} incoming={}", fn.type(), type_table.size()));
 				fn.reserve(type_table.size());
 				vector<string> names;
 				names.reserve(type_table.size());
@@ -678,60 +830,62 @@ end
 						return error(generic_errc::parse_error, e.what()).add_context(lf::format("creating prototype '{}' (type:{})", name, fn.type()));
 					}
 				}
+				log::Debug("{}", format("[mod-loader] prototypes loaded: type={} total={}", fn.type(), fn.count()));
 			}
 		}
 		return error::no_error;
 	}
 
 	error LoadOptions(const sol::state& lua) {
-		ModOptions options;
-
 		sol::object option_obj = lua["option"];
 		if (!option_obj.is<sol::table>()) {
 			return error(generic_errc::missing_field, "missing required global 'option'");
 		}
+
+		detail::loaded_options = sol_to_object(option_obj);
 
 		sol::table option = option_obj.as<sol::table>();
 		sol::object scene_obj = option["scene"];
 		if (!scene_obj.is<sol::table>()) {
 			return error(generic_errc::missing_field, "missing required option.scene table");
 		}
-
 		sol::table scene = scene_obj.as<sol::table>();
 		sol::object main_obj = scene["main"];
 		if (!main_obj.is<sol::table>()) {
 			return error(generic_errc::missing_field, "missing required option.scene.main table");
 		}
-
 		sol::table main = main_obj.as<sol::table>();
 		sol::object path_obj = main["path"];
 		if (!path_obj.is<string>()) {
 			return error(generic_errc::type_mismatch, "option.scene.main.path must be a string");
 		}
-
-		options.main_scene.path = path_obj.as<string>();
-		if (options.main_scene.path.empty()) {
+		detail::loaded_main_scene_path = path_obj.as<string>();
+		if (detail::loaded_main_scene_path.empty()) {
 			return error(generic_errc::input_error, "option.scene.main.path cannot be empty");
 		}
-
-		loaded_options() = std::move(options);
 		return error::no_error;
 	}
 
 	error LoadMods(ModCollection& mod_tree, ModLoadProgress* progress) {
+		log::Info("{}", "[mod-loader] loading mods");
 		for (const auto& func : PrototypeTypeRegistry::functions) {
 			func.clear();
 		}
 		ClearVirtualFileSpace();
 		ClearLocalization();
-		loaded_options() = {};
-		loaded_startup_settings().clear();
+		detail::loaded_options = {};
+		detail::loaded_mods.clear();
+		detail::loaded_main_scene_path.clear();
+		detail::loaded_startup_settings.clear();
+		log::Debug("{}", format("[mod-loader] reset runtime state: prototype_types={}", PrototypeTypeRegistry::functions.size()));
 
 		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "scanning-mod-directories", 0.0f);
 		vector<ModInfo> mods;
 		auto add_mods_from_dir = [&](const fs::path& dir, bool privileged) {
+			log::Debug("{}", format("[mod-loader] scan root: kind={} path={}", privileged ? "privileged" : "unprivileged", dir.string()));
 			if (!fs::exists(dir)) {
 				fs::create_directories(dir);
+				log::Debug("{}", format("[mod-loader] created missing mod directory: {}", dir.string()));
 			}
 			vector<fs::path> mod_dirs;
 			for (const auto& entry : fs::directory_iterator(dir)) {
@@ -739,14 +893,25 @@ end
 					auto info_path = entry.path() / "info.yaml";
 					if (fs::exists(info_path)) {
 						mod_dirs.push_back(entry.path());
+					} else {
+						log::Debug("{}", format("[mod-loader] ignored non-mod directory: {}", entry.path().string()));
 					}
 				}
 			}
 			std::sort(mod_dirs.begin(), mod_dirs.end(), [](const fs::path& a, const fs::path& b) {
 				return a.filename().generic_string() < b.filename().generic_string();
 			});
+			log::Debug("{}", format("[mod-loader] candidates in root: count={} path={}", mod_dirs.size(), dir.string()));
 			for (const fs::path& mod_dir : mod_dirs) {
-				mods.emplace_back(parse_mod_info((mod_dir / "info.yaml").string(), privileged));
+				ModInfo info = parse_mod_info((mod_dir / "info.yaml").string(), privileged);
+				log::Debug("{}", format("[mod-loader] discovered: {} v{} title='{}' path={} privileged={} deps=[{}]",
+										info.name,
+										version_to_string(info.mod_version),
+										info.title,
+										info.location.string(),
+										info.privileged ? "true" : "false",
+										dependencies_to_string(info.dependencies)));
+				mods.emplace_back(std::move(info));
 			}
 		};
 		for (const auto& dir : mod_tree.privileged_dirs) {
@@ -755,19 +920,26 @@ end
 		for (const auto& dir : mod_tree.unprivileged_dirs) {
 			add_mods_from_dir(dir, false);
 		}
+		log::Info("{}", format("[mod-loader] discovered {} mod(s): {}", mods.size(), mod_names_to_string(mods)));
 
 		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "reading-enabled-mods", 0.35f);
 		fs::path enabled_mods_path = fs::folder::appdata / "enabled_mods.yaml";
+		log::Debug("{}", format("[mod-loader] enabled file: {}", enabled_mods_path.string()));
 		sync_enabled_mods(enabled_mods_path, mods);
 		auto enabled_mods = load_enabled_mods(enabled_mods_path);
+		log::Debug("{}", format("[mod-loader] enabled entries: {}", enabled_mods.size()));
 
 		vector<ModInfo> enabled_mod_list;
 		for (const auto& mod : mods) {
 			auto it = enabled_mods.find(mod.name);
 			if (it != enabled_mods.end() && it->second.enabled) {
+				log::Debug("{}", format("[mod-loader] selected: {} v{} enabled=true", mod.name, version_to_string(mod.mod_version)));
 				enabled_mod_list.push_back(mod);
+			} else {
+				log::Debug("{}", format("[mod-loader] selected: {} v{} enabled=false", mod.name, version_to_string(mod.mod_version)));
 			}
 		}
+		log::Info("{}", format("[mod-loader] enabled {} mod(s): {}", enabled_mod_list.size(), mod_names_to_string(enabled_mod_list)));
 
 		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(0), "resolving-dependencies", 0.7f);
 		error sort_result = sort_mods_by_dependency(enabled_mod_list);
@@ -776,34 +948,41 @@ end
 		}
 		report_mod_progress(progress, "collecting-sorting-mods", mod_stage_progress(1), "load-order-ready", 1.0f);
 
-		log::Debug("{}", "[mod-loader] load order:");
-		for (const auto& mod : enabled_mod_list) {
+		log::Info("{}", "[mod-loader] load order:");
+		for (size_t i = 0; i < enabled_mod_list.size(); ++i) {
+			const auto& mod = enabled_mod_list[i];
 			RegisterVirtualRoot(mod.name, mod.location);
-			log::Debug("{}", format("[mod-loader]   - {} (version {})", mod.name,
-							version_to_string(mod.mod_version)));
+			log::Info("{}", format("[mod-loader]   {}. \"{}\" v{}", i + 1, mod.name, version_to_string(mod.mod_version)));
 		}
 
-		auto language_result = LoadSelectedLanguageSetting(AppSettingsPath());
+		if (error err = detail::load_mod_settings_cache("core")) {
+			return err.add_context("loading settings/core.yaml");
+		}
+		auto language_result = LoadSetting("core", "language", object(default_language));
 		if (!language_result) {
 			return language_result.error().add_context("loading settings/core.yaml");
 		}
-		string selected_language = *language_result;
+		string selected_language = language_result->as<string>();
+		log::Info("{}", format("[mod-loader] language: {}", selected_language));
 
 		report_mod_progress(progress, "loading-settings", mod_stage_progress(1), "syncing-mod-settings", 0.0f);
+		log::Debug("{}", "[mod-loader] loading mod settings");
 		if (error settings_err = sync_loaded_mod_settings(span<const ModInfo>(enabled_mod_list.data(), enabled_mod_list.size()))) {
 			return settings_err.add_context("syncing mod settings");
 		}
 		report_mod_progress(progress, "loading-settings", mod_stage_progress(2), "mod-settings-loaded", 1.0f);
+		log::Info("{}", format("[mod-loader] settings: {} startup setting(s)", detail::loaded_startup_settings.size()));
 
 		report_mod_progress(progress, "loading-localization", mod_stage_progress(0), selected_language, 0.0f);
+		log::Info("{}", format("[mod-loader] loading locale: {}", selected_language));
 		error locale_error = LoadLocaleFiles(span<const ModInfo>(enabled_mod_list.data(), enabled_mod_list.size()), selected_language);
 		if (locale_error) {
 			return locale_error.add_context("loading locale files");
 		}
 
 		{
-			log::Trace("{}", "[mod-loader] loading unknown prototypes");
-		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "core/null.lua", 0.0f);
+			log::Info("{}", "[mod-loader] loading built-in prototype defaults");
+			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "core/null.lua", 0.0f);
 			sol::state lua;
 			initialize_prototype_lua(lua);
 
@@ -820,16 +999,18 @@ end
 				return err.add_context("loading null prototypes from core/null.lua");
 			}
 			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "registered-null-prototypes", 0.35f);
+			log::Debug("{}", format("[mod-loader] built-in prototypes: {}", prototype_counts_to_string()));
 		}
 
 		sol::state lua;
 		initialize_prototype_lua(lua);
 
-		log::Debug("{}", "[mod-loader] loading mods");
+		log::Info("{}", "[mod-loader] loading data scripts");
 		for (size_t i = 0; i < enabled_mod_list.size(); ++i) {
 			const auto& mod = enabled_mod_list[i];
 			f32 progress_base = enabled_mod_list.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(enabled_mod_list.size());
 			report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), mod.name + "/data.lua", 0.35f + progress_base * 0.45f);
+			log::Debug("{}", format("[mod-loader] data.lua {}/{}: {}", i + 1, enabled_mod_list.size(), mod.name));
 			if (error err = load_prototype_script(lua, mod, "data.lua")) {
 				return err;
 			}
@@ -837,30 +1018,36 @@ end
 
 		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "data-lua-files-loaded", 0.8f);
 		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "loading-options", 0.85f);
+		log::Debug("{}", "[mod-loader] loading global mod options");
 		auto option_err = LoadOptions(lua);
 		if (option_err) {
 			return option_err.add_context("loading options from mods' data.lua");
 		}
-		loaded_options().language = selected_language;
-		loaded_options().mods = enabled_mod_list;
+		detail::loaded_mods = enabled_mod_list;
+		log::Info("{}", format("[mod-loader] main scene: {}", detail::loaded_main_scene_path));
 
 		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(2), "creating-prototypes", 0.9f);
+		log::Debug("{}", "[mod-loader] creating prototypes from data.raw");
 		auto err = LoadDataRaw(lua);
 		if (err) {
 			return err.add_context("loading prototypes from mods' data.lua");
 		}
 		report_mod_progress(progress, "loading-mod-prototypes", mod_stage_progress(3), "prototypes-loaded", 1.0f);
+		log::Debug("{}", format("[mod-loader] prototypes: {}", prototype_counts_to_string()));
 
 		for (size_t i = 0; i < PrototypeTypeRegistry::functions.size(); ++i) {
 			const auto& fn = PrototypeTypeRegistry::functions[i];
 			try {
 				f32 process_progress = PrototypeTypeRegistry::functions.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(PrototypeTypeRegistry::functions.size());
 				report_mod_progress(progress, "linking-prototypes", mod_stage_progress(3), string(fn.type()), process_progress);
+				log::Debug("{}", format("[mod-loader] resolve begin: type={} count={}", fn.type(), fn.count()));
 				fn.resolve();
+				log::Debug("{}", format("[mod-loader] resolve complete: type={}", fn.type()));
 			} catch (const lf::exception& e) {
 				return error(generic_errc::parse_error, e.what()).add_context("linking prototypes");
 			}
 		}
+		log::Debug("{}", "[mod-loader] prototype references linked");
 
 		report_mod_progress(progress, "linking-prototypes", mod_stage_progress(4), "prototype-references-linked", 1.0f);
 		report_mod_progress(progress, "loading-assets", mod_stage_progress(4), "checking-asset-work", 0.0f);
@@ -870,12 +1057,58 @@ end
 		return error::no_error;
 	}
 
-	const ModOptions& LoadedModOptions() {
-		return loaded_options();
+	const object& LoadedModOptions() {
+		return detail::loaded_options;
+	}
+
+	string_view LoadedMainScenePath() {
+		return detail::loaded_main_scene_path;
 	}
 
 	const vector<ModInfo>& LoadedMods() {
-		return loaded_options().mods;
+		return detail::loaded_mods;
+	}
+
+	report<object> LoadSetting(string_view mod_name, string_view name, object fallback) {
+		const string mod_key(mod_name.empty() ? "core" : mod_name);
+		auto mod = detail::loaded_settings.find(mod_key);
+		if (mod == detail::loaded_settings.end()) {
+			return fallback;
+		}
+		if (auto value = mod->second.values.find(string(name)); value != mod->second.values.end()) {
+			return value->second;
+		}
+		return fallback;
+	}
+
+	error SaveSetting(string_view mod_name, string_view name, object value) {
+		const string mod_key(mod_name.empty() ? "core" : mod_name);
+		detail::loaded_settings[mod_key].values[string(name)] = std::move(value);
+		return detail::write_mod_settings(mod_key);
+	}
+
+	error EnsureSetting(string_view mod_name, string_view name, object value) {
+		const string mod_key(mod_name.empty() ? "core" : mod_name);
+		detail::loaded_settings[mod_key].values.try_emplace(string(name), std::move(value));
+		return error::no_error;
+	}
+
+	report<string> LoadInputSetting(string_view mod_name, string_view action) {
+		const string mod_key(mod_name.empty() ? "core" : mod_name);
+		auto mod = detail::loaded_settings.find(mod_key);
+		if (mod == detail::loaded_settings.end()) {
+			return string();
+		}
+		if (auto value = mod->second.input.find(string(action)); value != mod->second.input.end()) {
+			return value->second;
+		}
+		return string();
+	}
+
+	error EnsureInputSetting(string_view mod_name, string_view action, string_view key) {
+		const string mod_key(mod_name.empty() ? "core" : mod_name);
+		detail::loaded_settings[mod_key].input.try_emplace(string(action), string(key));
+		return error::no_error;
 	}
 
 	void UnloadMods() {
@@ -884,6 +1117,10 @@ end
 		}
 		ClearVirtualFileSpace();
 		ClearLocalization();
-		loaded_options() = {};
+		detail::loaded_options = {};
+		detail::loaded_mods.clear();
+		detail::loaded_main_scene_path.clear();
+		detail::loaded_startup_settings.clear();
+		detail::loaded_settings.clear();
 	}
 } // namespace lf

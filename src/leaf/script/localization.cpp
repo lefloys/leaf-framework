@@ -225,7 +225,7 @@ namespace lf {
 
 	error SetLanguage(string_view language) {
 		string selected = language.empty() ? string(default_language) : string(language);
-		if (error err = SaveSelectedLanguageSetting(AppSettingsPath(), selected)) {
+		if (error err = SaveSetting("core", "language", object(selected))) {
 			return err;
 		}
 		return ReloadLocaleFiles(selected);

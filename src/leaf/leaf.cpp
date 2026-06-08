@@ -3,6 +3,7 @@
 #include "leaf.hpp"
 
 #include "leaf/core/error.hpp"
+#include "leaf/core/filesystem.hpp"
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/logging/logging.hpp"
@@ -14,13 +15,35 @@
 #include "leaf/graphics/graphics.hpp"
 
 namespace lf {
+	void ConfigureUserDataRoot(const InitOptions& options) {
+		if (options.portable_user_data) {
+			OverwriteAppdataDir((fs::path(GetInstallDir()) / "").string());
+		} else if (!options.appdata_folder_name.empty()) {
+			OverwriteAppdataDir((fs::path(GetAppdataDir()) / string(options.appdata_folder_name)).string());
+		}
+	}
+
+	void LogRuntimeInfo(bool headless) {
+		log::Info("[leaf] system: {}", system_backend_name());
+		if (!headless) {
+			log::Info("[leaf] platform: {}", platform_backend_name());
+		}
+		log::Info("[leaf] store: {}", store_backend_name());
+		log::Info("[leaf] install: {}", GetInstallDir());
+		log::Info("[leaf] appdata: {}", GetAppdataDir());
+	}
+
 	error Init(span<string_view> args) {
+		return Init(args, {});
+	}
+
+	error Init(span<string_view> args, InitOptions options) {
 		error err = init_logging(args);
 		if (err) { return err; }
-		log::Info("init begin");
 
 		err = init_system(args);
 		if (err) { log::Error("{}", err.message); goto system_exit; }
+		ConfigureUserDataRoot(options);
 		log::Debug("system initialized");
 
 		err = init_platform(args);
@@ -37,8 +60,9 @@ namespace lf {
 
 		err = init_rml(args); 
 		if (err) { log::Error("{}", err.message); goto rml_exit; }
-		log::Info("init complete");
 
+		LogRuntimeInfo(false);
+		LogGraphicsInfo();
 		return err;
 	rml_exit:
 		exit_rml();
@@ -54,12 +78,16 @@ namespace lf {
 	}
 
 	error InitHeadless(span<string_view> args) {
+		return InitHeadless(args, {});
+	}
+
+	error InitHeadless(span<string_view> args, InitOptions options) {
 		error err = init_logging(args);
 		if (err) { return err; }
-		log::Info("headless init begin");
 
 		err = init_system(args);
 		if (err) { log::Error("{}", err.message); goto logging_exit; }
+		ConfigureUserDataRoot(options);
 		log::Debug("system initialized");
 
 		err = init_graphics(args, true);
@@ -70,7 +98,8 @@ namespace lf {
 		if (err) { log::Error("{}", err.message); goto graphics_exit; }
 		log::Debug("store initialized");
 
-		log::Info("headless init complete");
+		LogRuntimeInfo(true);
+		LogGraphicsInfo();
 		return err;
 
 	graphics_exit:
@@ -88,7 +117,7 @@ namespace lf {
 	}
 
 	void Exit() {
-		log::Info("shutdown begin");
+		log::Debug("shutdown begin");
 		exit_rml();
 		log::Debug("rml shut down");
 		exit_store();
@@ -98,18 +127,18 @@ namespace lf {
 		exit_platform();
 		log::Debug("platform shut down");
 		exit_system();
-		log::Info("shutdown complete");
+		log::Debug("shutdown complete");
 		exit_logging();
 	}
 
 	void ExitHeadless() {
-		log::Info("headless shutdown begin");
+		log::Debug("headless shutdown begin");
 		exit_store();
 		log::Debug("store shut down");
 		exit_graphics();
 		log::Debug("graphics shut down");
 		exit_system();
-		log::Info("headless shutdown complete");
+		log::Debug("headless shutdown complete");
 		exit_logging();
 	}
 } // namespace lf

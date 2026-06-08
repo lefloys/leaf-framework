@@ -221,6 +221,9 @@ namespace lf {
 	void exit_platform() {
 		glfwTerminate();
 	}
+	string_view platform_backend_name() {
+		return "GLFW";
+	}
 
 	PlatformWindow* create_platform_window(const PlatformWindowCreateInfo& info) {
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);

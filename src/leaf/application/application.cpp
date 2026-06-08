@@ -1,7 +1,7 @@
 #include "application.hpp"
 
 #include "application_stats.hpp"
-#include "rml_window.hpp"
+#include "elements/window.hpp"
 
 #include <leaf/core/filesystem.hpp>
 #include <leaf/core/format.hpp>
@@ -248,7 +248,12 @@ namespace lf {
 	Application::Application(const ApplicationCreateInfo& create_info)
 		: display(Window::Create()),
 		  update_interval(update_interval_for(create_info.updates_per_second)) {
-		RegisterRmlWindowElement();
+		log::Debug("Creating application title='{}' requested_size={}x{} updates_per_second={}",
+				  create_info.title,
+				  create_info.width,
+				  create_info.height,
+				  create_info.updates_per_second);
+		RegisterWindowElement();
 		set_updates_per_second(create_info.updates_per_second);
 		Window::SetTitle(display, create_info.title);
 		window_title = string(create_info.title);
@@ -262,6 +267,8 @@ namespace lf {
 		if (!context) {
 			throw runtime_exception("failed to create RmlUi application context");
 		}
+		log::Info("[application] created: {}", window_title);
+		log::Debug("Created RmlUi context '{}' size={}x{}", context_name, create_info.width, create_info.height);
 	}
 
 	Application::Application(handle<lf::window> display)
@@ -270,7 +277,10 @@ namespace lf {
 	Application::Application(handle<lf::window> display, const ApplicationCreateInfo& create_info)
 		: display(display),
 		  update_interval(update_interval_for(create_info.updates_per_second)) {
-		RegisterRmlWindowElement();
+		log::Debug("Creating application from existing window title='{}' updates_per_second={}",
+				  create_info.title,
+				  create_info.updates_per_second);
+		RegisterWindowElement();
 		set_updates_per_second(create_info.updates_per_second);
 		Window::SetShouldClose(this->display, false);
 		Window::SetTitle(this->display, create_info.title);
@@ -283,9 +293,12 @@ namespace lf {
 		if (!context) {
 			throw runtime_exception("failed to create RmlUi application context");
 		}
+		log::Info("[application] created: {}", window_title);
+		log::Debug("Created RmlUi context '{}' from window size={}x{}", context_name, size.width, size.height);
 	}
 
 	Application::~Application() {
+		log::Debug("Destroying application");
 		stop_threads();
 		wait_for_render_idle();
 		if (context) {
@@ -293,6 +306,7 @@ namespace lf {
 			loaded_scene.reset();
 			Rml::RemoveContext(context->GetName());
 			context = nullptr;
+			log::Debug("Removed RmlUi context '{}'", context_name);
 		}
 	}
 
@@ -301,6 +315,7 @@ namespace lf {
 			return error::no_error;
 		}
 
+		log::Info("[application] launching: {}", window_title);
 		load_scene(scene_source);
 		{
 			std::lock_guard lock(window_mutex);
@@ -310,26 +325,34 @@ namespace lf {
 		running = true;
 		render_thread = std::jthread(&Application::render_thread_main, std::ref(*this));
 		update_thread = std::jthread(&Application::update_thread_main, std::ref(*this));
+		log::Debug("Application launched; render and update threads started");
 		return error::no_error;
 	}
 
 	void Application::close() {
+		log::Debug("Closing application");
 		stop_threads();
 		wait_for_render_idle();
 	}
 
 	void Application::stop_threads() {
+		if (running || render_thread.joinable() || update_thread.joinable()) {
+			log::Debug("Stopping application threads");
+		}
 		render_thread.request_stop();
 		update_thread.request_stop();
 		running = false;
 
 		render_thread = {};
 		update_thread = {};
+		log::Debug("Application threads stopped");
 	}
 
 	void Application::wait_for_render_idle() {
+		log::Debug("Waiting for graphics queue idle");
 		handle<queue> graphics_queue = Queue::Query(QueueCapability::Graphics);
 		Queue::Flush(graphics_queue);
+		log::Debug("Graphics queue idle");
 	}
 
 	handle<lf::window> Application::release_window() {
@@ -438,21 +461,21 @@ namespace lf {
 	}
 
 	void Application::load_scene(string_view scene_source, string_view args_yaml) {
-		log::Trace("{}", format("[scene] loading scene ({} bytes, args {} bytes, installers {}, fixed updaters {})",
-								scene_source.size(),
-								args_yaml.size(),
-								scene_script_installers.size(),
-								scene_fixed_updaters.size()));
+		log::Debug("{}", format("[scene] loading source={} bytes args={} bytes",
+								 scene_source.size(),
+								 args_yaml.size()));
 		wait_for_render_idle();
 		std::vector<Scene::PersistentElement> persistent_elements;
 		if (loaded_scene) {
-			log::Trace("{}", "[scene] releasing current scene");
+			log::Debug("{}", format("[scene] releasing current scene '{}'", window_title));
 			persistent_elements = loaded_scene->release_persistent_elements();
+			log::Debug("{}", format("[scene] preserved {} persistent element(s)", persistent_elements.size()));
 			loaded_scene.reset();
 		}
 		for (const ElementInstaller& installer : rml_element_installers) {
 			installer();
 		}
+		log::Debug("{}", format("[scene] installed {} RML element installer(s)", rml_element_installers.size()));
 		std::vector<Scene::ScriptInstaller> script_installers;
 		script_installers.reserve(scene_script_installers.size() + 1);
 		script_installers.push_back([this](sol::state& lua, Rml::ElementDocument&) {
@@ -480,7 +503,7 @@ namespace lf {
 			scene_fixed_updaters);
 		window_title = string(loaded_scene->title());
 		Window::SetTitle(display, window_title);
-		log::Trace("{}", format("[scene] loaded '{}'", window_title));
+		log::Info("{}", format("[scene] entering: {}", window_title));
 	}
 
 	Scene* Application::scene() {
@@ -510,11 +533,14 @@ namespace lf {
 	void Application::render_thread_main(std::stop_token stop, Application& app) {
 		using namespace std::chrono_literals;
 		handle<queue> graphics_queue = Queue::Query(QueueCapability::Graphics);
+		log::Debug("Render thread started");
 		if (std::getenv("LEAF_RENDER_PROFILE")) {
 			app.set_render_profile_enabled(true);
+			log::Debug("Render profile logging enabled by LEAF_RENDER_PROFILE");
 		}
 		if (std::getenv("LEAF_PROFILE")) {
 			SetProfilerEnabled(true);
+			log::Debug("Profiler enabled by LEAF_PROFILE");
 		}
 		auto next_frame = std::chrono::steady_clock::now();
 		auto fps_sample_start = next_frame;
@@ -672,6 +698,7 @@ namespace lf {
 				if (window_size.width != context_size.width || window_size.height != context_size.height) {
 					context->SetDimensions({ static_cast<int>(window_size.width), static_cast<int>(window_size.height) });
 					context_size = window_size;
+					log::Debug("RmlUi context resized to {}x{}", context_size.width, context_size.height);
 				}
 				auto update_start = std::chrono::steady_clock::now();
 				{
@@ -766,10 +793,12 @@ namespace lf {
 				next_frame = std::chrono::steady_clock::now();
 			}
 		}
+		log::Debug("Render thread stopped");
 	}
 
 	void Application::update_thread_main(std::stop_token stop, Application& app) {
 		using namespace std::chrono_literals;
+		log::Debug("Update thread started");
 		auto next_update = std::chrono::steady_clock::now();
 		auto ups_sample_start = std::chrono::steady_clock::now();
 		u32 ups_sample_updates = 0;
@@ -784,10 +813,13 @@ namespace lf {
 					fixed_updates_run = 0;
 				} else {
 					if (std::optional<Scene::LoadRequest> request = scene->take_load_request()) {
+						log::Info("{}", format("[scene] request: {}", request->path));
+						log::Debug("{}", format("[scene] request args={} bytes", request->args_yaml.size()));
 						report<string> scene_source = ReadVirtualTextFile(request->path);
 						if (!scene_source) {
 							log::Error("{}", format("[scene] {}: {}", request->path, scene_source.error().message));
 						} else {
+							log::Debug("{}", format("[scene] read requested scene '{}' ({} bytes)", request->path, scene_source->size()));
 							app.load_scene(inject_scene_args(std::move(*scene_source), request->args_yaml), request->args_yaml);
 							scene = app.scene();
 						}
@@ -861,6 +893,7 @@ namespace lf {
 				std::this_thread::yield();
 			}
 		}
+		log::Debug("Update thread stopped");
 	}
 
 	std::chrono::steady_clock::duration Application::update_interval_for(u32 updates_per_second) {
