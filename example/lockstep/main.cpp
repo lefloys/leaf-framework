@@ -497,9 +497,9 @@ int main(int argc, char* argv[]) {
 		});
 	}
 
-	std::unique_ptr<lf::Application> app;
+	std::unique_ptr<lf::ClientApplication> app;
 	if (!headless_mode) {
-		app = std::make_unique<lf::Application>(lf::ApplicationCreateInfo {
+		app = std::make_unique<lf::ClientApplication>(lf::ClientApplicationCreateInfo {
 			.title = host_mode ? "Leaf lockstep host" : "Leaf lockstep client",
 			.width = 720,
 			.height = 520,

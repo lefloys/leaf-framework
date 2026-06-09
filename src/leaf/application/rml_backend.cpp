@@ -112,6 +112,7 @@ void main() {
 
 
 	error init_rml(span<string_view> args) {
+		log::Debug("[leaf] Starting interface...");
 		g_rml_system = std::make_unique<RmlSystemInterface>();
 		g_rml_renderer = std::make_unique<RmlRenderInterface>();
 		Rml::SetSystemInterface(g_rml_system.get());

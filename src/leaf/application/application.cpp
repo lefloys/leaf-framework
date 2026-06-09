@@ -85,6 +85,14 @@ namespace lf {
 			return scene_source;
 		}
 
+		std::chrono::steady_clock::duration fixed_update_interval_for(u32 updates_per_second) {
+			if (updates_per_second == 0) {
+				updates_per_second = DefaultApplicationUpdatesPerSecond;
+			}
+			return std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+				std::chrono::duration<f64>(1.0 / static_cast<f64>(updates_per_second)));
+		}
+
 	} // namespace
 
 	static Rml::Input::KeyIdentifier rml_key(input_key key) {
@@ -243,12 +251,12 @@ namespace lf {
 		return key == KEY_V && (modifiers.has(INPUT_MODIFIER_CTRL) || modifiers.has(INPUT_MODIFIER_SUPER));
 	}
 
-	Application::Application() : Application(ApplicationCreateInfo{}) {}
+	ClientApplication::ClientApplication() : ClientApplication(ClientApplicationCreateInfo{}) {}
 
-	Application::Application(const ApplicationCreateInfo& create_info)
+	ClientApplication::ClientApplication(const ClientApplicationCreateInfo& create_info)
 		: display(Window::Create()),
 		  update_interval(update_interval_for(create_info.updates_per_second)) {
-		log::Debug("Creating application title='{}' requested_size={}x{} updates_per_second={}",
+		log::Debug("Creating client application title='{}' requested_size={}x{} updates_per_second={}",
 				  create_info.title,
 				  create_info.width,
 				  create_info.height,
@@ -260,24 +268,24 @@ namespace lf {
 		Window::SetWidth(display, create_info.width);
 		Window::SetHeight(display, create_info.height);
 
-		context_name = "leaf-application";
+		context_name = "leaf-client-application";
 		context = Rml::CreateContext(
 			context_name,
 			Rml::Vector2i(static_cast<int>(create_info.width), static_cast<int>(create_info.height)));
 		if (!context) {
-			throw runtime_exception("failed to create RmlUi application context");
+			throw runtime_exception("failed to create RmlUi client application context");
 		}
-		log::Info("[application] created: {}", window_title);
+		log::Info("[client-application] created: {}", window_title);
 		log::Debug("Created RmlUi context '{}' size={}x{}", context_name, create_info.width, create_info.height);
 	}
 
-	Application::Application(handle<lf::window> display)
-		: Application(display, ApplicationCreateInfo{}) {}
+	ClientApplication::ClientApplication(handle<lf::window> display)
+		: ClientApplication(display, ClientApplicationCreateInfo{}) {}
 
-	Application::Application(handle<lf::window> display, const ApplicationCreateInfo& create_info)
+	ClientApplication::ClientApplication(handle<lf::window> display, const ClientApplicationCreateInfo& create_info)
 		: display(display),
 		  update_interval(update_interval_for(create_info.updates_per_second)) {
-		log::Debug("Creating application from existing window title='{}' updates_per_second={}",
+		log::Debug("Creating client application from existing window title='{}' updates_per_second={}",
 				  create_info.title,
 				  create_info.updates_per_second);
 		RegisterWindowElement();
@@ -285,20 +293,20 @@ namespace lf {
 		Window::SetShouldClose(this->display, false);
 		Window::SetTitle(this->display, create_info.title);
 		dim2<u32> size = Window::Size(this->display);
-		context_name = "leaf-application";
+		context_name = "leaf-client-application";
 		window_title = string(create_info.title);
 		context = Rml::CreateContext(
 			context_name,
 			Rml::Vector2i(static_cast<int>(size.width), static_cast<int>(size.height)));
 		if (!context) {
-			throw runtime_exception("failed to create RmlUi application context");
+			throw runtime_exception("failed to create RmlUi client application context");
 		}
-		log::Info("[application] created: {}", window_title);
+		log::Info("[client-application] created: {}", window_title);
 		log::Debug("Created RmlUi context '{}' from window size={}x{}", context_name, size.width, size.height);
 	}
 
-	Application::~Application() {
-		log::Debug("Destroying application");
+	ClientApplication::~ClientApplication() {
+		log::Debug("Destroying client application");
 		stop_threads();
 		wait_for_render_idle();
 		if (context) {
@@ -310,12 +318,12 @@ namespace lf {
 		}
 	}
 
-	error Application::launch(string_view scene_source) {
+	error ClientApplication::launch(string_view scene_source) {
 		if (running) {
 			return error::no_error;
 		}
 
-		log::Info("[application] launching: {}", window_title);
+		log::Info("[client-application] launching: {}", window_title);
 		load_scene(scene_source);
 		{
 			std::lock_guard lock(window_mutex);
@@ -323,21 +331,21 @@ namespace lf {
 			Window::Show(display);
 		}
 		running = true;
-		render_thread = std::jthread(&Application::render_thread_main, std::ref(*this));
-		update_thread = std::jthread(&Application::update_thread_main, std::ref(*this));
-		log::Debug("Application launched; render and update threads started");
+		render_thread = std::jthread(&ClientApplication::render_thread_main, std::ref(*this));
+		update_thread = std::jthread(&ClientApplication::update_thread_main, std::ref(*this));
+		log::Debug("Client application launched; render and update threads started");
 		return error::no_error;
 	}
 
-	void Application::close() {
-		log::Debug("Closing application");
+	void ClientApplication::close() {
+		log::Debug("Closing client application");
 		stop_threads();
 		wait_for_render_idle();
 	}
 
-	void Application::stop_threads() {
+	void ClientApplication::stop_threads() {
 		if (running || render_thread.joinable() || update_thread.joinable()) {
-			log::Debug("Stopping application threads");
+			log::Debug("Stopping client application threads");
 		}
 		render_thread.request_stop();
 		update_thread.request_stop();
@@ -345,17 +353,17 @@ namespace lf {
 
 		render_thread = {};
 		update_thread = {};
-		log::Debug("Application threads stopped");
+		log::Debug("Client application threads stopped");
 	}
 
-	void Application::wait_for_render_idle() {
+	void ClientApplication::wait_for_render_idle() {
 		log::Debug("Waiting for graphics queue idle");
 		handle<queue> graphics_queue = Queue::Query(QueueCapability::Graphics);
 		Queue::Flush(graphics_queue);
 		log::Debug("Graphics queue idle");
 	}
 
-	handle<lf::window> Application::release_window() {
+	handle<lf::window> ClientApplication::release_window() {
 		stop_threads();
 		wait_for_render_idle();
 		if (context) {
@@ -367,80 +375,80 @@ namespace lf {
 		return display.release();
 	}
 
-	void Application::set_rml(string_view id, string_view rml) {
+	void ClientApplication::set_rml(string_view id, string_view rml) {
 		std::lock_guard lock(rml_mutex);
 		if (loaded_scene) {
 			loaded_scene->set_rml(id, rml);
 		}
 	}
 
-	void Application::set_attribute(string_view id, string_view name, string_view value) {
+	void ClientApplication::set_attribute(string_view id, string_view name, string_view value) {
 		std::lock_guard lock(rml_mutex);
 		if (loaded_scene) {
 			loaded_scene->set_attribute(id, name, value);
 		}
 	}
 
-	void Application::set_attribute(string_view id, string_view name, f32 value) {
+	void ClientApplication::set_attribute(string_view id, string_view name, f32 value) {
 		std::lock_guard lock(rml_mutex);
 		if (loaded_scene) {
 			loaded_scene->set_attribute(id, name, value);
 		}
 	}
 
-	void Application::run_script(string_view script) {
+	void ClientApplication::run_script(string_view script) {
 		std::lock_guard lock(rml_mutex);
 		if (loaded_scene) {
 			loaded_scene->queue_script(string(script), "lua-console");
 		}
 	}
 
-	void Application::set_max_fps(f32 value) {
+	void ClientApplication::set_max_fps(f32 value) {
 		stats.max_fps.store(value, std::memory_order_relaxed);
 	}
 
-	f32 Application::max_fps() const {
+	f32 ClientApplication::max_fps() const {
 		return stats.max_fps.load(std::memory_order_relaxed);
 	}
 
-	void Application::set_updates_per_second(u32 value) {
+	void ClientApplication::set_updates_per_second(u32 value) {
 		stats.updates_per_second.store(value, std::memory_order_relaxed);
 		update_interval = update_interval_for(value);
 	}
 
-	u32 Application::updates_per_second() const {
+	u32 ClientApplication::updates_per_second() const {
 		return stats.updates_per_second.load(std::memory_order_relaxed);
 	}
 
-	void Application::add_rml_element_installer(ElementInstaller installer) {
+	void ClientApplication::add_rml_element_installer(ElementInstaller installer) {
 		rml_element_installers.push_back(std::move(installer));
 	}
 
-	void Application::add_scene_script_installer(Scene::ScriptInstaller installer) {
+	void ClientApplication::add_scene_script_installer(Scene::ScriptInstaller installer) {
 		scene_script_installers.push_back(std::move(installer));
 	}
 
-	void Application::add_scene_fixed_updater(Scene::FixedUpdater updater) {
+	void ClientApplication::add_scene_fixed_updater(Scene::FixedUpdater updater) {
 		scene_fixed_updaters.push_back(std::move(updater));
 	}
 
-	f32 Application::current_fps() const {
+	f32 ClientApplication::current_fps() const {
 		return stats.current_fps.load(std::memory_order_relaxed);
 	}
 
-	f32 Application::current_ups() const {
+	f32 ClientApplication::current_ups() const {
 		return stats.current_ups.load(std::memory_order_relaxed);
 	}
 
-	void Application::set_render_profile_enabled(bool enabled) {
+	void ClientApplication::set_render_profile_enabled(bool enabled) {
 		stats.render_profile_enabled.store(enabled, std::memory_order_relaxed);
 	}
 
-	bool Application::render_profile_enabled() const {
+	bool ClientApplication::render_profile_enabled() const {
 		return stats.render_profile_enabled.load(std::memory_order_relaxed);
 	}
 
-	bool Application::update() {
+	bool ClientApplication::update() {
 		bool should_run = running;
 		{
 			std::lock_guard lock(window_mutex);
@@ -452,15 +460,15 @@ namespace lf {
 		return should_run;
 	}
 
-	bool Application::is_running() const {
+	bool ClientApplication::is_running() const {
 		return running && !Window::ShouldClose(display);
 	}
 
-	void Application::load_scene(string_view scene_source) {
+	void ClientApplication::load_scene(string_view scene_source) {
 		load_scene(scene_source, {});
 	}
 
-	void Application::load_scene(string_view scene_source, string_view args_yaml) {
+	void ClientApplication::load_scene(string_view scene_source, string_view args_yaml) {
 		log::Debug("{}", format("[scene] loading source={} bytes args={} bytes",
 								 scene_source.size(),
 								 args_yaml.size()));
@@ -506,31 +514,31 @@ namespace lf {
 		log::Info("{}", format("[scene] entering: {}", window_title));
 	}
 
-	Scene* Application::scene() {
+	Scene* ClientApplication::scene() {
 		return loaded_scene.get();
 	}
 
-	const Scene* Application::scene() const {
+	const Scene* ClientApplication::scene() const {
 		return loaded_scene.get();
 	}
 
-	Rml::Context* Application::rml_context() {
+	Rml::Context* ClientApplication::rml_context() {
 		return context;
 	}
 
-	const Rml::Context* Application::rml_context() const {
+	const Rml::Context* ClientApplication::rml_context() const {
 		return context;
 	}
 
-	view<lf::window> Application::window() {
+	view<lf::window> ClientApplication::window() {
 		return display;
 	}
 
-	view<const lf::window> Application::window() const {
+	view<const lf::window> ClientApplication::window() const {
 		return display;
 	}
 
-	void Application::render_thread_main(std::stop_token stop, Application& app) {
+	void ClientApplication::render_thread_main(std::stop_token stop, ClientApplication& app) {
 		using namespace std::chrono_literals;
 		handle<queue> graphics_queue = Queue::Query(QueueCapability::Graphics);
 		log::Debug("Render thread started");
@@ -554,7 +562,7 @@ namespace lf {
 			bool rendered_frame = false;
 			Rml::Context* context = app.rml_context();
 			if (context) {
-				LF_PROFILE_SCOPE("Application::RenderFrame");
+				LF_PROFILE_SCOPE("ClientApplication::RenderFrame");
 				dim2<u32> window_size{};
 				view<command_buffer> cmd;
 				bool drawable = true;
@@ -579,7 +587,7 @@ namespace lf {
 				if (drawable) {
 					auto begin_start = std::chrono::steady_clock::now();
 					{
-						LF_PROFILE_SCOPE("Application::BeginFrame");
+						LF_PROFILE_SCOPE("ClientApplication::BeginFrame");
 						cmd = Window::BeginFrame(app.window(), graphics_queue);
 					}
 					auto begin_end = std::chrono::steady_clock::now();
@@ -604,7 +612,7 @@ namespace lf {
 				}
 				std::vector<input_event> input;
 				{
-					LF_PROFILE_SCOPE("Application::CollectInput");
+					LF_PROFILE_SCOPE("ClientApplication::CollectInput");
 					input = Window::InputEvents(app.window());
 				}
 				auto lock_wait_start = std::chrono::steady_clock::now();
@@ -731,7 +739,7 @@ namespace lf {
 				lock.unlock();
 				auto end_start = std::chrono::steady_clock::now();
 				{
-					LF_PROFILE_SCOPE("Application::EndFrame");
+					LF_PROFILE_SCOPE("ClientApplication::EndFrame");
 					Window::EndFrame(app.window());
 				}
 				auto end_end = std::chrono::steady_clock::now();
@@ -796,7 +804,7 @@ namespace lf {
 		log::Debug("Render thread stopped");
 	}
 
-	void Application::update_thread_main(std::stop_token stop, Application& app) {
+	void ClientApplication::update_thread_main(std::stop_token stop, ClientApplication& app) {
 		using namespace std::chrono_literals;
 		log::Debug("Update thread started");
 		auto next_update = std::chrono::steady_clock::now();
@@ -896,11 +904,95 @@ namespace lf {
 		log::Debug("Update thread stopped");
 	}
 
-	std::chrono::steady_clock::duration Application::update_interval_for(u32 updates_per_second) {
-		if (updates_per_second == 0) {
-			updates_per_second = DefaultApplicationUpdatesPerSecond;
+	std::chrono::steady_clock::duration ClientApplication::update_interval_for(u32 updates_per_second) {
+		return fixed_update_interval_for(updates_per_second);
+	}
+
+	ServerApplication::ServerApplication()
+		: ServerApplication(ServerApplicationCreateInfo{}) {}
+
+	ServerApplication::ServerApplication(const ServerApplicationCreateInfo& create_info) {
+		set_updates_per_second(create_info.updates_per_second);
+	}
+
+	ServerApplication::~ServerApplication() {
+		close();
+	}
+
+	error ServerApplication::launch() {
+		if (running.exchange(true, std::memory_order_relaxed)) {
+			return error::no_error;
 		}
-		return std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-			std::chrono::duration<f64>(1.0 / static_cast<f64>(updates_per_second)));
+		next_update = std::chrono::steady_clock::now();
+		ups_sample_start = next_update;
+		ups_sample_updates = 0;
+		measured_ups.store(0.0f, std::memory_order_relaxed);
+		log::Info("[server-application] launched updates_per_second={}", updates_per_second());
+		return error::no_error;
+	}
+
+	bool ServerApplication::update() {
+		if (!running.load(std::memory_order_relaxed)) {
+			return false;
+		}
+		auto now = std::chrono::steady_clock::now();
+		if (next_update > now) {
+			std::this_thread::sleep_until(next_update);
+			now = std::chrono::steady_clock::now();
+		}
+
+		for (const FixedUpdater& updater : fixed_updaters) {
+			updater();
+		}
+
+		++ups_sample_updates;
+		const f64 elapsed = std::chrono::duration<f64>(now - ups_sample_start).count();
+		if (elapsed >= 0.25) {
+			measured_ups.store(static_cast<f32>(static_cast<f64>(ups_sample_updates) / elapsed), std::memory_order_relaxed);
+			ups_sample_start = now;
+			ups_sample_updates = 0;
+		}
+
+		next_update += update_interval;
+		now = std::chrono::steady_clock::now();
+		if (next_update <= now) {
+			next_update = now;
+			std::this_thread::yield();
+		}
+		return running.load(std::memory_order_relaxed);
+	}
+
+	void ServerApplication::close() {
+		if (running.exchange(false, std::memory_order_relaxed)) {
+			log::Info("[server-application] closed");
+		}
+	}
+
+	bool ServerApplication::is_running() const {
+		return running.load(std::memory_order_relaxed);
+	}
+
+	void ServerApplication::add_fixed_updater(FixedUpdater updater) {
+		fixed_updaters.push_back(std::move(updater));
+	}
+
+	void ServerApplication::set_updates_per_second(u32 value) {
+		if (value == 0) {
+			value = DefaultApplicationUpdatesPerSecond;
+		}
+		target_ups.store(value, std::memory_order_relaxed);
+		update_interval = update_interval_for(value);
+	}
+
+	u32 ServerApplication::updates_per_second() const {
+		return target_ups.load(std::memory_order_relaxed);
+	}
+
+	f32 ServerApplication::current_ups() const {
+		return measured_ups.load(std::memory_order_relaxed);
+	}
+
+	std::chrono::steady_clock::duration ServerApplication::update_interval_for(u32 updates_per_second) {
+		return fixed_update_interval_for(updates_per_second);
 	}
 } // namespace lf

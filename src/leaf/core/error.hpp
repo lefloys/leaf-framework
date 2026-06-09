@@ -17,9 +17,12 @@
 
 namespace lf {
 	enum class generic_errc : i32;
-}
+	enum class graphics_errc : i32;
+} // namespace lf
 template <>
 struct std::is_error_code_enum<lf::generic_errc> : std::true_type {};
+template <>
+struct std::is_error_code_enum<lf::graphics_errc> : std::true_type {};
 
 namespace lf {
 	using std::errc;
@@ -31,11 +34,29 @@ namespace lf {
 	*/
 	enum class generic_errc : i32 {
 		unknown = 1,
-		parse_error,
+		input_error,
 		invalid_id,
 		missing_field,
-		input_error,
+		parse_error,
 		type_mismatch,
+	};
+	
+	enum class graphics_errc : i32 {
+		unknown = 1,
+		already_exists,
+		device_lost,
+		extension_not_present,
+		incompatible_driver,
+		initialization,
+		invalid_argument,
+		layer_not_present,
+		not_supported,
+		out_of_device_memory,
+		out_of_host_memory,
+		platform_failure,
+		shader_compilation,
+		shader_link_failed,
+		unsupported_feature,
 	};
 
 	/*!

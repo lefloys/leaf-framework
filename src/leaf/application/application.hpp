@@ -11,8 +11,10 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 namespace Rml {
 	class Context;
@@ -27,9 +29,9 @@ namespace lf {
 
 	/*!
 	** @ingroup application
-	** @brief Parameters used to create an application window and update loop.
+	** @brief Parameters used to create a client application window and update loop.
 	*/
-	struct ApplicationCreateInfo {
+	struct ClientApplicationCreateInfo {
 		/*!
 		** @brief Initial window title.
 		*/
@@ -53,71 +55,82 @@ namespace lf {
 
 	/*!
 	** @ingroup application
-	** @brief Owns a Leaf game/application instance.
+	** @brief Parameters used to create a headless fixed-update application.
+	*/
+	struct ServerApplicationCreateInfo {
+		/*!
+		** @brief Number of fixed simulation updates to run per second.
+		*/
+		u32 updates_per_second = DefaultApplicationUpdatesPerSecond;
+	};
+
+	/*!
+	** @ingroup application
+	** @brief Owns a headed Leaf application instance.
 	**
-	** Application ties together the platform window, graphics queue, RML UI
+	** ClientApplication ties together the platform window, graphics queue, RML UI
 	** context, scene lifetime, render thread, and fixed-update thread.
 	*/
-	struct Application {
+	struct ClientApplication {
 		/*!
-		** @brief Creates an application with default create information.
+		** @brief Creates a client application with default create information.
 		*/
-		Application();
+		ClientApplication();
 
 		/*!
-		** @brief Creates an application and its window from explicit settings.
+		** @brief Creates a client application and its window from explicit settings.
 		** @param create_info Window and update-loop settings.
 		*/
-		explicit Application(const ApplicationCreateInfo& create_info);
+		explicit ClientApplication(const ClientApplicationCreateInfo& create_info);
 
 		/*!
-		** @brief Creates an application around an existing window handle.
+		** @brief Creates a client application around an existing window handle.
 		** @param display Window ownership to adopt.
 		*/
-		explicit Application(handle<lf::window> display);
+		explicit ClientApplication(handle<lf::window> display);
 
 		/*!
-		** @brief Creates an application around an existing window handle.
+		** @brief Creates a client application around an existing window handle.
 		** @param display Window ownership to adopt.
 		** @param create_info Window and update-loop settings.
 		*/
-		Application(handle<lf::window> display, const ApplicationCreateInfo& create_info);
-		Application(const Application&) = delete;
-		Application& operator=(const Application&) = delete;
-		Application(Application&&) = delete;
-		Application& operator=(Application&&) = delete;
+		ClientApplication(handle<lf::window> display, const ClientApplicationCreateInfo& create_info);
+		ClientApplication(const ClientApplication&) = delete;
+		ClientApplication& operator=(const ClientApplication&) = delete;
+		ClientApplication(ClientApplication&&) = delete;
+		ClientApplication& operator=(ClientApplication&&) = delete;
 
 		/*!
-		** @brief Stops background work and releases application-owned resources.
+		** @brief Stops background work and releases client application resources.
 		*/
-		~Application();
+		~ClientApplication();
 
 		/*!
-		** @brief Starts the application with an initial scene.
+		** @brief Starts the client application with an initial scene.
 		** @param scene_source Source path or identifier for the scene to load.
 		** @return An error when startup fails, or an empty error on success.
 		*/
 		error launch(string_view scene_source);
 
 		/*!
-		** @brief Runs main-thread application work for one iteration.
-		** @return True while the application remains open.
+		** @brief Runs main-thread client application work for one iteration.
+		** @return True while the client application remains open.
 		*/
 		bool update();
 
 		/*!
-		** @brief Requests application shutdown.
+		** @brief Requests client application shutdown.
 		*/
 		void close();
 
 		/*!
-		** @brief Checks whether the application is currently running.
+		** @brief Checks whether the client application is currently running.
 		*/
 		bool is_running() const;
 
 		/*!
 		** @brief Releases ownership of the display window.
-		** @return The window handle previously owned by the application.
+		** @return The window handle previously owned by the client application.
 		*/
 		handle<lf::window> release_window();
 
@@ -173,22 +186,22 @@ namespace lf {
 		u32 updates_per_second() const;
 
 		/*!
-		** @brief Adds RML element types needed by scenes loaded by this application.
+		** @brief Adds RML element types needed by scenes loaded by this client application.
 		*/
 		using ElementInstaller = std::function<void()>;
 
 		/*!
-		** @brief Adds an RML element installer to this application.
+		** @brief Adds an RML element installer to this client application.
 		*/
 		void add_rml_element_installer(ElementInstaller installer);
 
 		/*!
-		** @brief Adds Lua bindings to scenes loaded by this application.
+		** @brief Adds Lua bindings to scenes loaded by this client application.
 		*/
 		void add_scene_script_installer(Scene::ScriptInstaller installer);
 
 		/*!
-		** @brief Adds fixed-update work to scenes loaded by this application.
+		** @brief Adds fixed-update work to scenes loaded by this client application.
 		*/
 		void add_scene_fixed_updater(Scene::FixedUpdater updater);
 
@@ -236,22 +249,22 @@ namespace lf {
 		const Scene* scene() const;
 
 		/*!
-		** @brief Gets the RML context owned by the application.
+		** @brief Gets the RML context owned by the client application.
 		*/
 		Rml::Context* rml_context();
 
 		/*!
-		** @brief Gets the RML context owned by the application.
+		** @brief Gets the RML context owned by the client application.
 		*/
 		const Rml::Context* rml_context() const;
 
 		/*!
-		** @brief Gets a mutable view of the application window.
+		** @brief Gets a mutable view of the client application window.
 		*/
 		view<lf::window> window();
 
 		/*!
-		** @brief Gets a read-only view of the application window.
+		** @brief Gets a read-only view of the client application window.
 		*/
 		view<const lf::window> window() const;
 
@@ -259,8 +272,8 @@ namespace lf {
 		void stop_threads();
 		void wait_for_render_idle();
 
-		static void render_thread_main(std::stop_token stop, Application& app);
-		static void update_thread_main(std::stop_token stop, Application& app);
+		static void render_thread_main(std::stop_token stop, ClientApplication& app);
+		static void update_thread_main(std::stop_token stop, ClientApplication& app);
 		static std::chrono::steady_clock::duration update_interval_for(u32 updates_per_second);
 
 		unique<lf::window> display;
@@ -280,5 +293,47 @@ namespace lf {
 
 		std::jthread render_thread;
 		std::jthread update_thread;
+	};
+
+	/*!
+	** @ingroup application
+	** @brief Owns a headless fixed-update application lifecycle.
+	**
+	** ServerApplication intentionally does not create a platform window, RML
+	** context, renderer, or scene. It only provides deterministic tick pacing
+	** and shutdown state for server-style applications.
+	*/
+	struct ServerApplication {
+		using FixedUpdater = std::function<void()>;
+
+		ServerApplication();
+		explicit ServerApplication(const ServerApplicationCreateInfo& create_info);
+		ServerApplication(const ServerApplication&) = delete;
+		ServerApplication& operator=(const ServerApplication&) = delete;
+		ServerApplication(ServerApplication&&) = delete;
+		ServerApplication& operator=(ServerApplication&&) = delete;
+		~ServerApplication();
+
+		error launch();
+		bool update();
+		void close();
+		bool is_running() const;
+
+		void add_fixed_updater(FixedUpdater updater);
+		void set_updates_per_second(u32 value);
+		u32 updates_per_second() const;
+		f32 current_ups() const;
+
+	  private:
+		static std::chrono::steady_clock::duration update_interval_for(u32 updates_per_second);
+
+		std::vector<FixedUpdater> fixed_updaters;
+		std::chrono::steady_clock::duration update_interval = update_interval_for(DefaultApplicationUpdatesPerSecond);
+		std::chrono::steady_clock::time_point next_update = {};
+		std::chrono::steady_clock::time_point ups_sample_start = {};
+		u32 ups_sample_updates = 0;
+		std::atomic<u32> target_ups = DefaultApplicationUpdatesPerSecond;
+		std::atomic<f32> measured_ups = 0.0f;
+		std::atomic<bool> running = false;
 	};
 } // namespace lf

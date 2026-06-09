@@ -1,19 +1,13 @@
 #include "platform.hpp"
 
-#include <leaf/core/exception.hpp>
-#include <leaf/graphics/resource.hpp>
-#include <leaf/graphics/window_private.hpp>
+#include "leaf/core/exception.hpp"
+#include "leaf/graphics/resource.hpp"
+#include "leaf/graphics/window_private.hpp"
+#include "leaf/logging/logging.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#if defined(_WIN32)
-#define GLFW_EXPOSE_NATIVE_WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <GLFW/glfw3native.h>
-#include <windows.h>
-#endif
+
 #include <rt_ext_glfw.h>
 #include <rt_ext_swapchain.h>
 
@@ -26,84 +20,68 @@ static GLFWwindow* to_glfw(lf::PlatformWindow* wnd) { return reinterpret_cast<GL
 static lf::window_t* owner(GLFWwindow* wnd) { return static_cast<lf::window_t*>(glfwGetWindowUserPointer(wnd)); }
 
 static lf::input_key input_key_from_glfw(int key) {
-	if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
-		return static_cast<lf::input_key>(lf::KEY_A + key - GLFW_KEY_A);
-	}
-	if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
-		return static_cast<lf::input_key>(lf::KEY_0 + key - GLFW_KEY_0);
-	}
-	if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9) {
-		return static_cast<lf::input_key>(lf::KEY_NUMPAD_0 + key - GLFW_KEY_KP_0);
-	}
-	if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F24) {
-		return static_cast<lf::input_key>(lf::KEY_F1 + key - GLFW_KEY_F1);
-	}
+	if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) { return static_cast<lf::input_key>(lf::KEY_A + key - GLFW_KEY_A); }
+	if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) { return static_cast<lf::input_key>(lf::KEY_0 + key - GLFW_KEY_0); }
+	if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9) { return static_cast<lf::input_key>(lf::KEY_NUMPAD_0 + key - GLFW_KEY_KP_0); }
+	if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F24) { return static_cast<lf::input_key>(lf::KEY_F1 + key - GLFW_KEY_F1); }
 
 	switch (key) {
-	case GLFW_KEY_BACKSPACE: return lf::KEY_BACKSPACE;
-	case GLFW_KEY_TAB: return lf::KEY_TAB;
-	case GLFW_KEY_ENTER: return lf::KEY_ENTER;
-	case GLFW_KEY_ESCAPE: return lf::KEY_ESCAPE;
-	case GLFW_KEY_SPACE: return lf::KEY_SPACE;
-	case GLFW_KEY_DELETE: return lf::KEY_DELETE;
-	case GLFW_KEY_INSERT: return lf::KEY_INSERT;
-	case GLFW_KEY_HOME: return lf::KEY_HOME;
-	case GLFW_KEY_END: return lf::KEY_END;
-	case GLFW_KEY_PAGE_UP: return lf::KEY_PAGE_UP;
-	case GLFW_KEY_PAGE_DOWN: return lf::KEY_PAGE_DOWN;
-	case GLFW_KEY_LEFT: return lf::KEY_LEFT_ARROW;
-	case GLFW_KEY_RIGHT: return lf::KEY_RIGHT_ARROW;
-	case GLFW_KEY_UP: return lf::KEY_UP_ARROW;
-	case GLFW_KEY_DOWN: return lf::KEY_DOWN_ARROW;
-	case GLFW_KEY_LEFT_ALT: return lf::KEY_ALT_LEFT;
-	case GLFW_KEY_RIGHT_ALT: return lf::KEY_ALT_RIGHT;
-	case GLFW_KEY_LEFT_CONTROL: return lf::KEY_CTRL_LEFT;
-	case GLFW_KEY_RIGHT_CONTROL: return lf::KEY_CTRL_RIGHT;
-	case GLFW_KEY_LEFT_SHIFT: return lf::KEY_SHIFT_LEFT;
-	case GLFW_KEY_RIGHT_SHIFT: return lf::KEY_SHIFT_RIGHT;
-	case GLFW_KEY_LEFT_SUPER: return lf::KEY_SUPER_LEFT;
-	case GLFW_KEY_RIGHT_SUPER: return lf::KEY_SUPER_RIGHT;
-	case GLFW_KEY_NUM_LOCK: return lf::KEY_NUM_LOCK;
-	case GLFW_KEY_SCROLL_LOCK: return lf::KEY_SCROLL_LOCK;
-	case GLFW_KEY_CAPS_LOCK: return lf::KEY_CAPS_LOCK;
-	case GLFW_KEY_PAUSE: return lf::KEY_PAUSE;
-	case GLFW_KEY_PRINT_SCREEN: return lf::KEY_PRINT;
-	case GLFW_KEY_KP_ADD: return lf::KEY_NUMPAD_ADD;
-	case GLFW_KEY_KP_DECIMAL: return lf::KEY_NUMPAD_DECIMAL;
-	case GLFW_KEY_KP_DIVIDE: return lf::KEY_NUMPAD_DIVIDE;
-	case GLFW_KEY_KP_ENTER: return lf::KEY_NUMPAD_ENTER;
-	case GLFW_KEY_KP_MULTIPLY: return lf::KEY_NUMPAD_MULTIPLY;
-	case GLFW_KEY_KP_SUBTRACT: return lf::KEY_NUMPAD_SUBTRACT;
-	case GLFW_KEY_GRAVE_ACCENT: return lf::KEY_BACKQUOTE;
-	case GLFW_KEY_BACKSLASH: return lf::KEY_BACKSLASH;
-	case GLFW_KEY_LEFT_BRACKET: return lf::KEY_BRACKET_LEFT;
-	case GLFW_KEY_RIGHT_BRACKET: return lf::KEY_BRACKET_RIGHT;
-	case GLFW_KEY_COMMA: return lf::KEY_COMMA;
-	case GLFW_KEY_EQUAL: return lf::KEY_EQUAL;
-	case GLFW_KEY_MINUS: return lf::KEY_MINUS;
-	case GLFW_KEY_PERIOD: return lf::KEY_PERIOD;
-	case GLFW_KEY_APOSTROPHE: return lf::KEY_QUOTE;
-	case GLFW_KEY_SEMICOLON: return lf::KEY_SEMICOLON;
-	case GLFW_KEY_SLASH: return lf::KEY_SLASH;
-	case GLFW_KEY_MENU: return lf::KEY_CONTEXT_MENU;
+	case GLFW_KEY_BACKSPACE: /******/ return lf::KEY_BACKSPACE;
+	case GLFW_KEY_TAB: /************/ return lf::KEY_TAB;
+	case GLFW_KEY_ENTER: /**********/ return lf::KEY_ENTER;
+	case GLFW_KEY_ESCAPE: /*********/ return lf::KEY_ESCAPE;
+	case GLFW_KEY_SPACE: /**********/ return lf::KEY_SPACE;
+	case GLFW_KEY_DELETE: /*********/ return lf::KEY_DELETE;
+	case GLFW_KEY_INSERT: /*********/ return lf::KEY_INSERT;
+	case GLFW_KEY_HOME: /***********/ return lf::KEY_HOME;
+	case GLFW_KEY_END: /************/ return lf::KEY_END;
+	case GLFW_KEY_PAGE_UP: /********/ return lf::KEY_PAGE_UP;
+	case GLFW_KEY_PAGE_DOWN: /******/ return lf::KEY_PAGE_DOWN;
+	case GLFW_KEY_LEFT: /***********/ return lf::KEY_LEFT_ARROW;
+	case GLFW_KEY_RIGHT: /**********/ return lf::KEY_RIGHT_ARROW;
+	case GLFW_KEY_UP: /*************/ return lf::KEY_UP_ARROW;
+	case GLFW_KEY_DOWN: /***********/ return lf::KEY_DOWN_ARROW;
+	case GLFW_KEY_LEFT_ALT: /*******/ return lf::KEY_ALT_LEFT;
+	case GLFW_KEY_RIGHT_ALT: /******/ return lf::KEY_ALT_RIGHT;
+	case GLFW_KEY_LEFT_CONTROL: /***/ return lf::KEY_CTRL_LEFT;
+	case GLFW_KEY_RIGHT_CONTROL: /**/ return lf::KEY_CTRL_RIGHT;
+	case GLFW_KEY_LEFT_SHIFT: /*****/ return lf::KEY_SHIFT_LEFT;
+	case GLFW_KEY_RIGHT_SHIFT: /****/ return lf::KEY_SHIFT_RIGHT;
+	case GLFW_KEY_LEFT_SUPER: /*****/ return lf::KEY_SUPER_LEFT;
+	case GLFW_KEY_RIGHT_SUPER: /****/ return lf::KEY_SUPER_RIGHT;
+	case GLFW_KEY_NUM_LOCK: /*******/ return lf::KEY_NUM_LOCK;
+	case GLFW_KEY_SCROLL_LOCK: /****/ return lf::KEY_SCROLL_LOCK;
+	case GLFW_KEY_CAPS_LOCK: /******/ return lf::KEY_CAPS_LOCK;
+	case GLFW_KEY_PAUSE: /**********/ return lf::KEY_PAUSE;
+	case GLFW_KEY_PRINT_SCREEN: /***/ return lf::KEY_PRINT;
+	case GLFW_KEY_KP_ADD: /*********/ return lf::KEY_NUMPAD_ADD;
+	case GLFW_KEY_KP_DECIMAL: /*****/ return lf::KEY_NUMPAD_DECIMAL;
+	case GLFW_KEY_KP_DIVIDE: /******/ return lf::KEY_NUMPAD_DIVIDE;
+	case GLFW_KEY_KP_ENTER: /*******/ return lf::KEY_NUMPAD_ENTER;
+	case GLFW_KEY_KP_MULTIPLY: /****/ return lf::KEY_NUMPAD_MULTIPLY;
+	case GLFW_KEY_KP_SUBTRACT: /****/ return lf::KEY_NUMPAD_SUBTRACT;
+	case GLFW_KEY_GRAVE_ACCENT: /***/ return lf::KEY_BACKQUOTE;
+	case GLFW_KEY_BACKSLASH: /******/ return lf::KEY_BACKSLASH;
+	case GLFW_KEY_LEFT_BRACKET: /***/ return lf::KEY_BRACKET_LEFT;
+	case GLFW_KEY_RIGHT_BRACKET: /**/ return lf::KEY_BRACKET_RIGHT;
+	case GLFW_KEY_COMMA: /**********/ return lf::KEY_COMMA;
+	case GLFW_KEY_EQUAL: /**********/ return lf::KEY_EQUAL;
+	case GLFW_KEY_MINUS: /**********/ return lf::KEY_MINUS;
+	case GLFW_KEY_PERIOD: /*********/ return lf::KEY_PERIOD;
+	case GLFW_KEY_APOSTROPHE: /*****/ return lf::KEY_QUOTE;
+	case GLFW_KEY_SEMICOLON: /******/ return lf::KEY_SEMICOLON;
+	case GLFW_KEY_SLASH: /**********/ return lf::KEY_SLASH;
+	case GLFW_KEY_MENU: /***********/ return lf::KEY_CONTEXT_MENU;
 	default: return lf::KEY_NULL;
 	}
 }
 
 static lf::input_modifiers input_modifiers_from_glfw(int mods) {
 	lf::input_modifiers modifiers;
-	if (mods & GLFW_MOD_CONTROL) {
-		modifiers.add(lf::INPUT_MODIFIER_CTRL);
-	}
-	if (mods & GLFW_MOD_SHIFT) {
-		modifiers.add(lf::INPUT_MODIFIER_SHIFT);
-	}
-	if (mods & GLFW_MOD_ALT) {
-		modifiers.add(lf::INPUT_MODIFIER_ALT);
-	}
-	if (mods & GLFW_MOD_SUPER) {
-		modifiers.add(lf::INPUT_MODIFIER_SUPER);
-	}
+	if (mods & GLFW_MOD_CONTROL) { modifiers.add(lf::INPUT_MODIFIER_CTRL); }
+	if (mods & GLFW_MOD_SHIFT) { modifiers.add(lf::INPUT_MODIFIER_SHIFT); }
+	if (mods & GLFW_MOD_ALT) { modifiers.add(lf::INPUT_MODIFIER_ALT); }
+	if (mods & GLFW_MOD_SUPER) { modifiers.add(lf::INPUT_MODIFIER_SUPER); }
 	return modifiers;
 }
 
@@ -213,7 +191,10 @@ static void framebuffer_size_callback(GLFWwindow* wnd, int width, int height) {
 
 namespace lf {
 	error init_platform(span<string_view> args) {
+		log::Info("[leaf] Starting platform...");
 		if (!glfwInit()) {
+			// TODO
+			// to_error whatever();
 			return error::unknown_error;
 		}
 		return error::no_error;
@@ -231,12 +212,9 @@ namespace lf {
 
 		GLFWwindow* wnd = glfwCreateWindow(static_cast<i32>(info.width), static_cast<i32>(info.height), info.title.data(), nullptr, nullptr);
 		if (!wnd) {
-			const char* description = nullptr;
-			glfwGetError(&description);
-			if (description && description[0]) {
-				throw runtime_exception(format("failed to create GLFW wnd: {}", description));
-			}
-			throw runtime_exception("failed to create GLFW wnd");
+			// TODO
+			// throw_glfw_error();
+			throw lf::runtime_exception("failed to create GLFW window");
 		}
 
 		return from_glfw(wnd);
@@ -317,11 +295,11 @@ namespace lf {
 		int x = 0;
 		int y = 0;
 		glfwGetWindowPos(to_glfw(wnd), &x, &y);
-		return { x, y };
+		return { static_cast<i32>(x), static_cast<i32>(y) };
 	}
 
 	void platform_window_fullscreen(PlatformWindow* wnd, bool fullscreen, pos2<i32> windowed_position, dim2<u32> windowed_size) {
-		GLFWwindow* glfw_window = to_glfw(wnd);
+		GLFWwindow* window = to_glfw(wnd);
 		if (fullscreen) {
 			GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 			if (!monitor) {
@@ -334,45 +312,25 @@ namespace lf {
 			int monitor_x = 0;
 			int monitor_y = 0;
 			glfwGetMonitorPos(monitor, &monitor_x, &monitor_y);
-			glfwSetWindowAttrib(glfw_window, GLFW_DECORATED, GLFW_FALSE);
-			glfwSetWindowAttrib(glfw_window, GLFW_RESIZABLE, GLFW_FALSE);
-			glfwSetWindowAttrib(glfw_window, GLFW_FLOATING, GLFW_FALSE);
-			glfwSetWindowMonitor(glfw_window, nullptr, monitor_x, monitor_y, mode->width, mode->height, GLFW_DONT_CARE);
-#if defined(_WIN32)
-			SetWindowPos(
-				glfwGetWin32Window(glfw_window),
-				HWND_NOTOPMOST,
-				monitor_x,
-				monitor_y,
-				mode->width,
-				mode->height,
-				SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-#endif
-			glfwFocusWindow(glfw_window);
+			glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_FALSE);
+			glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_FALSE);
+			glfwSetWindowAttrib(window, GLFW_FLOATING, GLFW_FALSE);
+			glfwSetWindowMonitor(window, nullptr, monitor_x, monitor_y, mode->width, mode->height, GLFW_DONT_CARE);
+			glfwFocusWindow(window);
 			return;
 		}
 
-		glfwSetWindowAttrib(glfw_window, GLFW_FLOATING, GLFW_FALSE);
+		glfwSetWindowAttrib(window, GLFW_FLOATING, GLFW_FALSE);
 		glfwSetWindowMonitor(
-			glfw_window,
+			window,
 			nullptr,
 			windowed_position.x,
 			windowed_position.y,
 			static_cast<int>(windowed_size.width),
 			static_cast<int>(windowed_size.height),
 			GLFW_DONT_CARE);
-		glfwSetWindowAttrib(glfw_window, GLFW_DECORATED, GLFW_TRUE);
-		glfwSetWindowAttrib(glfw_window, GLFW_RESIZABLE, GLFW_TRUE);
-#if defined(_WIN32)
-		SetWindowPos(
-			glfwGetWin32Window(glfw_window),
-			HWND_NOTOPMOST,
-			windowed_position.x,
-			windowed_position.y,
-			static_cast<int>(windowed_size.width),
-			static_cast<int>(windowed_size.height),
-			SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-#endif
+		glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_TRUE);
+		glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_TRUE);
 	}
 
 	bool platform_window_should_close(PlatformWindow* wnd) {

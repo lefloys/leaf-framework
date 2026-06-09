@@ -172,8 +172,6 @@ namespace lf {
 		KEY_ENUM_MAX,
 	};
 
-
-
 	enum input_button : u08 {
 		BUTTON_NULL = 0x00,
 		BUTTON_1 = 0x01,
@@ -198,10 +196,10 @@ namespace lf {
 	};
 
 	enum input_modifier : u08 {
-		INPUT_MODIFIER_CTRL = 1 << 0,
-		INPUT_MODIFIER_SHIFT = 1 << 1,
-		INPUT_MODIFIER_ALT = 1 << 2,
-		INPUT_MODIFIER_SUPER = 1 << 3,
+		INPUT_MODIFIER_CTRL = (1 << 0),
+		INPUT_MODIFIER_SHIFT = (1 << 1),
+		INPUT_MODIFIER_ALT = (1 << 2),
+		INPUT_MODIFIER_SUPER = (1 << 3),
 	};
 
 	struct input_modifiers {

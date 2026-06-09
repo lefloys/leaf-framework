@@ -6,7 +6,8 @@ namespace lf {
 
 
 	error init_store(span<string_view>) {
-		log::Debug("Store backend: none");
+		log::Debug("[leaf] Starting store...");
+		log::Info("[leaf] Store backend : none");
 		return error::no_error;
 	}
 
