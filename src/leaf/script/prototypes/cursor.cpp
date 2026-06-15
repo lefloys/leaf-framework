@@ -1,4 +1,4 @@
-#include "cursor_prototype.hpp"
+#include "cursor.hpp"
 
 namespace lf {
 	CursorPrototype::CursorPrototype(const dict& data) : Prototype(data) {

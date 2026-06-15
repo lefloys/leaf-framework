@@ -1,31 +1,27 @@
 #include "leaf.hpp"
 
+#include "leaf/application/rml_backend.hpp"
 #include "leaf/core/error.hpp"
 #include "leaf/core/filesystem.hpp"
+#include "leaf/core/logging.hpp"
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
-#include "leaf/logging/logging.hpp"
-#include "leaf/store/lifecycle.hpp"
-#include "leaf/graphics/window.hpp"
-#include "leaf/application/rml_backend.hpp"
-#include "leaf/system/system.hpp"
-#include "leaf/platform/platform.hpp"
 #include "leaf/graphics/graphics.hpp"
+#include "leaf/graphics/window.hpp"
+#include "leaf/platform/platform.hpp"
+#include "leaf/store/lifecycle.hpp"
+#include "leaf/system/system.hpp"
 
 namespace lf {
 	error Init(span<string_view> args) {
-		error err = init_logging(args);
-		if (err) {
-			std::cout << err.message << "\n";
-			goto logging_exit; 
-		}
+		error err;
 
 		log::Info("[leaf] initializing leaf-framework...");
 
 		err = init_system(args);
 		if (err) { goto system_exit; }
 
-		err = init_graphics(args, true);
+		err = init_graphics(args, false);
 		if (err) { goto graphics_exit; }
 
 		err = init_store(args);
@@ -49,35 +45,30 @@ namespace lf {
 	system_exit:
 		exit_system();
 		log::Error("{}", err.message);
-	logging_exit:
-		exit_logging();
 		return err;
 	}
 
 
 	error InitHeadless(span<string_view> args) {
-		error err = init_logging(args);
-		if (err) {
-			std::cout << err.message << "\n";
-			return err;
-		}
-		err = init_system(args);
-		if (err) { goto logging_exit; }
+		error err;
 
-		err = init_graphics(args, true);
+		err = init_system(args);
 		if (err) { goto system_exit; }
 
-		err = init_store(args);
+		err = init_graphics(args, true);
 		if (err) { goto graphics_exit; }
 
+		err = init_store(args);
+		if (err) { goto store_exit; }
+
 		return err;
+	store_exit:
+		exit_store();
 	graphics_exit:
 		exit_graphics();
 	system_exit:
 		exit_system();
 		log::Error("{}", err.message);
-	logging_exit:
-		exit_logging();
 		return err;
 	}
 
@@ -95,7 +86,6 @@ namespace lf {
 		exit_store();
 		exit_graphics();
 		exit_system();
-		exit_logging();
 	}
 
 	void ExitHeadless() {
@@ -104,6 +94,5 @@ namespace lf {
 		exit_store();
 		exit_graphics();
 		exit_system();
-		exit_logging();
 	}
 } // namespace lf

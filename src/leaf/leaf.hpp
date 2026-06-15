@@ -1,10 +1,10 @@
 #pragma once
 
 #include "core/error.hpp"
+#include "core/progress.hpp"
 #include "core/span.hpp"
 #include "core/string.hpp"
 
-#include <leaf/application/application.hpp>
 #include <leaf/graphics/buffer.hpp>
 #include <leaf/graphics/canvas.hpp>
 #include <leaf/graphics/command_buffer.hpp>
@@ -22,13 +22,12 @@
 #include <leaf/pmg/pmg.hpp>
 
 namespace lf {
-
 	/*!
 	** @brief Initializes Leaf's global systems.
 	** @param args Command line arguments passed to the process.
 	** @return An error when initialization fails, or an empty error on success.
 	**
-	** Call this before creating Leaf applications or using subsystems that need
+	** Call this before creating Leaf scenes or using subsystems that need
 	** framework-level setup.
 	*/
 	error Init(span<string_view> args);

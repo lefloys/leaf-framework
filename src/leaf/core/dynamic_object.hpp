@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "error.hpp"
 #include "exception.hpp"
 #include "string.hpp"
@@ -132,7 +132,7 @@ namespace lf {
 			return object_trait<T>::parse(at(index));
 		} catch (...) {
 			rethrow_with_context(
-				format("when parsing list index {} to '{}'", index, typeid(T).name()));
+				lf::format("when parsing list index {} to '{}'", index, typeid(T).name()));
 		}
 	}
 
@@ -249,7 +249,7 @@ namespace lf {
 				return static_cast<f32>(u);
 			} else {
 				throw lf::runtime_exception(
-					format("cannot convert type '{}' to f32", obj.current_type_name()));
+					lf::format("cannot convert type '{}' to f32", obj.current_type_name()));
 			}
 		}
 	};
@@ -266,7 +266,7 @@ namespace lf {
 				return static_cast<f64>(u);
 			} else {
 				throw lf::runtime_exception(
-					format("cannot convert type '{}' to f64", obj.current_type_name()));
+					lf::format("cannot convert type '{}' to f64", obj.current_type_name()));
 			}
 		}
 	};
@@ -277,7 +277,7 @@ namespace lf {
 				return obj.get<bool>();
 			}
 			throw lf::runtime_exception(
-				format("cannot convert type '{}' to bool", obj.current_type_name()));
+				lf::format("cannot convert type '{}' to bool", obj.current_type_name()));
 		}
 	};
 
@@ -290,7 +290,7 @@ namespace lf {
 			if (obj.is<u64>()) {
 				u64 v = obj.get<u64>();
 				if (v > static_cast<u64>(std::numeric_limits<i64>::max())) {
-					throw lf::runtime_exception(format("value {} out of range for i64", v));
+					throw lf::runtime_exception(lf::format("value {} out of range for i64", v));
 				}
 				return static_cast<i64>(v);
 			}
@@ -298,7 +298,7 @@ namespace lf {
 				return static_cast<i64>(obj.get<f64>());
 			}
 			throw lf::runtime_exception(
-				format("cannot convert type '{}' to i64", obj.current_type_name()));
+				lf::format("cannot convert type '{}' to i64", obj.current_type_name()));
 		}
 	};
 	template <>
@@ -310,19 +310,19 @@ namespace lf {
 			if (obj.is<i64>()) {
 				i64 v = obj.get<i64>();
 				if (v < 0) {
-					throw lf::runtime_exception(format("value {} out of range for u64", v));
+					throw lf::runtime_exception(lf::format("value {} out of range for u64", v));
 				}
 				return static_cast<u64>(v);
 			}
 			if (obj.is<f64>()) {
 				f64 v = obj.get<f64>();
 				if (v < 0 || v > static_cast<f64>(std::numeric_limits<u64>::max())) {
-					throw lf::runtime_exception(format("value {} out of range for u64", v));
+					throw lf::runtime_exception(lf::format("value {} out of range for u64", v));
 				}
 				return static_cast<u64>(v);
 			}
 			throw lf::runtime_exception(
-				format("cannot convert type '{}' to u64", obj.current_type_name()));
+				lf::format("cannot convert type '{}' to u64", obj.current_type_name()));
 		}
 	};
 
@@ -332,7 +332,7 @@ namespace lf {
 			i64 v = object_trait<i64>::parse(obj);
 			if (v < static_cast<i64>(std::numeric_limits<i32>::min()) ||
 				v > static_cast<i64>(std::numeric_limits<i32>::max())) {
-				throw lf::runtime_exception(format("value {} out of range for i32", v));
+				throw lf::runtime_exception(lf::format("value {} out of range for i32", v));
 			}
 			return static_cast<i32>(v);
 		}
@@ -342,7 +342,7 @@ namespace lf {
 		static u32 parse(const object& obj) {
 			u64 v = object_trait<u64>::parse(obj);
 			if (v > static_cast<u64>(std::numeric_limits<u32>::max())) {
-				throw lf::runtime_exception(format("value {} out of range for u32", v));
+				throw lf::runtime_exception(lf::format("value {} out of range for u32", v));
 			}
 			return static_cast<u32>(v);
 		}
@@ -353,7 +353,7 @@ namespace lf {
 			i64 v = object_trait<i64>::parse(obj);
 			if (v < static_cast<i64>(std::numeric_limits<i16>::min()) ||
 				v > static_cast<i64>(std::numeric_limits<i16>::max())) {
-				throw lf::runtime_exception(format("value {} out of range for i16", v));
+				throw lf::runtime_exception(lf::format("value {} out of range for i16", v));
 			}
 			return static_cast<i16>(v);
 		}
@@ -363,7 +363,7 @@ namespace lf {
 		static u16 parse(const object& obj) {
 			u64 v = object_trait<u64>::parse(obj);
 			if (v > static_cast<u64>(std::numeric_limits<u16>::max())) {
-				throw lf::runtime_exception(format("value {} out of range for u16", v));
+				throw lf::runtime_exception(lf::format("value {} out of range for u16", v));
 			}
 			return static_cast<u16>(v);
 		}
@@ -374,7 +374,7 @@ namespace lf {
 			i64 v = object_trait<i64>::parse(obj);
 			if (v < static_cast<i64>(std::numeric_limits<i08>::min()) ||
 				v > static_cast<i64>(std::numeric_limits<i08>::max())) {
-				throw lf::runtime_exception(format("value {} out of range for i08", v));
+				throw lf::runtime_exception(lf::format("value {} out of range for i08", v));
 			}
 			return static_cast<i08>(v);
 		}
@@ -384,7 +384,7 @@ namespace lf {
 		static u08 parse(const object& obj) {
 			u64 v = object_trait<u64>::parse(obj);
 			if (v > static_cast<u64>(std::numeric_limits<u08>::max())) {
-				throw lf::runtime_exception(format("value {} out of range for u08", v));
+				throw lf::runtime_exception(lf::format("value {} out of range for u08", v));
 			}
 			return static_cast<u08>(v);
 		}
@@ -397,7 +397,7 @@ namespace lf {
 				return obj.get<string>();
 			}
 			throw lf::runtime_exception(
-				format("cannot convert type '{}' to string", obj.current_type_name()));
+				lf::format("cannot convert type '{}' to string", obj.current_type_name()));
 		}
 	};
 	template <>
@@ -407,7 +407,7 @@ namespace lf {
 				return obj.get<dict>();
 			}
 			throw lf::runtime_exception(
-				format("cannot convert type '{}' to dict", obj.current_type_name()));
+				lf::format("cannot convert type '{}' to dict", obj.current_type_name()));
 		}
 	};
 	template <>
@@ -417,7 +417,8 @@ namespace lf {
 				return obj.get<list>();
 			}
 			throw lf::runtime_exception(
-				format("cannot convert type '{}' to list", obj.current_type_name()));
+				lf::format("cannot convert type '{}' to list", obj.current_type_name()));
 		}
 	};
 } // namespace lf
+

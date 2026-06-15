@@ -1,51 +1,52 @@
-#include "texture_prototype.hpp"
+#include "texture.hpp"
 
-#include <leaf/core/exception.hpp>
-#include <leaf/core/filesystem.hpp>
-#include <leaf/graphics/queue.hpp>
-#include <leaf/script/database.hpp>
+#include "leaf/core/exception.hpp"
+#include "leaf/core/filesystem.hpp"
+#include "leaf/graphics/queue.hpp"
+#include "leaf/script/database.hpp"
 
 #include <algorithm>
 
-bool has_field(const lf::dict& data, lf::string_view field_name) {
-	return data.find(field_name) != data.end();
-}
+namespace lf {
+	bool has_field(const dict& data, string_view field_name) {
+		return data.find(field_name) != data.end();
+	}
 
-lf::TextureSourceFrame parse_frame(const lf::object& object, const lf::string& default_path) {
-	lf::TextureSourceFrame frame;
-	frame.path = default_path;
-	if (object.is<lf::string>()) {
-		frame.path = object.as<lf::string>();
+	TextureSourceFrame parse_frame(const object& object, const string& default_path) {
+		TextureSourceFrame frame;
+		frame.path = default_path;
+		if (object.is<string>()) {
+			frame.path = object.as<string>();
+			return frame;
+		}
+		if (!object.is<dict>()) {
+			throw runtime_exception(lf::format("texture frame must be a path string or dictionary, got '{}'", object.current_type_name()));
+		}
+
+		const dict& data = object.get<dict>();
+		if (has_field(data, "path")) {
+			frame.path = data.parse_field<string>("path");
+		}
+
+		bool has_x = has_field(data, "x");
+		bool has_y = has_field(data, "y");
+		bool has_width = has_field(data, "w") || has_field(data, "width");
+		bool has_height = has_field(data, "h") || has_field(data, "height");
+		if (has_x || has_y || has_width || has_height) {
+			if (!has_x || !has_y || !has_width || !has_height) {
+				throw runtime_exception("texture frame rect needs x, y, and w/h or width/height");
+			}
+			frame.rect = rect<u32>{
+				{ data.parse_field<u32>("x"), data.parse_field<u32>("y") },
+				{ has_field(data, "w") ? data.parse_field<u32>("w") : data.parse_field<u32>("width"),
+				  has_field(data, "h") ? data.parse_field<u32>("h") : data.parse_field<u32>("height") },
+			};
+		}
 		return frame;
 	}
-	if (!object.is<lf::dict>()) {
-		throw lf::runtime_exception(lf::format("texture frame must be a path string or dictionary, got '{}'", object.current_type_name()));
-	}
 
-	const lf::dict& data = object.get<lf::dict>();
-	if (has_field(data, "path")) {
-		frame.path = data.parse_field<lf::string>("path");
-	}
-
-	bool has_x = has_field(data, "x");
-	bool has_y = has_field(data, "y");
-	bool has_width = has_field(data, "w") || has_field(data, "width");
-	bool has_height = has_field(data, "h") || has_field(data, "height");
-	if (has_x || has_y || has_width || has_height) {
-		if (!has_x || !has_y || !has_width || !has_height) {
-			throw lf::runtime_exception("texture frame rect needs x, y, and w/h or width/height");
-		}
-		frame.x = data.parse_field<u32>("x");
-		frame.y = data.parse_field<u32>("y");
-		frame.width = has_field(data, "w") ? data.parse_field<u32>("w") : data.parse_field<u32>("width");
-		frame.height = has_field(data, "h") ? data.parse_field<u32>("h") : data.parse_field<u32>("height");
-		frame.has_rect = true;
-	}
-	return frame;
-}
-
-namespace lf {
-	TexturePrototype::TexturePrototype(const dict& data) : Prototype(data) {
+	TexturePrototype::TexturePrototype(const dict& data)
+			: Prototype<identifier<TexturePrototype, u16, void>>(data) {
 		if (has_field(data, "path")) {
 			load_field(data, "path", path);
 		}
@@ -58,9 +59,9 @@ namespace lf {
 		if (has_field(data, "frames")) {
 			const object& value = data.at("frames");
 			if (value.is<list>()) {
-				const list& list = value.get<lf::list>();
-				frames.reserve(list.size());
-				for (const object& frame : list) {
+				const list& frame_list = value.get<list>();
+				frames.reserve(frame_list.size());
+				for (const object& frame : frame_list) {
 					frames.push_back(parse_frame(frame, path));
 				}
 			} else if (value.convertible<u16>()) {
@@ -72,7 +73,7 @@ namespace lf {
 					frames.push_back(frame);
 				}
 			} else {
-				throw runtime_exception(format("texture frames must be a list or count, got '{}'", value.current_type_name()));
+				throw runtime_exception(lf::format("texture frames must be a list or count, got '{}'", value.current_type_name()));
 			}
 		}
 		if (frames.empty()) {
@@ -93,14 +94,8 @@ namespace lf {
 				source.texture_index = static_cast<u32>(texture_index);
 				source.frame_index = static_cast<u32>(frame_index);
 				source.path = frame.path;
-				if (frame.has_rect) {
-					source.rect = {
-						frame.x,
-						frame.y,
-						frame.width,
-						frame.height,
-						true,
-					};
+				if (frame.rect) {
+					source.rect = *frame.rect;
 				}
 				source_frames.push_back(source);
 			}
@@ -125,3 +120,4 @@ namespace lf {
 		}
 	}
 } // namespace lf
+

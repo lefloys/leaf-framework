@@ -26,7 +26,7 @@ namespace lf {
 	object& object::at(string_view key) {
 		if (!is<dict>()) {
 			throw std::runtime_error(
-				format("object::at: not a dict (type = {})", current_type_name()));
+				lf::format("object::at: not a dict (type = {})", current_type_name()));
 		}
 		return get<dict>().at(string(key));
 	}
@@ -34,7 +34,7 @@ namespace lf {
 	const object& object::at(string_view key) const {
 		if (!is<dict>()) {
 			throw std::runtime_error(
-				format("object::at: not a dict (type = {})", current_type_name()));
+				lf::format("object::at: not a dict (type = {})", current_type_name()));
 		}
 		return get<dict>().at(string(key));
 	}
@@ -42,7 +42,7 @@ namespace lf {
 	object& object::at(size_t index) {
 		if (!is<list>()) {
 			throw std::runtime_error(
-				format("object::at: not a list (type = {})", current_type_name()));
+				lf::format("object::at: not a list (type = {})", current_type_name()));
 		}
 		return get<list>().at(index);
 	}
@@ -50,7 +50,7 @@ namespace lf {
 	const object& object::at(size_t index) const {
 		if (!is<list>()) {
 			throw std::runtime_error(
-				format("object::at: not a list (type = {})", current_type_name()));
+				lf::format("object::at: not a list (type = {})", current_type_name()));
 		}
 		return get<list>().at(index);
 	}
@@ -149,3 +149,4 @@ namespace lf {
 	}
 
 } // namespace lf
+

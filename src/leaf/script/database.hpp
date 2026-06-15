@@ -44,10 +44,16 @@ namespace lf {
 	}
 	template <typename T>
 	T& Database<T>::get(identifier<T, u16, void> id) {
+		if (id.get() >= prototypes.size()) {
+			throw runtime_exception(lf::format("{} prototype id {} out of range", type(), id.get()));
+		}
 		return prototypes[id.get()];
 	}
 	template <typename T>
 	const T& Database<T>::get(identifier<const T, u16, void> id) {
+		if (id.get() >= prototypes.size()) {
+			throw runtime_exception(lf::format("{} prototype id {} out of range", type(), id.get()));
+		}
 		return prototypes[id.get()];
 	}
 	template <typename T>
@@ -63,6 +69,10 @@ namespace lf {
 
 	template <typename T>
 	const T& Database<T>::get_null() {
+		if (prototypes.empty()) {
+			throw runtime_exception(lf::format("{} null prototype is missing", type()));
+		}
 		return prototypes[0];
 	}
 } // namespace lf
+

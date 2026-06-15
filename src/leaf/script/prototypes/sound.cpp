@@ -1,4 +1,4 @@
-#include "sound_prototype.hpp"
+#include "sound.hpp"
 
 namespace lf {
 	SoundPrototype::SoundPrototype(const dict& data) : Prototype(data) {

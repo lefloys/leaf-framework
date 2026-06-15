@@ -193,7 +193,7 @@ namespace lf {
 			return unexpected(error(generic_errc::input_error, "fixed text has no digits"));
 		}
 		if (begin != end) {
-			return unexpected(error(generic_errc::input_error, format("invalid fixed character '{}'", text[begin])));
+			return unexpected(error(generic_errc::input_error, lf::format("invalid fixed character '{}'", text[begin])));
 		}
 		while (fraction_digits < 9) {
 			fraction *= 10u;
@@ -320,3 +320,4 @@ namespace lf {
 		return *result;
 	}
 } // namespace lf
+

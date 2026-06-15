@@ -23,6 +23,5 @@ function(leaf_framework_configure_example target_name)
 endfunction()
 
 add_subdirectory(core)
-add_subdirectory(lockstep)
 add_subdirectory(network)
 add_subdirectory(steam)

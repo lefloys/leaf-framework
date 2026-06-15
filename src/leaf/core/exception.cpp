@@ -7,9 +7,9 @@ namespace lf {
 		try {
 			throw;
 		} catch (const std::exception& e) {
-			throw std::runtime_error(format("{}\n -> {}", context, e.what()));
+			throw std::runtime_error(lf::format("{}\n -> {}", context, e.what()));
 		} catch (...) {
-			throw std::runtime_error(format("{}\n -> unknown exception", context));
+			throw std::runtime_error(lf::format("{}\n -> unknown exception", context));
 		}
 	}
 } // namespace lf

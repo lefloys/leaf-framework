@@ -12,14 +12,14 @@ namespace lf {
 		vT& at(const kT& key) {
 			auto it = this->find(key);
 			if (it == this->end()) {
-				throw out_of_range_exception(format("key '{}' not found", key));
+				throw out_of_range_exception(lf::format("key '{}' not found", key));
 			}
 			return it->second;
 		}
 		const vT& at(const kT& key) const {
 			auto it = this->find(key);
 			if (it == this->end()) {
-				throw out_of_range_exception(format("key '{}' not found", key));
+				throw out_of_range_exception(lf::format("key '{}' not found", key));
 			}
 			return it->second;
 		}

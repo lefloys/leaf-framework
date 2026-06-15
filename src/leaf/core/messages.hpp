@@ -26,7 +26,8 @@ namespace lf {
 
 		template <typename T>
 		string Field(string_view field, const T& value) {
-			return Field(field, format("{}", value));
+			return Field(field, lf::format("{}", value));
 		}
 	} // namespace log
 } // namespace lf
+

@@ -11,6 +11,7 @@
 #include "unordered_map.hpp"
 #include "version.hpp"
 #include "vector.hpp"
+#include "concepts.hpp"
 
 #include <bit>
 #include <concepts>
@@ -120,10 +121,53 @@ namespace lf::bin {
 
 	/*!
 	** @ingroup binary
+	** @brief Logical progress observer shared by binary readers and writers.
+	**
+	** Progress is expressed in work units discovered during processing, not
+	** exact bytes. Totals may grow while nested containers are processed.
+	*/
+	struct progress_observer {
+		using callback_t = std::function<void(size_t, size_t)>;
+
+		callback_t callback;
+		size_t done = 0;
+		size_t total = 0;
+
+		progress_observer() = default;
+		explicit progress_observer(callback_t callback) : callback(std::move(callback)) {}
+
+		void add_total(size_t amount) {
+			total += amount;
+			notify();
+		}
+
+		void advance(size_t amount = 1) {
+			done += amount;
+			notify();
+		}
+
+		void notify() {
+			if (callback) {
+				callback(done, total);
+			}
+		}
+	};
+
+	/*!
+	** @ingroup binary
 	** @brief Options passed to read() and fast_read().
 	*/
 	struct read_options {
 		read_limits limits;
+		progress_observer* progress = nullptr;
+	};
+
+	/*!
+	** @ingroup binary
+	** @brief Options passed to write(), fast_write(), write_graph(), and write_to().
+	*/
+	struct write_options {
+		progress_observer* progress = nullptr;
 	};
 
 	/*!
@@ -139,6 +183,244 @@ namespace lf::bin {
 		T& value;
 		std::tuple<Args&...> args;
 	};
+
+	/*!
+	** @ingroup binary
+	** @brief Per-hierarchy traits for RTTI-free polymorphic serialization.
+	**
+	** Specialize this for a base type and provide:
+	** - id_type: the encoded discriminator type
+	** - types: a tuple of all concrete derived types, in any order
+	** - id_of(const Base&): discriminator for a live object
+	** - id_for<Derived>(): discriminator for a concrete derived type
+	*/
+	template<typename Base>
+	struct polymorphic_traits;
+
+	template<typename T>
+	concept polymorphic = requires {
+		typename polymorphic_traits<std::remove_cvref_t<T>>::types;
+		typename polymorphic_traits<std::remove_cvref_t<T>>::id_type;
+	};
+
+	/*!
+	** @ingroup binary
+	** @brief Cross-reference context used by graph-aware streams.
+	*/
+	struct write_refs {
+		unordered_map<const void*, u64> ids;
+		unordered_map<const void*, u64> definitions;
+		u64 next = 0;
+
+		u64 id_of(const void* p) {
+			if (!p) {
+				return 0;
+			}
+			auto [it, inserted] = ids.try_emplace(p, next + 1u);
+			if (inserted) {
+				++next;
+			}
+			return it->second;
+		}
+
+		u64 define(const void* p) {
+			const u64 id = id_of(p);
+			definitions.emplace(p, id);
+			return id;
+		}
+
+		error validate() const {
+			for (const auto& [ptr, id] : ids) {
+				if (ptr && definitions.find(ptr) == definitions.end()) {
+					return error(generic_errc::parse_error, "graph ref target was not registered with process_shared");
+				}
+			}
+			return {};
+		}
+	};
+
+	/*!
+	** @ingroup binary
+	** @brief Read-side cross-reference table and deferred fixups.
+	*/
+	struct read_refs {
+		struct fixup {
+			void* slot = nullptr;
+			u64 id = 0;
+			void (*assign)(void*, void*) = nullptr;
+		};
+
+		unordered_map<u64, void*> objects;
+		vector<fixup> fixups;
+
+		void define(u64 id, void* obj) {
+			objects.emplace(id, obj);
+		}
+
+		template<typename T>
+		void defer(T** slot, u64 id) {
+			fixups.push_back({
+				slot,
+				id,
+				[](void* slot, void* object) {
+					*static_cast<T**>(slot) = static_cast<T*>(object);
+				}
+			});
+		}
+
+		error run_fixups() {
+			for (const fixup& item : fixups) {
+				auto it = objects.find(item.id);
+				if (it == objects.end()) {
+					return error(generic_errc::parse_error, "dangling ref id");
+				}
+				item.assign(item.slot, it->second);
+			}
+			fixups.clear();
+			return {};
+		}
+	};
+
+	struct read_stream_tag;
+	struct write_stream_tag;
+	struct fast_stream_tag;
+
+	template<typename T>
+	concept readable_byte_stream = requires { typename std::remove_cvref_t<T>::stream_tag; } &&
+		std::same_as<typename std::remove_cvref_t<T>::stream_tag, read_stream_tag>;
+
+	template<typename T>
+	concept writable_byte_stream = requires { typename std::remove_cvref_t<T>::stream_tag; } &&
+		std::same_as<typename std::remove_cvref_t<T>::stream_tag, write_stream_tag>;
+
+	template<typename T>
+	concept byte_stream = readable_byte_stream<T> || writable_byte_stream<T>;
+
+	template<typename T, typename... Args>
+	struct field_ref;
+
+	template<typename T, typename... Args>
+	field_ref<T, Args...> field(string_view name, T& value, Args&... args);
+
+	template<lf::bitfield_enum Mask, byte_stream Stream, typename T>
+	error gated_field(Stream& stream, Mask mask, string_view name, T& value) {
+		if ((stream.mode() & mask) == Mask{}) {
+			return {};
+		}
+		return stream(field(name, value));
+	}
+
+	template<typename T>
+	struct ref {
+		T* ptr = nullptr;
+	};
+
+	template<typename T, typename Pred>
+	struct presence {
+		string_view name;
+		T& value;
+		Pred present;
+		T fallback;
+	};
+
+	template<typename T, typename Pred>
+	presence<T, Pred> maybe(string_view name, T& value, Pred present, T fallback = {}) {
+		return { name, value, present, fallback };
+	}
+
+	template<byte_stream Stream, typename... Ps>
+	error bitmask(Stream& stream, Ps&&... ps) {
+		static_assert(sizeof...(Ps) <= 64, "lf::bin::bitmask supports at most 64 fields");
+		using mask_t = std::conditional_t<sizeof...(Ps) <= 8u, u08,
+			std::conditional_t<sizeof...(Ps) <= 16u, u16,
+			std::conditional_t<sizeof...(Ps) <= 32u, u32, u64>>>;
+		if constexpr (writable_byte_stream<Stream>) {
+			mask_t mask = 0;
+			size_t bit = 0;
+			((mask |= static_cast<mask_t>(ps.present(ps.value)) << bit++), ...);
+			IF_ERROR_RETURN_ERROR(stream(field("mask", mask)));
+			size_t index = 0;
+			error err;
+			auto write_one = [&](auto& p) -> bool {
+				if (mask & (static_cast<mask_t>(1) << index++)) {
+					err = stream(field(p.name, p.value));
+				}
+				return !err;
+			};
+			(write_one(ps) && ...);
+			return err;
+		} else {
+			mask_t mask = 0;
+			IF_ERROR_RETURN_ERROR(stream(field("mask", mask)));
+			size_t index = 0;
+			error err;
+			auto read_one = [&](auto& p) -> bool {
+				if (mask & (static_cast<mask_t>(1) << index++)) {
+					err = stream(field(p.name, p.value));
+				} else {
+					p.value = p.fallback;
+				}
+				return !err;
+			};
+			(read_one(ps) && ...);
+			return err;
+		}
+	}
+
+	namespace detail {
+		template<size_t Count>
+		struct smallest_uint_for_impl {
+			static_assert(Count <= 64, "binary bitmask supports at most 64 fields");
+			using type = std::conditional_t<Count <= 8u, u08,
+				std::conditional_t<Count <= 16u, u16,
+				std::conditional_t<Count <= 32u, u32, u64>>>;
+		};
+
+		template<size_t Count>
+		using smallest_uint_for_t = typename smallest_uint_for_impl<Count>::type;
+
+		template<typename Base, typename Stream, typename Tuple, size_t... Indices>
+		error dispatch_polymorphic_write_impl(typename polymorphic_traits<Base>::id_type id, Stream& stream, const Base& value, std::index_sequence<Indices...>) {
+			error err = error(generic_errc::parse_error, "unknown polymorphic type id");
+			bool matched = ((id == polymorphic_traits<Base>::template id_for<std::tuple_element_t<Indices, Tuple>>()
+				? (err = process(stream, static_cast<const std::tuple_element_t<Indices, Tuple>&>(value)), true)
+				: false) || ...);
+			(void)matched;
+			return err;
+		}
+
+		template<typename Base, typename Stream, typename Tuple, size_t... Indices>
+		error dispatch_polymorphic_read_impl(typename polymorphic_traits<Base>::id_type id, Stream& stream, unique_ptr<Base>& out, std::index_sequence<Indices...>) {
+			error err = error(generic_errc::parse_error, "unknown polymorphic type id");
+			bool matched = ((id == polymorphic_traits<Base>::template id_for<std::tuple_element_t<Indices, Tuple>>()
+				? ([&]() -> bool {
+					using Derived = std::tuple_element_t<Indices, Tuple>;
+					auto value = make_unique<Derived>();
+					err = process(stream, *value);
+					if (!err) {
+						out = std::move(value);
+					}
+					return true;
+				}())
+				: false) || ...);
+			(void)matched;
+			return err;
+		}
+	}
+
+	template<typename Base, typename Stream>
+	error dispatch_write(typename polymorphic_traits<Base>::id_type id, Stream& stream, const Base& value) {
+		using traits = polymorphic_traits<Base>;
+		using tuple_t = typename traits::types;
+		return detail::dispatch_polymorphic_write_impl<Base, Stream, tuple_t>(id, stream, value, std::make_index_sequence<std::tuple_size_v<tuple_t>>{});
+	}
+
+	template<typename Base, typename Stream>
+	error dispatch_read(typename polymorphic_traits<Base>::id_type id, Stream& stream, unique_ptr<Base>& out) {
+		using traits = polymorphic_traits<Base>;
+		using tuple_t = typename traits::types;
+		return detail::dispatch_polymorphic_read_impl<Base, Stream, tuple_t>(id, stream, out, std::make_index_sequence<std::tuple_size_v<tuple_t>>{});
+	}
 
 	/*!
 	** @ingroup binary
@@ -212,17 +494,6 @@ namespace lf::bin {
 	template<typename Element, size_t Count>
 	struct is_array<std::array<Element, Count>> : std::true_type {};
 
-	template<typename T>
-	concept readable_byte_stream = requires { typename std::remove_cvref_t<T>::stream_tag; } &&
-		std::same_as<typename std::remove_cvref_t<T>::stream_tag, read_stream_tag>;
-
-	template<typename T>
-	concept writable_byte_stream = requires { typename std::remove_cvref_t<T>::stream_tag; } &&
-		std::same_as<typename std::remove_cvref_t<T>::stream_tag, write_stream_tag>;
-
-	template<typename T>
-	concept byte_stream = readable_byte_stream<T> || writable_byte_stream<T>;
-
 	template<typename Stream, typename = void>
 	struct is_fast_stream : std::false_type {};
 
@@ -242,6 +513,15 @@ namespace lf::bin {
 
 	template<typename T, template<typename...> typename Template>
 	concept specialized_data = data<T, std::remove_cvref_t<T>> && is_specialization_of<std::remove_cvref_t<T>, Template>::value;
+
+	template<typename T>
+	struct is_glm_vec2 : std::false_type {};
+
+	template<typename T, glm::qualifier Qualifier>
+	struct is_glm_vec2<glm::vec<2, T, Qualifier>> : std::true_type {};
+
+	template<typename T>
+	concept glm_vec2_data = is_glm_vec2<std::remove_cvref_t<T>>::value;
 
 	template<typename T>
 	concept fixed_binary_integer =
@@ -274,7 +554,7 @@ namespace lf::bin {
 		string context_message(const Stream& stream, string_view message) {
 			if constexpr (requires { stream.context(); }) {
 				if (!stream.context().empty()) {
-					return format("{} : {}", stream.context(), message);
+					return lf::format("{} : {}", stream.context(), message);
 				}
 			}
 			return string(message);
@@ -309,7 +589,7 @@ namespace lf::bin {
 				return;
 			}
 			if (!err.message.starts_with(stream.context())) {
-				err.add_context(format("{} : {} binary data failed", stream.context(), action));
+				err.add_context(lf::format("{} : {} binary data failed", stream.context(), action));
 			}
 		}
 
@@ -335,7 +615,13 @@ namespace lf::bin {
 		template<typename Stream, binary_field Field>
 		error process_field(Stream& stream, Field&& item, string_view action) {
 			if constexpr (is_fast_stream_v<Stream>) {
-				return process_field_value(stream, std::forward<Field>(item));
+				if (auto err = process_field_value(stream, std::forward<Field>(item)); err) {
+					return err;
+				}
+				if constexpr (requires { stream.advance_progress(); }) {
+					stream.advance_progress();
+				}
+				return {};
 			}
 
 			context_scope scope(stream, item.name);
@@ -343,11 +629,17 @@ namespace lf::bin {
 				add_context_if_missing(stream, err, action);
 				return err;
 			}
+			if constexpr (requires { stream.advance_progress(); }) {
+				stream.advance_progress();
+			}
 			return {};
 		}
 
 		template<typename Stream, binary_field... Fields>
 		error process_fields(Stream& stream, string_view action, Fields&&... fields) {
+			if constexpr (requires { stream.add_progress_total(sizeof...(Fields)); }) {
+				stream.add_progress_total(sizeof...(Fields));
+			}
 			error err;
 			auto process_one = [&](auto&& item) -> bool {
 				err = process_field(stream, std::forward<decltype(item)>(item), action);
@@ -455,7 +747,7 @@ namespace lf::bin {
 
 		error bytes(span<lf::byte> out) {
 			if (out.size() > remaining()) {
-				return error(generic_errc::parse_error, detail::context_message(*this, format("reading {} bytes failed at byte {}: {} bytes remain", out.size(), m_cursor, remaining())));
+				return error(generic_errc::parse_error, detail::context_message(*this, lf::format("reading {} bytes failed at byte {}: {} bytes remain", out.size(), m_cursor, remaining())));
 			}
 
 			if (!out.empty()) { std::memcpy(out.data(), m_input.data() + m_cursor, out.size()); }
@@ -470,7 +762,7 @@ namespace lf::bin {
 		template<typename T>
 		error read_scalar(T& value) {
 			if (sizeof(T) > remaining()) {
-				return error(generic_errc::parse_error, detail::context_message(*this, format("reading {} bytes failed at byte {}: {} bytes remain", sizeof(T), m_cursor, remaining())));
+				return error(generic_errc::parse_error, detail::context_message(*this, lf::format("reading {} bytes failed at byte {}: {} bytes remain", sizeof(T), m_cursor, remaining())));
 			}
 			std::memcpy(&value, m_input.data() + m_cursor, sizeof(T));
 			advance(sizeof(T));
@@ -484,7 +776,7 @@ namespace lf::bin {
 		*/
 		error bytes_view(span<const lf::byte>& out, size_t byte_count) {
 			if (byte_count > remaining()) {
-				return error(generic_errc::parse_error, detail::context_message(*this, format("reading {} bytes failed at byte {}: {} bytes remain", byte_count, m_cursor, remaining())));
+				return error(generic_errc::parse_error, detail::context_message(*this, lf::format("reading {} bytes failed at byte {}: {} bytes remain", byte_count, m_cursor, remaining())));
 			}
 			out = span<const lf::byte>(m_input.data() + m_cursor, byte_count);
 			advance(byte_count);
@@ -493,7 +785,7 @@ namespace lf::bin {
 
 		error padding(size_t size) {
 			if (size > remaining()) {
-				return error(generic_errc::parse_error, detail::context_message(*this, format("reading {} padding bytes failed at byte {}: {} bytes remain", size, m_cursor, remaining())));
+				return error(generic_errc::parse_error, detail::context_message(*this, lf::format("reading {} padding bytes failed at byte {}: {} bytes remain", size, m_cursor, remaining())));
 			}
 			advance(size);
 			return {};
@@ -515,6 +807,14 @@ namespace lf::bin {
 			return m_limits;
 		}
 
+		read_refs& refs() {
+			return m_refs;
+		}
+
+		const read_refs& refs() const {
+			return m_refs;
+		}
+
 		const string& context() const {
 			return m_context;
 		}
@@ -529,7 +829,24 @@ namespace lf::bin {
 		** The callback receives the current cursor and total input size.
 		*/
 		void set_progress(std::function<void(size_t, size_t)> progress) {
-			m_progress = std::move(progress);
+			m_owned_progress = progress_observer(std::move(progress));
+			m_progress = &m_owned_progress;
+		}
+
+		void set_progress(progress_observer* progress) {
+			m_progress = progress;
+		}
+
+		void add_progress_total(size_t amount) {
+			if (m_progress) {
+				m_progress->add_total(amount);
+			}
+		}
+
+		void advance_progress(size_t amount = 1) {
+			if (m_progress) {
+				m_progress->advance(amount);
+			}
 		}
 
 		template<typename T>
@@ -552,14 +869,13 @@ namespace lf::bin {
 		span<const lf::byte> m_input;
 		read_limits m_limits;
 		size_t m_cursor = 0;
+		read_refs m_refs;
 		string m_context;
-		std::function<void(size_t, size_t)> m_progress;
+		progress_observer* m_progress = nullptr;
+		progress_observer m_owned_progress;
 
 		void advance(size_t amount) {
 			m_cursor += amount;
-			if (m_progress) {
-				m_progress(m_cursor, m_input.size());
-			}
 		}
 	};
 
@@ -580,7 +896,7 @@ namespace lf::bin {
 
 		error bytes(span<lf::byte> out) {
 			if (out.size() > remaining()) {
-				return error(generic_errc::parse_error, format("reading {} bytes failed at byte {}: {} bytes remain", out.size(), m_cursor, remaining()));
+				return error(generic_errc::parse_error, lf::format("reading {} bytes failed at byte {}: {} bytes remain", out.size(), m_cursor, remaining()));
 			}
 			if (!out.empty()) { std::memcpy(out.data(), m_input.data() + m_cursor, out.size()); }
 			m_cursor += out.size();
@@ -594,7 +910,7 @@ namespace lf::bin {
 		template<typename T>
 		error read_scalar(T& value) {
 			if (sizeof(T) > remaining()) {
-				return error(generic_errc::parse_error, format("reading {} bytes failed at byte {}: {} bytes remain", sizeof(T), m_cursor, remaining()));
+				return error(generic_errc::parse_error, lf::format("reading {} bytes failed at byte {}: {} bytes remain", sizeof(T), m_cursor, remaining()));
 			}
 			std::memcpy(&value, m_input.data() + m_cursor, sizeof(T));
 			m_cursor += sizeof(T);
@@ -603,7 +919,7 @@ namespace lf::bin {
 
 		error bytes_view(span<const lf::byte>& out, size_t byte_count) {
 			if (byte_count > remaining()) {
-				return error(generic_errc::parse_error, format("reading {} bytes failed at byte {}: {} bytes remain", byte_count, m_cursor, remaining()));
+				return error(generic_errc::parse_error, lf::format("reading {} bytes failed at byte {}: {} bytes remain", byte_count, m_cursor, remaining()));
 			}
 			out = span<const lf::byte>(m_input.data() + m_cursor, byte_count);
 			m_cursor += byte_count;
@@ -612,7 +928,7 @@ namespace lf::bin {
 
 		error padding(size_t size) {
 			if (size > remaining()) {
-				return error(generic_errc::parse_error, format("reading {} padding bytes failed at byte {}: {} bytes remain", size, m_cursor, remaining()));
+				return error(generic_errc::parse_error, lf::format("reading {} padding bytes failed at byte {}: {} bytes remain", size, m_cursor, remaining()));
 			}
 			m_cursor += size;
 			return {};
@@ -634,11 +950,35 @@ namespace lf::bin {
 			return m_limits;
 		}
 
+		read_refs& refs() {
+			return m_refs;
+		}
+
+		const read_refs& refs() const {
+			return m_refs;
+		}
+
 		string_view context() const {
 			return {};
 		}
 
 		void set_context(string) {}
+
+		void set_progress(progress_observer* progress) {
+			m_progress = progress;
+		}
+
+		void add_progress_total(size_t amount) {
+			if (m_progress) {
+				m_progress->add_total(amount);
+			}
+		}
+
+		void advance_progress(size_t amount = 1) {
+			if (m_progress) {
+				m_progress->advance(amount);
+			}
+		}
 
 		template<typename T>
 			requires (!std::is_const_v<std::remove_reference_t<T>>)
@@ -655,6 +995,8 @@ namespace lf::bin {
 		span<const lf::byte> m_input;
 		read_limits m_limits;
 		size_t m_cursor = 0;
+		read_refs m_refs;
+		progress_observer* m_progress = nullptr;
 	};
 
 	/*!
@@ -667,6 +1009,8 @@ namespace lf::bin {
 	*/
 	struct write_stream {
 		using stream_tag = write_stream_tag;
+
+		write_stream() = default;
 
 		error bytes(span<const lf::byte> in) {
 			if (in.empty()) { return {}; }
@@ -716,8 +1060,32 @@ namespace lf::bin {
 			return m_context;
 		}
 
+		write_refs& refs() {
+			return m_refs;
+		}
+
+		const write_refs& refs() const {
+			return m_refs;
+		}
+
 		void set_context(string context) {
 			m_context = std::move(context);
+		}
+
+		void set_progress(progress_observer* progress) {
+			m_progress = progress;
+		}
+
+		void add_progress_total(size_t amount) {
+			if (m_progress) {
+				m_progress->add_total(amount);
+			}
+		}
+
+		void advance_progress(size_t amount = 1) {
+			if (m_progress) {
+				m_progress->advance(amount);
+			}
 		}
 
 		template<typename T>
@@ -743,6 +1111,8 @@ namespace lf::bin {
 
 	private:
 		vector<lf::byte> m_output;
+		write_refs m_refs;
+		progress_observer* m_progress = nullptr;
 		string m_context;
 	};
 
@@ -756,6 +1126,8 @@ namespace lf::bin {
 	struct fast_write_stream {
 		using stream_tag = write_stream_tag;
 		using speed_tag = fast_stream_tag;
+
+		fast_write_stream() = default;
 
 		error bytes(span<const lf::byte> in) {
 			if (in.empty()) { return {}; }
@@ -796,7 +1168,31 @@ namespace lf::bin {
 			return {};
 		}
 
+		write_refs& refs() {
+			return m_refs;
+		}
+
+		const write_refs& refs() const {
+			return m_refs;
+		}
+
 		void set_context(string) {}
+
+		void set_progress(progress_observer* progress) {
+			m_progress = progress;
+		}
+
+		void add_progress_total(size_t amount) {
+			if (m_progress) {
+				m_progress->add_total(amount);
+			}
+		}
+
+		void advance_progress(size_t amount = 1) {
+			if (m_progress) {
+				m_progress->advance(amount);
+			}
+		}
 
 		template<typename T>
 			requires (!std::is_const_v<std::remove_reference_t<T>>)
@@ -816,6 +1212,8 @@ namespace lf::bin {
 
 	private:
 		vector<lf::byte> m_output;
+		write_refs m_refs;
+		progress_observer* m_progress = nullptr;
 	};
 
 	/*!
@@ -833,7 +1231,7 @@ namespace lf::bin {
 
 		error bytes(span<const lf::byte> in) {
 			if (in.size() > remaining()) {
-				return error(generic_errc::parse_error, detail::context_message(*this, format("writing {} bytes failed at byte {}: fixed output has {} bytes remaining", in.size(), m_cursor, remaining())));
+				return error(generic_errc::parse_error, detail::context_message(*this, lf::format("writing {} bytes failed at byte {}: fixed output has {} bytes remaining", in.size(), m_cursor, remaining())));
 			}
 			if (!in.empty()) { std::memcpy(m_output.data() + m_cursor, in.data(), in.size()); }
 			m_cursor += in.size();
@@ -847,7 +1245,7 @@ namespace lf::bin {
 		template<typename T>
 		error write_scalar(const T& value) {
 			if (sizeof(T) > remaining()) {
-				return error(generic_errc::parse_error, detail::context_message(*this, format("writing {} bytes failed at byte {}: fixed output has {} bytes remaining", sizeof(T), m_cursor, remaining())));
+				return error(generic_errc::parse_error, detail::context_message(*this, lf::format("writing {} bytes failed at byte {}: fixed output has {} bytes remaining", sizeof(T), m_cursor, remaining())));
 			}
 			std::memcpy(m_output.data() + m_cursor, &value, sizeof(T));
 			m_cursor += sizeof(T);
@@ -856,7 +1254,7 @@ namespace lf::bin {
 
 		error padding(size_t size) {
 			if (size > remaining()) {
-				return error(generic_errc::parse_error, detail::context_message(*this, format("writing {} padding bytes failed at byte {}: fixed output has {} bytes remaining", size, m_cursor, remaining())));
+				return error(generic_errc::parse_error, detail::context_message(*this, lf::format("writing {} padding bytes failed at byte {}: fixed output has {} bytes remaining", size, m_cursor, remaining())));
 			}
 			m_cursor += size;
 			return {};
@@ -886,6 +1284,30 @@ namespace lf::bin {
 			m_context = std::move(context);
 		}
 
+		write_refs& refs() {
+			return m_refs;
+		}
+
+		const write_refs& refs() const {
+			return m_refs;
+		}
+
+		void set_progress(progress_observer* progress) {
+			m_progress = progress;
+		}
+
+		void add_progress_total(size_t amount) {
+			if (m_progress) {
+				m_progress->add_total(amount);
+			}
+		}
+
+		void advance_progress(size_t amount = 1) {
+			if (m_progress) {
+				m_progress->advance(amount);
+			}
+		}
+
 		template<typename T>
 			requires (!std::is_const_v<std::remove_reference_t<T>>)
 		error process(T& value) {
@@ -905,6 +1327,8 @@ namespace lf::bin {
 	private:
 		span<lf::byte> m_output;
 		size_t m_cursor = 0;
+		write_refs m_refs;
+		progress_observer* m_progress = nullptr;
 		string m_context;
 	};
 
@@ -917,6 +1341,9 @@ namespace lf::bin {
 	*/
 	struct measure_stream {
 		using stream_tag = write_stream_tag;
+		using speed_tag = fast_stream_tag;
+
+		measure_stream() = default;
 
 		error bytes(span<const lf::byte> in) {
 			m_size += in.size();
@@ -943,12 +1370,36 @@ namespace lf::bin {
 			return m_size;
 		}
 
+		write_refs& refs() {
+			return m_refs;
+		}
+
+		const write_refs& refs() const {
+			return m_refs;
+		}
+
 		const string& context() const {
 			return m_context;
 		}
 
 		void set_context(string context) {
 			m_context = std::move(context);
+		}
+
+		void set_progress(progress_observer* progress) {
+			m_progress = progress;
+		}
+
+		void add_progress_total(size_t amount) {
+			if (m_progress) {
+				m_progress->add_total(amount);
+			}
+		}
+
+		void advance_progress(size_t amount = 1) {
+			if (m_progress) {
+				m_progress->advance(amount);
+			}
 		}
 
 		template<typename T>
@@ -969,6 +1420,8 @@ namespace lf::bin {
 
 	private:
 		size_t m_size = 0;
+		write_refs m_refs;
+		progress_observer* m_progress = nullptr;
 		string m_context;
 	};
 
@@ -1052,10 +1505,14 @@ namespace lf::bin {
 			}
 			if constexpr (std::endian::native == std::endian::little) {
 				if constexpr (is_writing_stream_v<Stream>) {
-					return stream.bytes(std::as_bytes(values));
+					IF_ERROR_RETURN_ERROR(stream.bytes(std::as_bytes(values)));
 				} else {
-					return stream.bytes(std::as_writable_bytes(values));
+					IF_ERROR_RETURN_ERROR(stream.bytes(std::as_writable_bytes(values)));
 				}
+				if constexpr (requires { stream.advance_progress(values.size()); }) {
+					stream.advance_progress(values.size());
+				}
+				return {};
 			} else {
 				for (size_t index = 0; index < values.size(); ++index) {
 					if constexpr (is_writing_stream_v<Stream>) {
@@ -1067,6 +1524,9 @@ namespace lf::bin {
 							return err;
 						}
 					}
+					if constexpr (requires { stream.advance_progress(); }) {
+						stream.advance_progress();
+					}
 				}
 				return {};
 			}
@@ -1076,12 +1536,12 @@ namespace lf::bin {
 		error validate_vector_allocation(Stream& stream, const Vector& value, size_t item_count) {
 			using element_t = typename Vector::value_type;
 			if (item_count > value.max_size()) {
-				return error(generic_errc::parse_error, context_message(stream, format("reading {} failed: vector size {} exceeds max_size {}", value_type_name<Vector>(), item_count, value.max_size())));
+				return error(generic_errc::parse_error, context_message(stream, lf::format("reading {} failed: vector size {} exceeds max_size {}", value_type_name<Vector>(), item_count, value.max_size())));
 			}
 			if constexpr (sizeof(element_t) > 0) {
 				constexpr size_t max_count_without_overflow = std::numeric_limits<size_t>::max() / sizeof(element_t);
 				if (item_count > max_count_without_overflow) {
-					return error(generic_errc::parse_error, context_message(stream, format("reading {} failed: vector byte size overflows size_t", value_type_name<Vector>())));
+					return error(generic_errc::parse_error, context_message(stream, lf::format("reading {} failed: vector byte size overflows size_t", value_type_name<Vector>())));
 				}
 			}
 			return {};
@@ -1117,7 +1577,7 @@ namespace lf::bin {
 				return err;
 			}
 			if (byte > 1) {
-				return error(generic_errc::parse_error, detail::context_message(stream, format("reading {} failed: expected 0 or 1, got {}", detail::value_type_name<Bool>(), byte)));
+				return error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: expected 0 or 1, got {}", detail::value_type_name<Bool>(), byte)));
 			}
 			value = (byte != 0);
 			return {};
@@ -1157,7 +1617,7 @@ namespace lf::bin {
 			}
 			value = static_cast<raw_t>(encoded);
 			if (!enum_validator<raw_t>::is_valid(value)) {
-				return error(generic_errc::parse_error, detail::context_message(stream, format("reading {} failed: invalid enum value {}", detail::value_type_name<Enum>(), encoded)));
+				return error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: invalid enum value {}", detail::value_type_name<Enum>(), encoded)));
 			}
 			return {};
 		}
@@ -1206,14 +1666,14 @@ namespace lf::bin {
 					break;
 				}
 				if (byte_count == max_encoded_size_bytes) {
-					return error(generic_errc::parse_error, detail::context_message(stream, format("reading {} failed: encoded size {} is too big, max is {} bytes", detail::value_type_name<Size>(), byte_count + 1u, max_encoded_size_bytes)));
+					return error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: encoded size {} is too big, max is {} bytes", detail::value_type_name<Size>(), byte_count + 1u, max_encoded_size_bytes)));
 				}
 			}
 
 			if (byte_count == max_encoded_size_bytes) {
 				const u08 final_payload = static_cast<u08>(std::to_integer<u08>(bytes[byte_count - 1u]) & 0x7fu);
 				if ((final_payload & ~final_payload_mask) != 0) {
-					return error(generic_errc::parse_error, detail::context_message(stream, format("reading {} failed: payload bits {}..{} must be 0, final byte only has {} valid payload bit(s)", detail::value_type_name<Size>(), first_overflow_bit, last_overflow_bit, final_payload_bits)));
+					return error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: payload bits {}..{} must be 0, final byte only has {} valid payload bit(s)", detail::value_type_name<Size>(), first_overflow_bit, last_overflow_bit, final_payload_bits)));
 				}
 			}
 			size_t result = 0;
@@ -1242,7 +1702,7 @@ namespace lf::bin {
 				return err;
 			}
 			if (byte_count.value > stream.limits().max_string_bytes) {
-				return error(generic_errc::parse_error, detail::context_message(stream, format("reading {} failed: string byte size {} exceeds limit {}", detail::value_type_name<String>(), byte_count.value, stream.limits().max_string_bytes)));
+				return error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: string byte size {} exceeds limit {}", detail::value_type_name<String>(), byte_count.value, stream.limits().max_string_bytes)));
 			}
 
 			string temp;
@@ -1265,6 +1725,9 @@ namespace lf::bin {
 			if (auto err = stream(field("size", item_count)); err) {
 				return err;
 			}
+			if constexpr (requires { stream.add_progress_total(value.size()); }) {
+				stream.add_progress_total(value.size());
+			}
 
 			if constexpr (detail::bulk_binary_element_v<element_t>) {
 				detail::context_scope scope(stream, "data");
@@ -1273,7 +1736,7 @@ namespace lf::bin {
 
 			size_t index = 0;
 			for (const auto& item : value) {
-				const string item_name = format("[{}]", index);
+				const string item_name = lf::format("[{}]", index);
 				if (auto err = stream(field(item_name, item)); err) {
 					return err;
 				}
@@ -1286,7 +1749,10 @@ namespace lf::bin {
 				return err;
 			}
 			if (item_count.value > stream.limits().max_vector_elements) {
-				return error(generic_errc::parse_error, detail::context_message(stream, format("reading {} failed: vector size {} exceeds limit {}", detail::value_type_name<Vector>(), item_count.value, stream.limits().max_vector_elements)));
+				return error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: vector size {} exceeds limit {}", detail::value_type_name<Vector>(), item_count.value, stream.limits().max_vector_elements)));
+			}
+			if constexpr (requires { stream.add_progress_total(item_count.value); }) {
+				stream.add_progress_total(item_count.value);
 			}
 
 			std::remove_cvref_t<Vector> temp;
@@ -1306,7 +1772,7 @@ namespace lf::bin {
 			temp.reserve(static_cast<size_t>(item_count.value));
 			for (size_t index = 0; index < static_cast<size_t>(item_count.value); ++index) {
 				temp.emplace_back();
-				const string item_name = format("[{}]", index);
+				const string item_name = lf::format("[{}]", index);
 				if (auto err = stream(field(item_name, temp.back())); err) {
 					return err;
 				}
@@ -1316,58 +1782,112 @@ namespace lf::bin {
 		}
 	}
 
-	template<byte_stream Stream, typename T>
-	error process(Stream& stream, unique_ptr<T>& value) {
-		bool present = static_cast<bool>(value);
-		IF_ERROR_RETURN_ERROR(stream(field("present", present)));
-		if (!present) {
-			if constexpr (readable_byte_stream<Stream>) {
-				value = nullptr;
-			}
-			return {};
-		}
-		if constexpr (readable_byte_stream<Stream>) {
-			value = make_unique<T>();
-		}
-		return stream(field("value", *value));
-	}
-
-	template<byte_stream Stream, typename T, typename... Args>
-		requires (sizeof...(Args) > 0)
+	template<readable_byte_stream Stream, typename T, typename... Args>
+		requires (!polymorphic<T>)
 	error process(Stream& stream, unique_ptr<T>& value, Args&... args) {
 		bool present = static_cast<bool>(value);
 		IF_ERROR_RETURN_ERROR(stream(field("present", present)));
 		if (!present) {
-			if constexpr (readable_byte_stream<Stream>) {
-				value = nullptr;
-			}
+			value = nullptr;
 			return {};
 		}
-		if constexpr (readable_byte_stream<Stream>) {
-			value = make_unique<T>();
-		}
+		value = make_unique<T>();
 		return stream(field("value", *value, args...));
 	}
 
-	template<byte_stream Stream, typename T>
-	error process(Stream& stream, const unique_ptr<T>& value) {
-		bool present = static_cast<bool>(value);
-		IF_ERROR_RETURN_ERROR(stream(field("present", present)));
-		if (!present) {
-			return {};
-		}
-		return stream(field("value", *value));
-	}
-
-	template<byte_stream Stream, typename T, typename... Args>
-		requires (sizeof...(Args) > 0)
+	template<writable_byte_stream Stream, typename T, typename... Args>
+		requires (!polymorphic<T>)
 	error process(Stream& stream, const unique_ptr<T>& value, Args&... args) {
 		bool present = static_cast<bool>(value);
 		IF_ERROR_RETURN_ERROR(stream(field("present", present)));
+		if (present) {
+			return stream(field("value", *value, args...));
+		}
+		return {};
+	}
+
+	template<readable_byte_stream Stream, typename Base, typename... Args>
+		requires polymorphic<Base>
+	error process(Stream& stream, unique_ptr<Base>& value, Args&... args) {
+		using traits = polymorphic_traits<Base>;
+		using id_t = typename traits::id_type;
+
+		bool present = static_cast<bool>(value);
+		IF_ERROR_RETURN_ERROR(stream(field("present", present)));
+		if (!present) {
+			value = nullptr;
+			return {};
+		}
+		id_t id{};
+		IF_ERROR_RETURN_ERROR(stream(field("type", id)));
+		return dispatch_read<Base>(id, stream, value);
+	}
+
+	template<writable_byte_stream Stream, typename Base, typename... Args>
+		requires polymorphic<Base>
+	error process(Stream& stream, const unique_ptr<Base>& value, Args&...) {
+		using traits = polymorphic_traits<Base>;
+		using id_t = typename traits::id_type;
+
+		bool present = static_cast<bool>(value);
+		IF_ERROR_RETURN_ERROR(stream(field("present", present)));
 		if (!present) {
 			return {};
 		}
-		return stream(field("value", *value, args...));
+		id_t id = traits::id_of(*value);
+		IF_ERROR_RETURN_ERROR(stream(field("type", id)));
+		return dispatch_write<Base>(id, stream, *value);
+	}
+
+	template<readable_byte_stream Stream, typename T>
+		requires requires (Stream& s) { s.refs(); }
+	error process(Stream& stream, ref<T>& value) {
+		u64 id = 0;
+		IF_ERROR_RETURN_ERROR(stream(field("ref", id)));
+		if (id == 0) {
+			value.ptr = nullptr;
+			return {};
+		}
+		stream.refs().defer(&value.ptr, id);
+		return {};
+	}
+
+	template<writable_byte_stream Stream, typename T>
+		requires requires (Stream& s) { s.refs(); }
+	error process(Stream& stream, const ref<T>& value) {
+		u64 id = stream.refs().id_of(value.ptr);
+		return stream(field("ref", id));
+	}
+
+	template<readable_byte_stream Stream, typename T>
+		requires requires (Stream& s) { s.refs(); }
+	error process_shared(Stream& stream, T& value) {
+		if constexpr (requires { stream.add_progress_total(1); }) {
+			stream.add_progress_total(1);
+		}
+		u64 id = 0;
+		IF_ERROR_RETURN_ERROR(stream(field("id", id)));
+		stream.refs().define(id, &value);
+		IF_ERROR_RETURN_ERROR(process(stream, value));
+		if constexpr (requires { stream.advance_progress(); }) {
+			stream.advance_progress();
+		}
+		return {};
+	}
+
+	template<writable_byte_stream Stream, typename T>
+		requires requires (Stream& s) { s.refs(); }
+	error process_shared(Stream& stream, const T& value) {
+		if constexpr (requires { stream.add_progress_total(1); }) {
+			stream.add_progress_total(1);
+		}
+		u64 id = stream.refs().define(&value);
+		IF_ERROR_RETURN_ERROR(stream(field("id", id)));
+		IF_ERROR_RETURN_ERROR(process(stream, value));
+		if constexpr (requires { stream.advance_progress(); }) {
+			stream.advance_progress();
+		}
+		return {};
 	}
 
 	template<byte_stream Stream, typename Optional>
@@ -1397,10 +1917,13 @@ namespace lf::bin {
 			if (auto err = stream(field("size", item_count)); err) {
 				return err;
 			}
+			if constexpr (requires { stream.add_progress_total(value.size()); }) {
+				stream.add_progress_total(value.size());
+			}
 
 			size_t index = 0;
 			for (auto& item : value) {
-				const string item_name = format("[{}]", index);
+				const string item_name = lf::format("[{}]", index);
 				if (auto err = stream(field(item_name, item, args...)); err) {
 					return err;
 				}
@@ -1413,7 +1936,10 @@ namespace lf::bin {
 				return err;
 			}
 			if (item_count.value > stream.limits().max_vector_elements) {
-				return error(generic_errc::parse_error, detail::context_message(stream, format("reading {} failed: vector size {} exceeds limit {}", detail::value_type_name<Vector>(), item_count.value, stream.limits().max_vector_elements)));
+				return error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: vector size {} exceeds limit {}", detail::value_type_name<Vector>(), item_count.value, stream.limits().max_vector_elements)));
+			}
+			if constexpr (requires { stream.add_progress_total(item_count.value); }) {
+				stream.add_progress_total(item_count.value);
 			}
 
 			vector_t temp;
@@ -1423,7 +1949,7 @@ namespace lf::bin {
 			temp.reserve(static_cast<size_t>(item_count.value));
 			for (size_t index = 0; index < static_cast<size_t>(item_count.value); ++index) {
 				temp.emplace_back();
-				const string item_name = format("[{}]", index);
+				const string item_name = lf::format("[{}]", index);
 				if (auto err = stream(field(item_name, temp.back(), args...)); err) {
 					return err;
 				}
@@ -1462,9 +1988,12 @@ namespace lf::bin {
 			if (auto err = stream(field("size", item_count)); err) {
 				return err;
 			}
+			if constexpr (requires { stream.add_progress_total(value.size()); }) {
+				stream.add_progress_total(value.size());
+			}
 			size_t index = 0;
 			for (const auto& [key, mapped] : value) {
-				const string item_name = format("[{}]", index);
+				const string item_name = lf::format("[{}]", index);
 				detail::context_scope scope(stream, item_name);
 				if (auto err = stream(field("key", key), field("value", mapped)); err) {
 					return err;
@@ -1478,14 +2007,17 @@ namespace lf::bin {
 				return err;
 			}
 			if (item_count.value > stream.limits().max_vector_elements) {
-				return error(generic_errc::parse_error, detail::context_message(stream, format("reading {} failed: map size {} exceeds limit {}", detail::value_type_name<Map>(), item_count.value, stream.limits().max_vector_elements)));
+				return error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: map size {} exceeds limit {}", detail::value_type_name<Map>(), item_count.value, stream.limits().max_vector_elements)));
+			}
+			if constexpr (requires { stream.add_progress_total(item_count.value); }) {
+				stream.add_progress_total(item_count.value);
 			}
 			map_t temp;
 			temp.reserve(static_cast<size_t>(item_count.value));
 			for (size_t index = 0; index < static_cast<size_t>(item_count.value); ++index) {
 				key_t key{};
 				mapped_t mapped{};
-				const string item_name = format("[{}]", index);
+				const string item_name = lf::format("[{}]", index);
 				detail::context_scope scope(stream, item_name);
 				if (auto err = stream(field("key", key), field("value", mapped)); err) {
 					return err;
@@ -1506,9 +2038,12 @@ namespace lf::bin {
 			return detail::process_bulk_elements(stream, span(value.data(), value.size()));
 		}
 
+		if constexpr (requires { stream.add_progress_total(value.size()); }) {
+			stream.add_progress_total(value.size());
+		}
 		size_t index = 0;
 		for (auto& item : value) {
-			const string item_name = format("[{}]", index);
+			const string item_name = lf::format("[{}]", index);
 			if (auto err = stream(field(item_name, item)); err) {
 				return err;
 			}
@@ -1520,9 +2055,12 @@ namespace lf::bin {
 	template<byte_stream Stream, typename Array, typename... Args>
 		requires (data<Array, std::remove_cvref_t<Array>> && is_array<std::remove_cvref_t<Array>>::value && sizeof...(Args) > 0)
 	error process(Stream& stream, Array& value, Args&... args) {
+		if constexpr (requires { stream.add_progress_total(value.size()); }) {
+			stream.add_progress_total(value.size());
+		}
 		size_t index = 0;
 		for (auto& item : value) {
-			const string item_name = format("[{}]", index);
+			const string item_name = lf::format("[{}]", index);
 			if (auto err = stream(field(item_name, item, args...)); err) {
 				return err;
 			}
@@ -1531,7 +2069,7 @@ namespace lf::bin {
 		return {};
 	}
 
-	template<byte_stream Stream, data<vec2> Vec2>
+	template<byte_stream Stream, glm_vec2_data Vec2>
 	error process(Stream& stream, Vec2& value) {
 		return stream(field("x", value.x), field("y", value.y));
 	}
@@ -1581,11 +2119,12 @@ namespace lf::bin {
 	report<T> read(span<const lf::byte> bytes, read_options options = {}) {
 		T value{};
 		read_stream stream(bytes, options.limits);
+		stream.set_progress(options.progress);
 		if (auto err = process(stream, value); err) {
 			return unexpected(err);
 		}
 		if (stream.cursor() != bytes.size()) {
-			return unexpected(error(generic_errc::parse_error, detail::context_message(stream, format("reading {} failed: {} trailing byte(s) remain", detail::value_type_name<T>(), bytes.size() - stream.cursor()))));
+			return unexpected(error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: {} trailing byte(s) remain", detail::value_type_name<T>(), bytes.size() - stream.cursor()))));
 		}
 		return value;
 	}
@@ -1601,11 +2140,12 @@ namespace lf::bin {
 	report<T> fast_read(span<const lf::byte> bytes, read_options options = {}) {
 		T value{};
 		fast_read_stream stream(bytes, options.limits);
+		stream.set_progress(options.progress);
 		if (auto err = process(stream, value); err) {
 			return unexpected(err);
 		}
 		if (stream.cursor() != bytes.size()) {
-			return unexpected(error(generic_errc::parse_error, format("reading {} failed: {} trailing byte(s) remain", detail::value_type_name<T>(), bytes.size() - stream.cursor())));
+			return unexpected(error(generic_errc::parse_error, lf::format("reading {} failed: {} trailing byte(s) remain", detail::value_type_name<T>(), bytes.size() - stream.cursor())));
 		}
 		return value;
 	}
@@ -1617,6 +2157,27 @@ namespace lf::bin {
 	template<typename T>
 	report<T> process(span<const lf::byte> bytes, read_options options = {}) {
 		return read<T>(bytes, options);
+	}
+
+	/*!
+	** @ingroup binary
+	** @brief Parses a complete graph payload and resolves deferred ref<T> values.
+	*/
+	template<typename T>
+	report<T> read_graph(span<const lf::byte> bytes, read_options options = {}) {
+		T value{};
+		read_stream stream(bytes, options.limits);
+		stream.set_progress(options.progress);
+		if (auto err = process(stream, value); err) {
+			return unexpected(err);
+		}
+		if (auto err = stream.refs().run_fixups(); err) {
+			return unexpected(err);
+		}
+		if (stream.cursor() != bytes.size()) {
+			return unexpected(error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: {} trailing byte(s) remain", detail::value_type_name<T>(), bytes.size() - stream.cursor()))));
+		}
+		return value;
 	}
 
 	/*!
@@ -1637,8 +2198,9 @@ namespace lf::bin {
 	** @brief Serializes value into an owned byte vector.
 	*/
 	template<typename T>
-	report<vector<lf::byte>> write(const T& value) {
+	report<vector<lf::byte>> write(const T& value, write_options options = {}) {
 		write_stream stream;
+		stream.set_progress(options.progress);
 		if (auto err = process(stream, value); err) {
 			return unexpected(err);
 		}
@@ -1652,9 +2214,27 @@ namespace lf::bin {
 	** fast_write() emits the same bytes as write().
 	*/
 	template<typename T>
-	report<vector<lf::byte>> fast_write(const T& value) {
+	report<vector<lf::byte>> fast_write(const T& value, write_options options = {}) {
 		fast_write_stream stream;
+		stream.set_progress(options.progress);
 		if (auto err = process(stream, value); err) {
+			return unexpected(err);
+		}
+		return stream.take_written();
+	}
+
+	/*!
+	** @ingroup binary
+	** @brief Serializes a graph payload and validates all non-null ref<T> targets.
+	*/
+	template<typename T>
+	report<vector<lf::byte>> write_graph(const T& value, write_options options = {}) {
+		write_stream stream;
+		stream.set_progress(options.progress);
+		if (auto err = process(stream, value); err) {
+			return unexpected(err);
+		}
+		if (auto err = stream.refs().validate(); err) {
 			return unexpected(err);
 		}
 		return stream.take_written();
@@ -1668,8 +2248,10 @@ namespace lf::bin {
 	** value. Use measure(value) to size the span first when needed.
 	*/
 	template<typename T>
-	error write_to(span<lf::byte> out, const T& value) {
+	error write_to(span<lf::byte> out, const T& value, write_options options = {}) {
 		fixed_write_stream stream(out);
+		stream.set_progress(options.progress);
 		return process(stream, value);
 	}
 } // namespace lf::bin
+

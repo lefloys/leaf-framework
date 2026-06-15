@@ -21,11 +21,11 @@ namespace lf {
 		fs::path checked_relative_path(string_view path) {
 			fs::path relative = fs::path(path).lexically_normal();
 			if (relative.is_absolute()) {
-				throw runtime_exception(format("virtual path tail '{}' must be relative", path));
+				throw runtime_exception(lf::format("virtual path tail '{}' must be relative", path));
 			}
 			for (const fs::path& part : relative) {
 				if (part == "..") {
-					throw runtime_exception(format("virtual path tail '{}' escapes its mod root", path));
+					throw runtime_exception(lf::format("virtual path tail '{}' escapes its mod root", path));
 				}
 			}
 			return relative;
@@ -36,13 +36,13 @@ namespace lf {
 			if (relative.is_absolute()) {
 				return unexpected(error(
 					generic_errc::input_error,
-					format("virtual path tail '{}' must be relative", path)));
+					lf::format("virtual path tail '{}' must be relative", path)));
 			}
 			for (const fs::path& part : relative) {
 				if (part == "..") {
 					return unexpected(error(
 						generic_errc::input_error,
-						format("virtual path tail '{}' escapes its mod root", path)));
+						lf::format("virtual path tail '{}' escapes its mod root", path)));
 				}
 			}
 			return relative;
@@ -83,7 +83,7 @@ namespace lf {
 
 		size_t end = path.find("__", 2);
 		if (end == string_view::npos || end == 2) {
-			throw runtime_exception(format("invalid virtual path '{}'", path));
+			throw runtime_exception(lf::format("invalid virtual path '{}'", path));
 		}
 
 		string mod_name(path.substr(2, end - 2));
@@ -96,7 +96,7 @@ namespace lf {
 		std::lock_guard lock(virtual_roots_mutex());
 		auto it = virtual_roots().find(mod_name);
 		if (it == virtual_roots().end()) {
-			throw runtime_exception(format("virtual path '{}' references unknown mod '{}'", path, mod_name));
+			throw runtime_exception(lf::format("virtual path '{}' references unknown mod '{}'", path, mod_name));
 		}
 		return it->second / relative_tail;
 	}
@@ -119,7 +119,7 @@ namespace lf {
 		if (end == string_view::npos || end == 2) {
 			return unexpected(error(
 				generic_errc::input_error,
-				format("invalid virtual path '{}'", path)));
+				lf::format("invalid virtual path '{}'", path)));
 		}
 
 		string mod_name(path.substr(2, end - 2));
@@ -130,7 +130,7 @@ namespace lf {
 
 		report<fs::path> relative_tail = checked_relative_path_report(tail);
 		if (!relative_tail) {
-			return unexpected(relative_tail.error().add_context(format("resolving virtual path '{}'", path)));
+			return unexpected(relative_tail.error().add_context(lf::format("resolving virtual path '{}'", path)));
 		}
 
 		std::lock_guard lock(virtual_roots_mutex());
@@ -138,7 +138,7 @@ namespace lf {
 		if (it == virtual_roots().end()) {
 			return unexpected(error(
 				generic_errc::input_error,
-				format("virtual path '{}' references unknown mod '{}'", path, mod_name)));
+				lf::format("virtual path '{}' references unknown mod '{}'", path, mod_name)));
 		}
 		return it->second / *relative_tail;
 	}
@@ -146,13 +146,14 @@ namespace lf {
 	report<string> ReadVirtualTextFile(string_view path, fs::path relative_root) {
 		report<fs::path> resolved_path = ResolveVirtualPathReport(path, std::move(relative_root));
 		if (!resolved_path) {
-			return unexpected(resolved_path.error().add_context(format("resolving text file '{}'", path)));
+			return unexpected(resolved_path.error().add_context(lf::format("resolving text file '{}'", path)));
 		}
 
 		auto text = fs::ReadTextFile(resolved_path->string());
 		if (!text) {
-			return unexpected(text.error().add_context(format("reading text file '{}'", path)));
+			return unexpected(text.error().add_context(lf::format("reading text file '{}'", path)));
 		}
 		return text;
 	}
 }
+

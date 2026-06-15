@@ -1,6 +1,8 @@
 #include <concepts>
+#include <array>
 #include <cstddef>
 #include <limits>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -9,7 +11,7 @@
 #include "leaf/core/binary.hpp"
 
 struct BinaryPlayer {
-	lf::vec2 position{};
+	lf::vec2<f32> position{};
 	lf::string name;
 	i32 health = 0;
 };
@@ -60,12 +62,192 @@ enum class BinaryValidatedEnum : u08 {
 	Known = 1
 };
 
+enum class BinaryTestMode : u08 {
+	None = 0,
+	Full = 1,
+	Compact = 2
+};
+
+template<>
+struct lf::is_bitfield_enum<BinaryTestMode> : std::true_type {};
+
+struct BinaryModeStream {
+	using stream_tag = lf::bin::write_stream_tag;
+
+	lf::bin::write_stream inner;
+	BinaryTestMode current_mode = BinaryTestMode::None;
+
+	BinaryTestMode mode() const { return current_mode; }
+	lf::error bytes(lf::span<const lf::byte> in) { return inner.bytes(in); }
+	lf::error bytes(const void* in, size_t size) { return inner.bytes(in, size); }
+	template<typename T> lf::error write_scalar(const T& value) { return inner.write_scalar(value); }
+	lf::error padding(size_t size) { return inner.padding(size); }
+	const lf::string& context() const { return inner.context(); }
+	void set_context(lf::string context) { inner.set_context(std::move(context)); }
+	template<typename T> lf::error process(T& value) { return inner.process(value); }
+	template<typename T> lf::error process(const T& value) { return inner.process(value); }
+	template<lf::bin::binary_field... Fields> lf::error operator()(Fields&&... fields) {
+		return lf::bin::detail::process_fields(*this, "writing", std::forward<Fields>(fields)...);
+	}
+};
+
+struct BinaryPolyBase {
+	virtual ~BinaryPolyBase() = default;
+	virtual u08 type_id() const = 0;
+	i32 value = 0;
+};
+
+struct BinaryPolyA : BinaryPolyBase {
+	BinaryPolyA() { value = 11; }
+	u08 type_id() const override { return 1; }
+};
+
+struct BinaryPolyB : BinaryPolyBase {
+	BinaryPolyB() { value = 22; }
+	u08 type_id() const override { return 2; }
+};
+
+struct BinaryPolyHolder {
+	lf::unique_ptr<BinaryPolyBase> item;
+};
+
+struct BinaryGraphNode {
+	i32 value = 0;
+	lf::bin::ref<BinaryGraphNode> next;
+};
+
+struct BinaryGraph {
+	lf::vector<BinaryGraphNode> nodes;
+};
+
+struct BinaryDanglingGraph {
+	BinaryGraphNode node;
+	BinaryGraphNode dangling;
+};
+
+struct BinaryRelocatingGraph {
+	lf::vector<BinaryGraphNode> nodes;
+};
+
 template<>
 struct lf::bin::enum_validator<BinaryValidatedEnum> {
 	static constexpr bool is_valid(BinaryValidatedEnum value) {
 		return value == BinaryValidatedEnum::Known;
 	}
 };
+
+template<>
+struct lf::bin::polymorphic_traits<BinaryPolyBase> {
+	using id_type = u08;
+	using types = std::tuple<BinaryPolyA, BinaryPolyB>;
+
+	static id_type id_of(const BinaryPolyBase& value) {
+		return value.type_id();
+	}
+
+	template<typename Derived>
+	static constexpr id_type id_for() {
+		if constexpr (std::same_as<Derived, BinaryPolyA>) {
+			return 1;
+		} else if constexpr (std::same_as<Derived, BinaryPolyB>) {
+			return 2;
+		}
+	}
+};
+
+template<lf::bin::byte_stream Stream, lf::bin::data<BinaryPolyA> Value>
+lf::error process(Stream& stream, Value& value) {
+	return stream(lf::bin::field("value", value.value));
+}
+
+template<lf::bin::byte_stream Stream, lf::bin::data<BinaryPolyB> Value>
+lf::error process(Stream& stream, Value& value) {
+	return stream(lf::bin::field("value", value.value));
+}
+
+template<lf::bin::byte_stream Stream, lf::bin::data<BinaryPolyHolder> Value>
+lf::error process(Stream& stream, Value& value) {
+	return stream(lf::bin::field("item", value.item));
+}
+
+template<lf::bin::byte_stream Stream, lf::bin::data<BinaryGraphNode> Value>
+lf::error process(Stream& stream, Value& value) {
+	return stream(
+		lf::bin::field("value", value.value),
+		lf::bin::field("next", value.next)
+	);
+}
+
+template<lf::bin::byte_stream Stream, lf::bin::data<BinaryGraph> Value>
+lf::error process(Stream& stream, Value& value) {
+	if constexpr (lf::bin::is_writing_stream_v<Stream>) {
+		lf::bin::size count = value.nodes.size();
+		IF_ERROR_RETURN_ERROR(stream(lf::bin::field("size", count)));
+		for (auto& node : value.nodes) {
+			IF_ERROR_RETURN_ERROR(lf::bin::process_shared(stream, node));
+		}
+		return {};
+	} else {
+		lf::bin::size count = 0;
+		IF_ERROR_RETURN_ERROR(stream(lf::bin::field("size", count)));
+		value.nodes.resize(static_cast<size_t>(count.value));
+		for (BinaryGraphNode& node : value.nodes) {
+			IF_ERROR_RETURN_ERROR(lf::bin::process_shared(stream, node));
+		}
+		return {};
+	}
+}
+
+template<lf::bin::byte_stream Stream, lf::bin::data<BinaryDanglingGraph> Value>
+lf::error process(Stream& stream, Value& value) {
+	return stream(lf::bin::field("node", value.node));
+}
+
+template<lf::bin::byte_stream Stream, lf::bin::data<BinaryRelocatingGraph> Value>
+lf::error process(Stream& stream, Value& value) {
+	if constexpr (lf::bin::is_writing_stream_v<Stream>) {
+		lf::bin::size count = value.nodes.size();
+		IF_ERROR_RETURN_ERROR(stream(lf::bin::field("size", count)));
+		for (auto& node : value.nodes) {
+			IF_ERROR_RETURN_ERROR(lf::bin::process_shared(stream, node));
+		}
+		return {};
+	} else {
+		lf::bin::size count = 0;
+		IF_ERROR_RETURN_ERROR(stream(lf::bin::field("size", count)));
+		value.nodes.clear();
+		value.nodes.reserve(static_cast<size_t>(count.value));
+		for (size_t index = 0; index < static_cast<size_t>(count.value); ++index) {
+			value.nodes.emplace_back();
+			IF_ERROR_RETURN_ERROR(lf::bin::process_shared(stream, value.nodes.back()));
+		}
+		return {};
+	}
+}
+
+template<size_t Count, lf::bin::byte_stream Stream, size_t... Indices>
+lf::error process_binary_bitmask_values(Stream& stream, std::array<i32, Count>& values, std::index_sequence<Indices...>) {
+	return lf::bin::bitmask(
+		stream,
+		lf::bin::maybe("value", values[Indices], [](i32 value) { return value != 0; }, i32{ 0 })...
+	);
+}
+
+template<size_t Count>
+struct BinaryBitmaskValues {
+	std::array<i32, Count> values{};
+};
+
+template<lf::bin::byte_stream Stream, size_t Count>
+lf::error process(Stream& stream, BinaryBitmaskValues<Count>& value) {
+	return process_binary_bitmask_values(stream, value.values, std::make_index_sequence<Count>{});
+}
+
+template<lf::bin::writable_byte_stream Stream, size_t Count>
+lf::error process(Stream& stream, const BinaryBitmaskValues<Count>& value) {
+	auto copy = value.values;
+	return process_binary_bitmask_values(stream, copy, std::make_index_sequence<Count>{});
+}
 
 inline constexpr lf::version binary_version_1 = lf::version(0, 0, 1, 0);
 inline constexpr lf::version binary_version_2 = lf::version(0, 0, 2, 0);
@@ -480,10 +662,10 @@ TEST_CASE("binary read stream can expose zero-copy byte spans", "[binary]") {
 
 /// Verifies that binary vec2 and custom data round trip.
 TEST_CASE("binary vec2 and custom data round trip", "[binary]") {
-	require_round_trip(lf::vec2{ 4.0f, -9.5f });
+	require_round_trip(lf::vec2<f32>{ 4.0f, -9.5f });
 
 	BinaryPlayer player;
-	player.position = lf::vec2{ 2.0f, 8.0f };
+	player.position = lf::vec2<f32>{ 2.0f, 8.0f };
 	player.name = "Leaf";
 	player.health = 75;
 
@@ -516,7 +698,7 @@ TEST_CASE("binary fixed write stream writes into bounded storage", "[binary]") {
 	REQUIRE(too_small.message.find("fixed output") != lf::string::npos);
 
 	BinaryPlayer player;
-	player.position = lf::vec2{ 1.0f, 2.0f };
+	player.position = lf::vec2<f32>{ 1.0f, 2.0f };
 	player.name = "Leaf";
 	player.health = 75;
 
@@ -549,4 +731,143 @@ TEST_CASE("binary read rejects trailing bytes", "[binary]") {
 	REQUIRE(!stream.process(value));
 	REQUIRE(value == 0x2a);
 	REQUIRE(stream.cursor() == 1);
+}
+
+TEST_CASE("binary graph read resolves public refs and forward refs", "[binary]") {
+	BinaryGraph graph;
+	graph.nodes.resize(2);
+	graph.nodes[0].value = 10;
+	graph.nodes[1].value = 20;
+	graph.nodes[0].next.ptr = &graph.nodes[1];
+	graph.nodes[1].next.ptr = nullptr;
+
+	lf::report<lf::vector<lf::byte>> bytes = lf::bin::write_graph(graph);
+	REQUIRE(bytes);
+
+	lf::report<BinaryGraph> parsed = lf::bin::read_graph<BinaryGraph>(*bytes);
+	REQUIRE(parsed);
+	REQUIRE(parsed->nodes.size() == 2);
+	REQUIRE(parsed->nodes[0].value == 10);
+	REQUIRE(parsed->nodes[1].value == 20);
+	REQUIRE(parsed->nodes[0].next.ptr == &parsed->nodes[1]);
+	REQUIRE(parsed->nodes[1].next.ptr == nullptr);
+}
+
+TEST_CASE("binary graph write rejects dangling refs", "[binary]") {
+	BinaryDanglingGraph graph;
+	graph.node.value = 1;
+	graph.dangling.value = 2;
+	graph.node.next.ptr = &graph.dangling;
+
+	lf::report<lf::vector<lf::byte>> bytes = lf::bin::write_graph(graph);
+	REQUIRE(!bytes);
+}
+
+TEST_CASE("binary graph fixups survive vector relocation", "[binary]") {
+	BinaryRelocatingGraph graph;
+	graph.nodes.resize(32);
+	for (size_t index = 0; index < graph.nodes.size(); ++index) {
+		graph.nodes[index].value = static_cast<i32>(index);
+	}
+	graph.nodes[0].next.ptr = &graph.nodes[31];
+
+	lf::report<lf::vector<lf::byte>> bytes = lf::bin::write_graph(graph);
+	REQUIRE(bytes);
+
+	lf::report<BinaryRelocatingGraph> parsed = lf::bin::read_graph<BinaryRelocatingGraph>(*bytes);
+	REQUIRE(parsed);
+	REQUIRE(parsed->nodes.size() == 32);
+	REQUIRE(parsed->nodes[0].next.ptr == &parsed->nodes[31]);
+	REQUIRE(parsed->nodes[0].next.ptr->value == 31);
+}
+
+TEST_CASE("binary polymorphic unique ptr writes through const containers", "[binary]") {
+	BinaryPolyHolder holder;
+	holder.item = lf::make_unique<BinaryPolyB>();
+	holder.item->value = 77;
+
+	const BinaryPolyHolder& const_holder = holder;
+	lf::report<size_t> measured = lf::bin::measure(const_holder);
+	lf::report<lf::vector<lf::byte>> bytes = lf::bin::write(const_holder);
+	REQUIRE(measured);
+	REQUIRE(bytes);
+	REQUIRE(*measured == bytes->size());
+
+	lf::report<BinaryPolyHolder> parsed = lf::bin::read<BinaryPolyHolder>(*bytes);
+	REQUIRE(parsed);
+	REQUIRE(parsed->item);
+	REQUIRE(parsed->item->type_id() == 2);
+	REQUIRE(parsed->item->value == 77);
+}
+
+TEST_CASE("binary bitmask chooses mask widths by bit count", "[binary]") {
+	auto require_bitmask_size = []<size_t Count>(size_t expected_mask_bytes) {
+		BinaryBitmaskValues<Count> values;
+		values.values[Count - 1u] = 7;
+
+		lf::report<lf::vector<lf::byte>> bytes = lf::bin::write(values);
+		REQUIRE(bytes);
+		REQUIRE(bytes->size() == expected_mask_bytes + sizeof(i32));
+
+		lf::report<BinaryBitmaskValues<Count>> parsed = lf::bin::read<BinaryBitmaskValues<Count>>(*bytes);
+		REQUIRE(parsed);
+		REQUIRE(parsed->values[Count - 1u] == 7);
+		REQUIRE(parsed->values[0] == (Count == 1 ? 7 : 0));
+	};
+
+	require_bitmask_size.template operator()<8>(1);
+	require_bitmask_size.template operator()<9>(2);
+	require_bitmask_size.template operator()<16>(2);
+	require_bitmask_size.template operator()<17>(4);
+	require_bitmask_size.template operator()<32>(4);
+	require_bitmask_size.template operator()<33>(8);
+	require_bitmask_size.template operator()<64>(8);
+}
+
+TEST_CASE("binary gated field uses caller owned bitfield enum", "[binary]") {
+	BinaryModeStream stream;
+	i32 value = 42;
+	stream.current_mode = BinaryTestMode::Compact;
+	REQUIRE(!lf::bin::gated_field(stream, BinaryTestMode::Full, "value", value));
+	REQUIRE(stream.inner.written().empty());
+
+	stream.current_mode = BinaryTestMode::Full;
+	REQUIRE(!lf::bin::gated_field(stream, BinaryTestMode::Full, "value", value));
+	REQUIRE(stream.inner.written().size() == sizeof(i32));
+}
+
+TEST_CASE("binary read and write share logical progress observer", "[binary]") {
+	lf::vector<i32> values;
+	values.push_back(1);
+	values.push_back(2);
+	values.push_back(3);
+
+	size_t write_done = 0;
+	size_t write_total = 0;
+	lf::bin::progress_observer write_progress([&](size_t done, size_t total) {
+		REQUIRE(done >= write_done);
+		REQUIRE(total >= write_total);
+		write_done = done;
+		write_total = total;
+	});
+
+	lf::report<lf::vector<lf::byte>> bytes = lf::bin::write(values, lf::bin::write_options{ .progress = &write_progress });
+	REQUIRE(bytes);
+	REQUIRE(write_done > 0);
+	REQUIRE(write_total >= write_done);
+
+	size_t read_done = 0;
+	size_t read_total = 0;
+	lf::bin::progress_observer read_progress([&](size_t done, size_t total) {
+		REQUIRE(done >= read_done);
+		REQUIRE(total >= read_total);
+		read_done = done;
+		read_total = total;
+	});
+
+	lf::report<lf::vector<i32>> parsed = lf::bin::read<lf::vector<i32>>(*bytes, lf::bin::read_options{ .progress = &read_progress });
+	REQUIRE(parsed);
+	REQUIRE(*parsed == values);
+	REQUIRE(read_done > 0);
+	REQUIRE(read_total >= read_done);
 }

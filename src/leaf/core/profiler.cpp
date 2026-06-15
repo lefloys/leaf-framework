@@ -1,10 +1,10 @@
 #include "profiler.hpp"
 
-#include <leaf/core/format.hpp>
-#include <leaf/core/filesystem.hpp>
-#include <leaf/logging/logging.hpp>
-#include <leaf/core/unordered_map.hpp>
-#include <leaf/core/vector.hpp>
+#include "leaf/core/filesystem.hpp"
+#include "leaf/core/format.hpp"
+#include "leaf/core/logging.hpp"
+#include "leaf/core/unordered_map.hpp"
+#include "leaf/core/vector.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -81,10 +81,10 @@ namespace lf {
 			}
 		};
 
-		write_line(format("[{}] {} profile buckets", label, snapshot.size()));
+		write_line(lf::format("[{}] {} profile buckets", label, snapshot.size()));
 		for (const ProfileSnapshotEntry& entry : snapshot) {
 			const f64 average_ms = entry.calls == 0 ? 0.0 : entry.total_ms / static_cast<f64>(entry.calls);
-			write_line(format(
+			write_line(lf::format(
 				"[{}] {} calls={} total={:.3f}ms avg={:.3f}ms max={:.3f}ms",
 				label,
 				entry.name,
@@ -109,3 +109,4 @@ namespace lf {
 		RecordProfileSample(name, std::chrono::duration<f64, std::milli>(end - start).count());
 	}
 } // namespace lf
+

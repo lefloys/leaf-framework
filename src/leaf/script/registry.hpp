@@ -1,10 +1,10 @@
 #pragma once
 #include "database.hpp"
+#include "leaf/core/exception.hpp"
+#include "leaf/core/format.hpp"
 #include "leaf/core/dynamic_object.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/core/vector.hpp"
-#include "prototype_inspection.hpp"
-
 namespace lf {
 	struct PrototypeTypeFunctions {
 		void (*clear)() = nullptr;
@@ -14,11 +14,7 @@ namespace lf {
 		void (*reserve)(size_t) = nullptr;
 		size_t (*count)() = nullptr;
 		string_view (*name)(size_t) = nullptr;
-		PrototypeFieldList (*runtime_fields)(size_t) = nullptr;
 	};
-
-	template<typename T>
-	PrototypeFieldList inspect_runtime_fields(const T&);
 
 	struct PrototypeTypeRegistry {
 		template<typename T>
@@ -27,12 +23,11 @@ namespace lf {
 			using db = Database<T>;
 			funcs.type = db::type;
 			funcs.clear = []() { db::prototypes.clear(); };
-			funcs.create = [](string_view name, const dict& data) { db::create(name, data); };
-			funcs.resolve = []() { db::resolve_connectors(); };
+			funcs.create = [](string_view name, const dict& data) { (void) db::create(name, data); };
+			funcs.resolve = &db::resolve_connectors;
 			funcs.reserve = [](size_t count) { db::prototypes.reserve(db::prototypes.size() + count); };
 			funcs.count = []() { return db::prototypes.size(); };
 			funcs.name = [](size_t index) -> string_view { return db::prototypes[index].name; };
-			funcs.runtime_fields = [](size_t index) { return inspect_runtime_fields(db::prototypes[index]); };
 		}
 
 		inline static vector<PrototypeTypeFunctions> functions = {};

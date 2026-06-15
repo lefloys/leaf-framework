@@ -1,5 +1,6 @@
 #pragma once
 
+#include "exception.hpp"
 #include "format.hpp"
 #include "string.hpp"
 #include "vector.hpp"
@@ -74,6 +75,11 @@ namespace lf {
 		string message(i32 ev) const override;
 	};
 
+	struct graphics_error_category : public std::error_category {
+		const ch08* name() const noexcept override;
+		string message(i32 ev) const override;
+	};
+
 	/*!
 	** @brief Gets Leaf's generic error category singleton.
 	*/
@@ -83,6 +89,7 @@ namespace lf {
 	** @brief Creates an error_code for a Leaf generic error.
 	*/
 	error_code make_error_code(generic_errc e);
+	error_code make_error_code(graphics_errc e);
 
 	/*!
 	** @brief Error value with both a machine-readable code and human text.

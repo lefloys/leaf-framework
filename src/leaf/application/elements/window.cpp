@@ -298,7 +298,7 @@ keybind {
 		}
 
 		void set_px(Rml::Element& element, string_view property, f32 value) {
-			element.SetProperty(Rml::String(property), Rml::String(format("{}px", value)));
+			element.SetProperty(Rml::String(property), Rml::String(lf::format("{}px", value)));
 		}
 
 		std::optional<Rml::String> local_property(Rml::Element& element, string_view property) {
@@ -1124,11 +1124,11 @@ keybind {
 				}
 
 				for (Rml::Element* parent = GetParentNode(); parent && parent != document; parent = parent->GetParentNode()) {
-					parent->SetProperty("z-index", Rml::String(format("{}", z_index)));
+					parent->SetProperty("z-index", Rml::String(lf::format("{}", z_index)));
 				}
 			}
 
-			SetProperty("z-index", Rml::String(format("{}", z_index)));
+			SetProperty("z-index", Rml::String(lf::format("{}", z_index)));
 		}
 }
 
@@ -1176,3 +1176,4 @@ namespace lf {
 		}
 	}
 }
+

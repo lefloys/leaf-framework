@@ -1,8 +1,8 @@
+
+add_subdirectory("prototypes")
+
 add_files("leaf-framework"
-	"cursor_prototype.cpp"
-	"cursor_prototype.hpp"
 	"database.hpp"
-	"lifetime.hpp"
 	"local_string.hpp"
 	"localization.cpp"
 	"localization.hpp"
@@ -13,15 +13,11 @@ add_files("leaf-framework"
 	"mod_loader.cpp"
 	"mod_loader.hpp"
 	"prototype.hpp"
+	"prototype_inspection.hpp"
 	"prototype_inspector_script.cpp"
 	"prototype_inspector_script.hpp"
-	"prototype_inspection.hpp"
 	"registry.hpp"
 	"settings.hpp"
-	"sound_prototype.cpp"
-	"sound_prototype.hpp"
-	"texture_prototype.cpp"
-	"texture_prototype.hpp"
 	"virtual_filesystem.cpp"
 	"virtual_filesystem.hpp"
 )

@@ -43,6 +43,22 @@ if(NOT "${store}" IN_LIST LEAF_SUPPORTED_STORES)
     message(FATAL_ERROR "Unsupported store '${store}'. Supported values: ${LEAF_SUPPORTED_STORES_TEXT}.")
 endif()
 
+function(leaf_clear_embedded_stale_package_cache cache_name)
+    if(PROJECT_IS_TOP_LEVEL OR NOT DEFINED CACHE{${cache_name}})
+        return()
+    endif()
+    get_property(cache_value CACHE "${cache_name}" PROPERTY VALUE)
+    cmake_path(IS_PREFIX CMAKE_CURRENT_SOURCE_DIR "${cache_value}" NORMALIZE is_leaf_local_cache)
+    if(is_leaf_local_cache)
+        unset("${cache_name}" CACHE)
+    endif()
+endfunction()
+
+leaf_clear_embedded_stale_package_cache(glm_DIR)
+leaf_clear_embedded_stale_package_cache(sol2_DIR)
+leaf_clear_embedded_stale_package_cache(yaml-cpp_DIR)
+leaf_clear_embedded_stale_package_cache(Stb_INCLUDE_DIR)
+
 # Shared project helpers.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include("AddFiles")
@@ -54,7 +70,7 @@ find_package("glm" CONFIG REQUIRED)
 find_package("Stb" REQUIRED)
 find_package("sol2" CONFIG REQUIRED)
 find_package("yaml-cpp" CONFIG REQUIRED)
-find_package("Lua" REQUIRED)
+find_package("unofficial-lua" CONFIG REQUIRED)
 if(NOT LEAF_HEADLESS)
     find_package("glfw3" CONFIG REQUIRED)
     find_package("RmlUi" CONFIG REQUIRED)
@@ -80,15 +96,16 @@ if(NOT LEAF_HEADLESS)
     target_compile_definitions("${PROJECT_NAME}" PRIVATE LEAF_WINDOW_BACKEND_GLFW)
 endif()
 target_include_directories("${PROJECT_NAME}" PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>")
-target_include_directories("${PROJECT_NAME}" PUBLIC "${Stb_INCLUDE_DIR}" "${LUA_INCLUDE_DIR}")
+target_include_directories("${PROJECT_NAME}" PUBLIC "${Stb_INCLUDE_DIR}")
 
 target_link_libraries("${PROJECT_NAME}"
     PUBLIC
         glm::glm
         Rutile::rutile
         sol2::sol2
+    PRIVATE
         yaml-cpp::yaml-cpp
-        ${LUA_LIBRARIES}
+        unofficial::lua::lua
 )
 if(NOT LEAF_HEADLESS)
     target_link_libraries("${PROJECT_NAME}"
@@ -144,6 +161,9 @@ endfunction()
 function(leaf_configure_executable target_name)
     if(NOT LEAF_HEADLESS)
         leaf_configure_store_executable("${target_name}")
+    endif()
+    if(WIN32)
+        set_property(TARGET "${target_name}" APPEND_STRING PROPERTY LINK_FLAGS " /NODEFAULTLIB:lua.lib /NODEFAULTLIB:yaml-cpp.lib /FORCE:MULTIPLE")
     endif()
     leaf_export_glfw_symbols("${target_name}")
     leaf_copy_rutile_backends("${target_name}")

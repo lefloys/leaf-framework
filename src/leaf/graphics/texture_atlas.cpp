@@ -1,9 +1,9 @@
 #include "texture_atlas.hpp"
 
-#include <leaf/core/exception.hpp>
-#include <leaf/core/format.hpp>
-#include <leaf/logging/logging.hpp>
-#include <leaf/script/virtual_filesystem.hpp>
+#include "leaf/core/exception.hpp"
+#include "leaf/core/format.hpp"
+#include "leaf/core/logging.hpp"
+#include "leaf/script/virtual_filesystem.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -23,10 +23,6 @@ namespace lf {
 		i32 height = 1;
 		stbrp_rect rect{};
 	};
-
-	fs::path resolve_path(const texture_atlas_options& options, string_view path) {
-		return ResolveVirtualPath(path, options.root);
-	}
 
 	loaded_atlas_frame make_fallback_frame(u32 texture_index, u32 frame_index) {
 		loaded_atlas_frame frame;
@@ -48,9 +44,9 @@ namespace lf {
 
 		fs::path path;
 		try {
-			path = resolve_path(options, source.path);
+			path = ResolveVirtualPath(source.path);
 		} catch (const lf::exception& e) {
-			log::Warning("{}", format("[textures] failed to resolve texture frame '{}': {}", source.path, e.what()));
+			log::Warning("[textures] failed to resolve texture frame '{}': {}", source.path, e.what());
 			return make_fallback_frame(source.texture_index, source.frame_index);
 		}
 		int image_width = 0;
@@ -60,17 +56,17 @@ namespace lf {
 			stbi_load(path.string().c_str(), &image_width, &image_height, &components, 4),
 			stbi_image_free);
 		if (!image || image_width <= 0 || image_height <= 0) {
-			log::Warning("{}", format("[textures] missing texture frame '{}', using fallback", path.string()));
+			log::Warning("[textures] missing texture frame '{}', using fallback", path.string());
 			return make_fallback_frame(source.texture_index, source.frame_index);
 		}
 
-		u32 source_x = source.rect.enabled ? source.rect.x : 0;
-		u32 source_y = source.rect.enabled ? source.rect.y : 0;
-		u32 source_width = source.rect.enabled ? source.rect.width : static_cast<u32>(image_width);
-		u32 source_height = source.rect.enabled ? source.rect.height : static_cast<u32>(image_height);
+		u32 source_x = source.rect ? source.rect->pos.x : 0;
+		u32 source_y = source.rect ? source.rect->pos.y : 0;
+		u32 source_width = source.rect ? source.rect->dim.width : static_cast<u32>(image_width);
+		u32 source_height = source.rect ? source.rect->dim.height : static_cast<u32>(image_height);
 		if (source_x >= static_cast<u32>(image_width) || source_y >= static_cast<u32>(image_height) ||
 			source_width == 0 || source_height == 0) {
-			log::Warning("{}", format("[textures] invalid frame rect in '{}', using fallback", path.string()));
+			log::Warning("[textures] invalid frame rect in '{}', using fallback", path.string());
 			return make_fallback_frame(source.texture_index, source.frame_index);
 		}
 
@@ -151,8 +147,8 @@ namespace lf {
 		if (frame.rect.x < 0 || frame.rect.y < 0 ||
 			frame.rect.x + padded_width > static_cast<i32>(atlas_width) ||
 			frame.rect.y + padded_height > static_cast<i32>(atlas_height)) {
-			log::Warning("{}", format("[textures] packed frame {}:{} is outside atlas bounds; skipping",
-							   frame.texture_index, frame.frame_index));
+			log::Warning("[textures] packed frame {}:{} is outside atlas bounds; skipping",
+				frame.texture_index, frame.frame_index);
 			return;
 		}
 
@@ -185,8 +181,7 @@ namespace lf {
 		return packed;
 	}
 
-	texture_atlas build_texture_atlas(view<queue> queue, span<const atlas_source_frame> source_frames,
-									  texture_atlas_options options) {
+	texture_atlas build_texture_atlas(view<queue> queue, span<const atlas_source_frame> source_frames, texture_atlas_options options) {
 		vector<loaded_atlas_frame> loaded_frames;
 		loaded_frames.reserve(source_frames.size());
 		for (const atlas_source_frame& source : source_frames) {
@@ -198,20 +193,20 @@ namespace lf {
 
 		texture_atlas atlas;
 		pack_frames(loaded_frames, atlas.width, atlas.height, options);
-		atlas.pixels.assign(static_cast<size_t>(atlas.width) * static_cast<size_t>(atlas.height) * 4u, 0);
+		auto atlas_pixels = vector<u08>{};
+		atlas_pixels.resize(static_cast<size_t>(atlas.width) * static_cast<size_t>(atlas.height) * 4u, 0);
 		for (const loaded_atlas_frame& frame : loaded_frames) {
-			blit_frame(atlas.pixels, atlas.width, atlas.height, frame, options.padding);
+			blit_frame(atlas_pixels, atlas.width, atlas.height, frame, options.padding);
 			atlas.frames.push_back(packed_frame_from(frame, atlas.width, atlas.height, options.padding));
 		}
 
 		atlas.atlas_texture = unique(Texture::Create());
-		Texture::Data(queue, atlas.atlas_texture, RT_TEXTURE_2D, 0, atlas.width, atlas.height, 1, RT_RGBA8_UNORM,
-					  atlas.pixels.data());
+		Texture::Data(queue, view<texture>(atlas.atlas_texture), RT_TEXTURE_2D, 0, atlas.width, atlas.height, 1, RT_RGBA8_UNORM,
+					  atlas_pixels.data());
 		atlas.view.reset(TextureView::CreateFromTexture(atlas.atlas_texture));
-		TextureView::Filter(atlas.view, RT_FILTER_NEAREST, RT_FILTER_NEAREST, RT_MIP_FILTER_NONE);
+		TextureView::Filter(atlas.view, RT_FILTER_NEAREST, RT_FILTER_LINEAR, RT_MIP_FILTER_LINEAR);
 		TextureView::Address(atlas.view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
-		log::Debug("{}", format("[textures] atlas {}x{} with {} frames", atlas.width, atlas.height,
-						loaded_frames.size()));
+		log::Debug("[textures] atlas {}x{} with {} frames", atlas.width, atlas.height, loaded_frames.size());
 		return atlas;
 	}
 } // namespace lf

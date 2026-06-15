@@ -1,16 +1,16 @@
 #include "leaf/store/lifecycle.hpp"
 
 #include <leaf/core/format.hpp>
-#include <leaf/logging/logging.hpp>
+#include <leaf/core/logging.hpp>
 
 #include <steam/steam_api.h>
 
 namespace lf {
 	void steam_warning_message_hook(int severity, const char* message) {
 		if (severity > 0) {
-			log::Warning("{}", format("steam[{}]: {}", severity, message));
+			log::Warning("{}", lf::format("steam[{}]: {}", severity, message));
 		} else {
-			log::Debug("{}", format("steam[{}]: {}", severity, message));
+			log::Debug("{}", lf::format("steam[{}]: {}", severity, message));
 		}
 	}
 
@@ -35,3 +35,4 @@ namespace lf {
 		SteamAPI_Shutdown();
 	}
 } // namespace lf
+

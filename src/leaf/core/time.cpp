@@ -18,7 +18,7 @@ namespace lf {
 				if (!result.empty()) {
 					result += " ";
 				}
-				result += format("{}{}", n, u.second);
+				result += lf::format("{}{}", n, u.second);
 				rem %= u.first;
 			}
 		}
@@ -52,10 +52,11 @@ namespace lf {
 			}
 
 			if (!matched) {
-				throw std::runtime_error(std::format("unknown time unit '{}' in '{}'", unit, str));
+				throw std::runtime_error(lf::format("unknown time unit '{}' in '{}'", unit, str));
 			}
 		}
 
 		return timespan(total_ns);
 	}
 } // namespace lf
+

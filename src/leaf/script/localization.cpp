@@ -1,219 +1,233 @@
 #include "localization.hpp"
 
-#include <leaf/logging/logging.hpp>
-#include <leaf/script/settings.hpp>
+#include "leaf/core/logging.hpp"
+#include "leaf/script/settings.hpp"
+#include "leaf/core/unordered_map.hpp"
 
 #include <cctype>
 #include <sstream>
-#include <unordered_map>
 
 namespace lf {
-	namespace {
-		using section_map = std::unordered_map<string, std::unordered_map<string, string>>;
+	static constexpr string_view DefaultLanguage = "en-US";
+	using section_map = lf::unordered_map_string<lf::unordered_map_string<string>>;
 
-		section_map& selected_entries() {
-			static section_map entries;
-			return entries;
+	section_map& selected_entries() {
+		static section_map entries;
+		return entries;
+	}
+
+	section_map& fallback_entries() {
+		static section_map entries;
+		return entries;
+	}
+
+	string& loaded_language() {
+		static string language(DefaultLanguage);
+		return language;
+	}
+
+	vector<LanguageInfo>& available_languages() {
+		static vector<LanguageInfo> languages;
+		return languages;
+	}
+
+	vector<ModInfo>& cached_locale_mods() {
+		static vector<ModInfo> mods;
+		return mods;
+	}
+
+	string trim(string_view value) {
+		size_t begin = 0;
+		size_t end = value.size();
+		while (begin < end && std::isspace(static_cast<unsigned char>(value[begin]))) {
+			++begin;
+		}
+		while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+			--end;
+		}
+		return string(value.substr(begin, end - begin));
+	}
+
+	string locale_path_for_language(string_view language) {
+		return string(language) + ".cfg";
+	}
+
+	error load_locale_file(const fs::path& path, section_map& entries) {
+		auto file_text = fs::ReadTextFile(path.string());
+		if (!file_text) {
+			return file_text.error();
 		}
 
-		section_map& fallback_entries() {
-			static section_map entries;
-			return entries;
-		}
-
-		string& loaded_language() {
-			static string language(default_language);
-			return language;
-		}
-
-		vector<LanguageInfo>& available_languages() {
-			static vector<LanguageInfo> languages;
-			return languages;
-		}
-
-		vector<ModInfo>& cached_locale_mods() {
-			static vector<ModInfo> mods;
-			return mods;
-		}
-
-		string trim(string_view value) {
-			size_t begin = 0;
-			size_t end = value.size();
-			while (begin < end && std::isspace(static_cast<unsigned char>(value[begin]))) {
-				++begin;
+		string section;
+		string line;
+		size_t line_number = 0;
+		std::istringstream file(*file_text);
+		while (std::getline(file, line)) {
+			++line_number;
+			if (line_number == 1 && line.starts_with("\xEF\xBB\xBF")) {
+				line.erase(0, 3);
 			}
-			while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
-				--end;
-			}
-			return string(value.substr(begin, end - begin));
-		}
-
-		string locale_path_for_language(string_view language) {
-			return string(language) + ".cfg";
-		}
-
-		error load_locale_file(const fs::path& path, section_map& entries) {
-			auto file_text = fs::ReadTextFile(path.string());
-			if (!file_text) {
-				return file_text.error();
+			string text = trim(line);
+			if (text.empty() || text[0] == '#' || text[0] == ';') {
+				continue;
 			}
 
-			string section;
-			string line;
-			size_t line_number = 0;
-			std::istringstream file(*file_text);
-			while (std::getline(file, line)) {
-				++line_number;
-				if (line_number == 1 && line.starts_with("\xEF\xBB\xBF")) {
-					line.erase(0, 3);
+			if (text.front() == '[') {
+				if (text.back() != ']') {
+					return error(generic_errc::parse_error, lf::format("{}:{} invalid locale section", path.string(), line_number));
 				}
-				string text = trim(line);
-				if (text.empty() || text[0] == '#' || text[0] == ';') {
-					continue;
-				}
-
-				if (text.front() == '[') {
-					if (text.back() != ']') {
-						return error(generic_errc::parse_error, format("{}:{} invalid locale section", path.string(), line_number));
-					}
-					section = trim(string_view(text).substr(1, text.size() - 2));
-					if (section.empty()) {
-						return error(generic_errc::parse_error, format("{}:{} empty locale section", path.string(), line_number));
-					}
-					continue;
-				}
-
-				size_t equals = text.find('=');
-				if (equals == string::npos) {
-					return error(generic_errc::parse_error, format("{}:{} expected key=value", path.string(), line_number));
-				}
+				section = trim(string_view(text).substr(1, text.size() - 2));
 				if (section.empty()) {
-					return error(generic_errc::parse_error, format("{}:{} locale entry outside a section", path.string(), line_number));
+					return error(generic_errc::parse_error, lf::format("{}:{} empty locale section", path.string(), line_number));
 				}
+				continue;
+			}
 
-				string key = trim(string_view(text).substr(0, equals));
-				string value = trim(string_view(text).substr(equals + 1));
-				if (key.empty()) {
-					return error(generic_errc::parse_error, format("{}:{} empty locale key", path.string(), line_number));
+			size_t equals = text.find('=');
+			if (equals == string::npos) {
+				return error(generic_errc::parse_error, lf::format("{}:{} expected key=value", path.string(), line_number));
+			}
+			if (section.empty()) {
+				return error(generic_errc::parse_error, lf::format("{}:{} locale entry outside a section", path.string(), line_number));
+			}
+
+			string key = trim(string_view(text).substr(0, equals));
+			string value = trim(string_view(text).substr(equals + 1));
+			if (key.empty()) {
+				return error(generic_errc::parse_error, lf::format("{}:{} empty locale key", path.string(), line_number));
+			}
+			entries[section][key] = value;
+		}
+
+		if (!file.eof() && file.fail()) {
+			return error(generic_errc::input_error, lf::format("failed to read '{}'", path.string()));
+		}
+		return error::no_error;
+	}
+
+	void replace_all(string& value, string_view needle, string_view replacement) {
+		if (needle.empty()) {
+			return;
+		}
+		size_t offset = 0;
+		while ((offset = value.find(needle, offset)) != string::npos) {
+			value.replace(offset, needle.size(), replacement);
+			offset += replacement.size();
+		}
+	}
+
+	string apply_parameters(string value, span<const string> parameters) {
+		for (size_t i = 0; i < parameters.size(); ++i) {
+			replace_all(value, lf::format("__{}__", i + 1), parameters[i]);
+		}
+		return value;
+	}
+
+	LanguageInfo& ensure_language(string_view id) {
+		for (LanguageInfo& language : available_languages()) {
+			if (language.id == id) {
+				return language;
+			}
+		}
+		LanguageInfo language;
+		language.id = string(id);
+		language.name = string(id);
+		language.native_name = string(id);
+		available_languages().push_back(std::move(language));
+		return available_languages().back();
+	}
+
+	void apply_language_metadata(string_view id, const section_map& entries) {
+		auto section_it = entries.find("language");
+		if (section_it == entries.end()) {
+			return;
+		}
+
+		LanguageInfo& language = ensure_language(id);
+		auto name_it = section_it->second.find("name");
+		if (name_it != section_it->second.end() && !name_it->second.empty()) {
+			language.name = name_it->second;
+		}
+		auto native_name_it = section_it->second.find("native-name");
+		if (native_name_it != section_it->second.end() && !native_name_it->second.empty()) {
+			language.native_name = native_name_it->second;
+		}
+	}
+
+	error discover_languages(span<const ModInfo> mods) {
+		available_languages().clear();
+		ensure_language(DefaultLanguage);
+
+		for (const ModInfo& mod : mods) {
+			fs::path locale_dir = mod.location / "locale";
+			if (!fs::exists(locale_dir)) {
+				continue;
+			}
+
+			std::error_code ec;
+			for (const fs::directory_entry& entry : fs::directory_iterator(locale_dir, ec)) {
+				if (ec) {
+					return error(generic_errc::input_error, lf::format("failed to read '{}': {}", locale_dir.string(), ec.message()));
 				}
-				entries[section][key] = value;
-			}
-
-			if (!file.eof() && file.fail()) {
-				return error(generic_errc::input_error, format("failed to read '{}'", path.string()));
-			}
-			return error::no_error;
-		}
-
-		void replace_all(string& value, string_view needle, string_view replacement) {
-			if (needle.empty()) {
-				return;
-			}
-			size_t offset = 0;
-			while ((offset = value.find(needle, offset)) != string::npos) {
-				value.replace(offset, needle.size(), replacement);
-				offset += replacement.size();
-			}
-		}
-
-		string apply_parameters(string value, span<const string> parameters) {
-			for (size_t i = 0; i < parameters.size(); ++i) {
-				replace_all(value, format("__{}__", i + 1), parameters[i]);
-			}
-			return value;
-		}
-
-		LanguageInfo& ensure_language(string_view id) {
-			for (LanguageInfo& language : available_languages()) {
-				if (language.id == id) {
-					return language;
-				}
-			}
-			LanguageInfo language;
-			language.id = string(id);
-			language.name = string(id);
-			language.native_name = string(id);
-			available_languages().push_back(std::move(language));
-			return available_languages().back();
-		}
-
-		void apply_language_metadata(string_view id, const section_map& entries) {
-			auto section_it = entries.find("language");
-			if (section_it == entries.end()) {
-				return;
-			}
-
-			LanguageInfo& language = ensure_language(id);
-			auto name_it = section_it->second.find("name");
-			if (name_it != section_it->second.end() && !name_it->second.empty()) {
-				language.name = name_it->second;
-			}
-			auto native_name_it = section_it->second.find("native-name");
-			if (native_name_it != section_it->second.end() && !native_name_it->second.empty()) {
-				language.native_name = native_name_it->second;
-			}
-		}
-
-		error discover_languages(span<const ModInfo> mods) {
-			available_languages().clear();
-			ensure_language(default_language);
-
-			for (const ModInfo& mod : mods) {
-				fs::path locale_dir = mod.location / "locale";
-				if (!fs::exists(locale_dir)) {
+				if (!entry.is_regular_file() || entry.path().extension() != ".cfg") {
 					continue;
 				}
 
-				std::error_code ec;
-				for (const fs::directory_entry& entry : fs::directory_iterator(locale_dir, ec)) {
-					if (ec) {
-						return error(generic_errc::input_error, format("failed to read '{}': {}", locale_dir.string(), ec.message()));
-					}
-					if (!entry.is_regular_file() || entry.path().extension() != ".cfg") {
-						continue;
-					}
-
-					string id = entry.path().stem().string();
-					if (id.empty()) {
-						continue;
-					}
-					ensure_language(id);
-
-					section_map metadata;
-					if (error err = load_locale_file(entry.path(), metadata)) {
-						log::Warning("{}", format("[locale] ignoring metadata in '{}': {}", entry.path().string(), err.message));
-						continue;
-					}
-					apply_language_metadata(id, metadata);
-				}
-			}
-			return error::no_error;
-		}
-
-		error load_language_into(span<const ModInfo> mods, string_view language, section_map& entries) {
-			for (const ModInfo& mod : mods) {
-				fs::path locale_path = mod.location / "locale" / locale_path_for_language(language);
-				if (!fs::exists(locale_path)) {
+				string id = entry.path().stem().string();
+				if (id.empty()) {
 					continue;
 				}
-				if (error err = load_locale_file(locale_path, entries)) {
-					return err.add_context(format("loading locale '{}'", locale_path.string()));
+				ensure_language(id);
+
+				section_map metadata;
+				if (error err = load_locale_file(entry.path(), metadata)) {
+					log::Warning("{}", lf::format("[locale] ignoring metadata in '{}': {}", entry.path().string(), err.message));
+					continue;
 				}
-				log::Trace("{}", format("[locale] loaded: {}/locale/{}", mod.name, locale_path.filename().string()));
+				apply_language_metadata(id, metadata);
 			}
+		}
+		return error::no_error;
+	}
+
+	error load_language_into(span<const ModInfo> mods, string_view language, section_map& entries) {
+		for (const ModInfo& mod : mods) {
+			fs::path locale_path = mod.location / "locale" / locale_path_for_language(language);
+			if (!fs::exists(locale_path)) {
+				continue;
+			}
+			if (error err = load_locale_file(locale_path, entries)) {
+				return err.add_context(lf::format("loading locale '{}'", locale_path.string()));
+			}
+			log::Trace("{}", lf::format("[locale] loaded: {}/locale/{}", mod.name, locale_path.filename().string()));
+		}
+		return error::no_error;
+	}
+
+	error load_core_language_into(string_view language, section_map& entries) {
+		fs::path locale_path = fs::folder::install / "data" / "core" / "locale" / locale_path_for_language(language);
+		if (!fs::exists(locale_path)) {
 			return error::no_error;
 		}
-	} // namespace
+		if (error err = load_locale_file(locale_path, entries)) {
+			return err.add_context(lf::format("loading core locale '{}'", locale_path.string()));
+		}
+		return error::no_error;
+	}
 
 	error LoadLocaleFiles(span<const ModInfo> mods, string_view language) {
 		cached_locale_mods().assign(mods.begin(), mods.end());
 		selected_entries().clear();
 		fallback_entries().clear();
-		loaded_language() = language.empty() ? string(default_language) : string(language);
+		loaded_language() = language.empty() ? string(DefaultLanguage) : string(language);
 
 		IF_ERROR_RETURN_ERROR(discover_languages(mods));
-		IF_ERROR_RETURN_ERROR(load_language_into(mods, default_language, fallback_entries()));
-		if (loaded_language() != default_language) {
+		IF_ERROR_RETURN_ERROR(load_core_language_into(DefaultLanguage, fallback_entries()));
+		if (loaded_language() != DefaultLanguage) {
+			IF_ERROR_RETURN_ERROR(load_core_language_into(loaded_language(), selected_entries()));
+		}
+		IF_ERROR_RETURN_ERROR(load_language_into(mods, DefaultLanguage, fallback_entries()));
+		if (loaded_language() != DefaultLanguage) {
 			IF_ERROR_RETURN_ERROR(load_language_into(mods, loaded_language(), selected_entries()));
 		}
 		return error::no_error;
@@ -224,7 +238,7 @@ namespace lf {
 	}
 
 	error SetLanguage(string_view language) {
-		string selected = language.empty() ? string(default_language) : string(language);
+		string selected = language.empty() ? string(DefaultLanguage) : string(language);
 		if (error err = SaveSetting("core", "language", object(selected))) {
 			return err;
 		}
@@ -236,7 +250,7 @@ namespace lf {
 		fallback_entries().clear();
 		available_languages().clear();
 		cached_locale_mods().clear();
-		loaded_language() = string(default_language);
+		loaded_language() = string(DefaultLanguage);
 	}
 
 	string_view LoadedLanguage() {
@@ -300,3 +314,4 @@ namespace lf {
 		return Localize(section, text.key, parameters);
 	}
 } // namespace lf
+

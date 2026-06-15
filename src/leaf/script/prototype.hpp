@@ -54,7 +54,7 @@ namespace lf {
 		void load_field(const dict& data, string_view field_name, T& out) {
 			auto it = data.find(field_name);
 			if (it == data.end()) {
-				throw runtime_exception(format("missing field '{}'", field_name));
+				throw runtime_exception(lf::format("missing field '{}'", field_name));
 			}
 			const object& obj = it->second;
 			if (obj.convertible<T>()) {
@@ -67,7 +67,7 @@ namespace lf {
 		template <typename T>
 		void load_field(const list& data, size_t index, T& out) {
 			if (index >= data.size()) {
-				throw runtime_exception(format("index {} out of range", index));
+				throw runtime_exception(lf::format("index {} out of range", index));
 			}
 			const object& obj = data[index];
 			if (obj.convertible<T>()) {
@@ -88,14 +88,14 @@ namespace lf {
 		void resolve(string_view owner_name, string_view field_name, bool required = false, std::optional<id_t> fallback = {}) {
 			if (name.empty()) {
 				if (required) {
-					throw runtime_exception(format("{} missing required field '{}'", owner_name, field_name));
+					throw runtime_exception(lf::format("{} missing required field '{}'", owner_name, field_name));
 				}
 				id = fallback.value_or(id_t(0));
 				return;
 			}
 			id = Database<Proto>::find(name);
 			if (!id) {
-				throw runtime_exception(format("{} references missing {} '{}'", owner_name, Proto::type(), name));
+				throw runtime_exception(lf::format("{} references missing {} '{}'", owner_name, Proto::type(), name));
 			}
 		}
 	};
@@ -107,3 +107,4 @@ namespace lf {
 		id_t id;
 	};
 } // namespace lf
+

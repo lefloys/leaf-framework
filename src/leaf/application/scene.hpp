@@ -1,11 +1,12 @@
 #pragma once
 
-#include <leaf/application/application_stats.hpp>
 #include <leaf/core/memory.hpp>
+#include <leaf/core/span.hpp>
 #include <leaf/core/string.hpp>
 #include <leaf/graphics/window.hpp>
 
 #include <RmlUi/Core/Element.h>
+#include <RmlUi/Core/EventListener.h>
 #include <sol/sol.hpp>
 
 #include <chrono>
@@ -24,6 +25,7 @@ namespace Rml {
 
 namespace lf {
 	struct input_event;
+	struct command_buffer;
 
 	/*!
 	** @ingroup application
@@ -36,6 +38,11 @@ namespace lf {
 	class Scene {
 	  public:
 		/*!
+		** @brief Creates a scene with its own window ownership.
+		*/
+		Scene();
+
+		/*!
 		** @brief Deferred request to replace the current scene.
 		*/
 		struct LoadRequest {
@@ -45,24 +52,9 @@ namespace lf {
 			string path;
 
 			/*!
-			** @brief YAML argument data passed to the next scene.
+			** @brief Opaque launch data passed to the next scene.
 			*/
-			string args_yaml;
-		};
-
-		/*!
-		** @brief RML element that survives a scene reload.
-		*/
-		struct PersistentElement {
-			/*!
-			** @brief Element id used to restore the persistent element.
-			*/
-			string id;
-
-			/*!
-			** @brief Owned RML element tree.
-			*/
-			Rml::ElementPtr element;
+			string args;
 		};
 
 		/*!
@@ -76,24 +68,50 @@ namespace lf {
 		using FixedUpdater = std::function<void(Rml::ElementDocument&)>;
 
 		/*!
+		** @brief Launches the scene using a scene-owned window.
+		*/
+		void launch(
+			string_view initial,
+			string_view args = {},
+			span<const ScriptInstaller> script_installers = {},
+			span<const FixedUpdater> fixed_updaters = {}
+		);
+
+		/*!
+		** @brief Launches the scene using an existing window.
+		*/
+		void launch(
+			handle<window> display,
+			string_view initial,
+			string_view args = {},
+			span<const ScriptInstaller> script_installers = {},
+			span<const FixedUpdater> fixed_updaters = {}
+		);
+
+		/*!
+		** @brief Releases ownership of the scene-owned window, if any.
+		*/
+		unique<window> release_window();
+
+		/*!
+		** @brief Gets a non-owning view of the scene window.
+		*/
+		view<window> window_view() const;
+
+		/*!
+		** @brief Creates an RML context for a window and owns the window.
+		*/
+		Scene(handle<window> display);
+
+		/*!
 		** @brief Loads a scene into an existing RML context.
 		** @param context RML context that owns the scene document.
-		** @param display Window used for input and cursor state.
-		** @param stats Shared application statistics.
-		** @param initial Initial scene source path or identifier.
-		** @param args_yaml YAML argument data exposed to the scene script.
-		** @param persistent_elements Elements to restore into the new document.
+		** @param display Window owned by the scene.
 		*/
-		Scene(
-			Rml::Context& context,
-			view<window> display,
-			ApplicationStats& stats,
-			string_view initial,
-			string_view args_yaml = {},
-			std::vector<PersistentElement> persistent_elements = {},
-			std::vector<ScriptInstaller> script_installers = {},
-			std::vector<FixedUpdater> fixed_updaters = {}
-		);
+		Scene(Rml::Context& context, handle<window> display);
+
+		Scene(Scene&&) noexcept = default;
+		Scene& operator=(Scene&&) noexcept = default;
 
 		/*!
 		** @brief Releases the loaded document, Lua state, and script listeners.
@@ -103,13 +121,33 @@ namespace lf {
 		/*!
 		** @brief Updates dynamic UI and queued script work.
 		*/
-		void update();
+		bool update();
 
 		/*!
 		** @brief Dispatches a platform input event to the scene.
 		** @param event Input event to process.
 		*/
 		void input(const input_event& event);
+
+		/*!
+		** @brief Dispatches pending window input to RML and the scene.
+		*/
+		void process_input();
+
+		/*!
+		** @brief Synchronizes the RML context dimensions with the window.
+		*/
+		void resize_context();
+
+		/*!
+		** @brief Updates and renders the scene document into a command buffer.
+		*/
+		void render(view<command_buffer> cmd);
+
+		/*!
+		** @brief Renders one scene frame using the scene's owned window.
+		*/
+		bool render_frame();
 
 		/*!
 		** @brief Checks whether an RML control currently owns text focus.
@@ -130,6 +168,11 @@ namespace lf {
 		** @brief Runs one fixed-rate scene update.
 		*/
 		void fixed_update();
+
+		/*!
+		** @brief Replaces the loaded document while keeping the scene context.
+		*/
+		void load(string_view initial, string_view args = {});
 
 		/*!
 		** @brief Replaces the RML markup for an element.
@@ -159,11 +202,6 @@ namespace lf {
 		std::optional<LoadRequest> take_load_request();
 
 		/*!
-		** @brief Releases elements marked as persistent before a scene reload.
-		*/
-		std::vector<PersistentElement> release_persistent_elements();
-
-		/*!
 		** @brief Refreshes the cached scene title from the document state.
 		*/
 		void refresh_title();
@@ -174,15 +212,22 @@ namespace lf {
 		string_view title() const;
 
 	  private:
-		class ScriptEventListener;
+		class ScriptEventListener final : public Rml::EventListener {
+		  public:
+			explicit ScriptEventListener(Scene& scene);
+			void ProcessEvent(Rml::Event& event) override;
 
+		  private:
+			Scene& scene;
+		};
+
+		void unload_document();
 		void bind_script_events();
 		void clear_script_events();
 		void run_inline_scripts(string_view source);
 		void run_script(string_view script, string_view source_name);
 		bool execute_script(string_view script, string_view source_name);
 		bool run_pending_scripts();
-		void restore_persistent_elements(std::vector<PersistentElement> persistent_elements);
 		void install_ui_automation_helpers();
 		void update_ui_automation(f64 elapsed);
 		void update_cursor(Rml::Element* start, bool pressed, bool released = false);
@@ -195,9 +240,10 @@ namespace lf {
 		bool run_element_script_event(string_view id, string_view attribute, const Rml::Dictionary& parameters, string_view source_name);
 
 		sol::state lua;
-		view<window> display;
-		ApplicationStats& stats;
-		string scene_args_yaml;
+		Rml::Context* context = nullptr;
+		string owned_context_name;
+		unique<window> display;
+		string scene_args;
 		std::vector<ScriptInstaller> script_installers;
 		std::vector<FixedUpdater> fixed_updaters;
 		std::optional<LoadRequest> pending_load_request;
@@ -218,23 +264,19 @@ namespace lf {
 
 	/*!
 	** @ingroup application
-	** @brief Creates a scene with the standard Leaf scene allocation path.
+	** @brief Creates a scene with the standard Leaf scene setup path.
 	** @param context RML context that owns the scene document.
-	** @param display Window used for input and cursor state.
-	** @param stats Shared application statistics.
+	** @param display Window owned by the scene.
 	** @param initial Initial scene source path or identifier.
-	** @param args_yaml YAML argument data exposed to the scene script.
-	** @param persistent_elements Elements to restore into the new document.
-	** @return Newly allocated scene.
+	** @param args Opaque launch data exposed to the scene script.
+	** @return Newly constructed scene.
 	*/
-	unique_ptr<Scene> make_scene(
+	Scene make_scene(
 		Rml::Context& context,
-		view<window> display,
-		ApplicationStats& stats,
+		handle<window> display,
 		string_view initial,
-		string_view args_yaml = {},
-		std::vector<Scene::PersistentElement> persistent_elements = {},
-		std::vector<Scene::ScriptInstaller> script_installers = {},
-		std::vector<Scene::FixedUpdater> fixed_updaters = {}
+		string_view args = {},
+		span<const Scene::ScriptInstaller> script_installers = {},
+		span<const Scene::FixedUpdater> fixed_updaters = {}
 	);
 } // namespace lf

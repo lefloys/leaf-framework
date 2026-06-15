@@ -1,8 +1,4 @@
 add_files("leaf-framework"
-    "application.cpp"
-    "application.hpp"
-    "application_stats.cpp"
-    "application_stats.hpp"
     "cursor.cpp"
     "cursor.hpp"
     "elements/window.cpp"

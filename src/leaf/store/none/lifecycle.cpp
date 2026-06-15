@@ -1,6 +1,6 @@
 #include "leaf/store/lifecycle.hpp"
 
-#include <leaf/logging/logging.hpp>
+#include <leaf/core/logging.hpp>
 
 namespace lf {
 

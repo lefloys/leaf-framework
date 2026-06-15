@@ -1,8 +1,8 @@
 #pragma once
 
-#include <leaf/core/string.hpp>
-#include <leaf/core/types.hpp>
-#include <leaf/script/prototype.hpp>
+#include "leaf/core/string.hpp"
+#include "leaf/core/types.hpp"
+#include "leaf/script/prototype.hpp"
 
 namespace lf {
 	struct CursorPrototype : public Prototype<identifier<CursorPrototype, u16, void>> {

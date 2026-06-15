@@ -3,7 +3,7 @@
 #include "leaf/core/exception.hpp"
 #include "leaf/graphics/resource.hpp"
 #include "leaf/graphics/window_private.hpp"
-#include "leaf/logging/logging.hpp"
+#include "leaf/core/logging.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>

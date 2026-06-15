@@ -4,6 +4,7 @@
 #include "string.hpp"
 #include "types.hpp"
 #include <exception>
+#include <stdexcept>
 
 namespace lf {
 

@@ -253,7 +253,7 @@ namespace lf::pmg {
 		const u08* history_vertex(u32 history_count, u32 reverse_vertex_index) const {
 			const u32 vertex_size = sizeof(Vertex);
 			if (reverse_vertex_index >= history_count) {
-				throw out_of_range_exception(format("pmg vertex repush index {} out of range ({} vertices in history)",
+				throw out_of_range_exception(lf::format("pmg vertex repush index {} out of range ({} vertices in history)",
 													reverse_vertex_index, history_count));
 			}
 			const u32 vertex_index = history_count - reverse_vertex_index - 1;
@@ -375,7 +375,7 @@ namespace lf::pmg {
 
 		Index history_index(u32 history_count, u32 reverse_vertex_index) const {
 			if (reverse_vertex_index >= history_count) {
-				throw out_of_range_exception(format("pmg vertex repush index {} out of range ({} vertices in history)",
+				throw out_of_range_exception(lf::format("pmg vertex repush index {} out of range ({} vertices in history)",
 													reverse_vertex_index, history_count));
 			}
 			return index_history[history_count - reverse_vertex_index - 1];
@@ -494,3 +494,4 @@ namespace lf::pmg {
 		return triangle_range<Vertex, Writer, Source>(writer, source, opts);
 	}
 } // namespace lf::pmg
+

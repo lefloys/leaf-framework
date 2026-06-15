@@ -10,8 +10,6 @@
 #include <leaf/core/vector.hpp>
 
 namespace lf {
-    constexpr string_view default_language = "en-US";
-
     struct LanguageInfo {
         string id;
         string name;

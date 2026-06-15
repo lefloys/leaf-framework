@@ -23,8 +23,8 @@ namespace leaf_binary_profiler {
 
 	struct ProfilerEntity {
 		u32 id = 0;
-		lf::vec2 position{};
-		lf::vec2 velocity{};
+		lf::vec2<f32> position{};
+		lf::vec2<f32> velocity{};
 		i32 health = 0;
 		lf::string name;
 		lf::vector<ProfilerItem> inventory;
@@ -39,14 +39,14 @@ namespace leaf_binary_profiler {
 	struct SessionPatch {
 		u64 tick = 0;
 		u32 selected_entity = 0;
-		lf::vec2 camera{};
+		lf::vec2<f32> camera{};
 		lf::vector<ProfilerItem> changed_items;
 	};
 
 	struct ProfilerSession {
 		u64 tick = 0;
 		u32 selected_entity = 0;
-		lf::vec2 camera{};
+		lf::vec2<f32> camera{};
 		lf::vector<ProfilerItem> changed_items;
 	};
 
@@ -93,8 +93,8 @@ namespace leaf_binary_profiler {
 		for (size_t entity_index = 0; entity_index < entity_count; ++entity_index) {
 			ProfilerEntity entity;
 			entity.id = static_cast<u32>(entity_index + 1u);
-			entity.position = lf::vec2{ static_cast<f32>(entity_index) * 0.25f, static_cast<f32>(entity_index) * -0.5f };
-			entity.velocity = lf::vec2{ 0.5f, -0.125f };
+			entity.position = lf::vec2<f32>{ static_cast<f32>(entity_index) * 0.25f, static_cast<f32>(entity_index) * -0.5f };
+			entity.velocity = lf::vec2<f32>{ 0.5f, -0.125f };
 			entity.health = 100 - static_cast<i32>(entity_index % 73u);
 			entity.name = lf::format("entity-{}", entity_index);
 			entity.inventory.reserve(inventory_count);
@@ -127,7 +127,7 @@ namespace leaf_binary_profiler {
 		SessionPatch patch;
 		patch.tick = 987654321;
 		patch.selected_entity = 42;
-		patch.camera = lf::vec2{ 1024.0f, -512.0f };
+		patch.camera = lf::vec2<f32>{ 1024.0f, -512.0f };
 		patch.changed_items.reserve(item_count);
 		for (size_t index = 0; index < item_count; ++index) {
 			patch.changed_items.push_back(ProfilerItem{

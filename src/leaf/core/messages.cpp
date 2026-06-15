@@ -2,11 +2,11 @@
 
 namespace lf {
 	string make_missing_field_error_message(string_view field_name) {
-		return format("missing required field '{}'", field_name);
+		return lf::format("missing required field '{}'", field_name);
 	}
 
 	string make_type_mismatch_error_message(string_view expected, string_view actual) {
-		return format("expected type '{}', but got type '{}'", expected, actual);
+		return lf::format("expected type '{}', but got type '{}'", expected, actual);
 	}
 
 	namespace log {
@@ -69,7 +69,7 @@ namespace lf {
 			if (field.empty()) {
 				return EscapeAnnotationText(display);
 			}
-			return format("{{{}|{}}}", EscapeAnnotationText(display), EscapeAnnotationText(field));
+			return lf::format("{{{}|{}}}", EscapeAnnotationText(display), EscapeAnnotationText(field));
 		}
 
 		string Field(string_view field, const char* display) {
@@ -184,3 +184,4 @@ namespace lf {
 		}
 	} // namespace log
 } // namespace lf
+

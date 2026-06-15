@@ -17,14 +17,14 @@ namespace lf {
 		T& at(size_type index) {
 			if (index >= this->size()) {
 				throw out_of_range_exception(
-					format("index {} out of range (size is {})", index, this->size()));
+					lf::format("index {} out of range (size is {})", index, this->size()));
 			}
 			return (*this)[index];
 		}
 		const T& at(size_type index) const {
 			if (index >= this->size()) {
 				throw out_of_range_exception(
-					format("index {} out of range (size is {})", index, this->size()));
+					lf::format("index {} out of range (size is {})", index, this->size()));
 			}
 			return (*this)[index];
 		}

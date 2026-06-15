@@ -1,8 +1,8 @@
 #include "graphics.hpp"
 
-#include <leaf/logging/logging.hpp>
+#include "leaf/core/logging.hpp"
+#include "leaf/config.hpp"
 
-#define RUTILE_IMPL
 #include <rutile.h>
 #include <rt_ext_compute.h>
 #include <rt_ext_glfw.h>
@@ -26,7 +26,8 @@ namespace lf {
 			log::Debug("{}", text);
 		}
 	}
-	error to_error(rt_error err) {
+	error rutile_error() {
+		auto err = rtError();
 		if (err == RT_SUCCESS) { return error::no_error; }
 
 		error_code code;
@@ -48,14 +49,14 @@ namespace lf {
 		case RT_SHADER_LINK_FAILED: /*********/ code = graphics_errc::shader_link_failed; /*****/ break;
 		default: UNREACHABLE(); break;
 		}
-		return error(code, format("rtInit failed: {}", rtErrorMessage()));
+		return error(code, lf::format("rtInit failed: {}", rtErrorMessage()));
 	}
 
 
 
 	error init_graphics(span<string_view> args, bool headless) {
 		log::Info("[leaf] Starting graphics...");
-		constexpr string_view DefaultGraphicsAPI = "rt-vulkan"
+		constexpr string_view DefaultGraphicsAPI = "rt-vulkan";
 		log::Debug("[leaf] Graphics init for '{}'", DefaultGraphicsAPI);
 		if (auto err = rtLoad(DefaultGraphicsAPI.data(), nullptr, 0)) {
 			log::Error("[leaf] Failed to load graphics backend '{}'", DefaultGraphicsAPI);
@@ -86,7 +87,7 @@ namespace lf {
 			rtInit(features, 1);
 		}
 
-		error err = to_error();
+		error err = rutile_error();
 		if (err) {
 			log::Error("Graphics initialization failed: {}", err.message);
 			rtUnload();
@@ -103,3 +104,4 @@ namespace lf {
 
 	string_view GraphicsBackendName() { return rtGetName(); }
 }
+

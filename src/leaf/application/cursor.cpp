@@ -1,14 +1,15 @@
 #include "cursor.hpp"
 
-#include <leaf/core/format.hpp>
-#include <leaf/logging/logging.hpp>
-#include <leaf/script/cursor_prototype.hpp>
-#include <leaf/script/database.hpp>
-#include <leaf/script/virtual_filesystem.hpp>
+#include "leaf/core/format.hpp"
+#include "leaf/core/logging.hpp"
+#include "leaf/script/database.hpp"
+#include "leaf/script/prototypes/cursor.hpp"
+#include "leaf/script/virtual_filesystem.hpp"
 
-#include <memory>
 
 #include <stb_image.h>
+
+#include <memory>
 
 namespace lf {
 	bool SetCursorPrototype(view<window> display, string_view name) {
@@ -20,16 +21,16 @@ namespace lf {
 			return true;
 		}
 
-		identifier<CursorPrototype, u16, void> id = Database<CursorPrototype>::find(name);
+		identifier<lf::CursorPrototype, u16, void> id = Database<lf::CursorPrototype>::find(name);
 		if (!id) {
-			log::Warning("{}", format("[cursor] missing cursor prototype '{}'", name));
+			log::Warning("{}", lf::format("[cursor] missing cursor prototype '{}'", name));
 			return false;
 		}
 
-		const CursorPrototype& cursor = Database<CursorPrototype>::get(id);
+		const lf::CursorPrototype& cursor = Database<lf::CursorPrototype>::get(id);
 		auto path = ResolveVirtualPathReport(cursor.path);
 		if (!path) {
-			log::Warning("{}", format("[cursor] {}", path.error().message));
+			log::Warning("{}", lf::format("[cursor] {}", path.error().message));
 			return false;
 		}
 
@@ -40,12 +41,12 @@ namespace lf {
 			stbi_load(path->string().c_str(), &width, &height, &components, 4),
 			stbi_image_free);
 		if (!pixels || width <= 0 || height <= 0) {
-			log::Warning("{}", format("[cursor] failed to load cursor image '{}'", path->string()));
+			log::Warning("{}", lf::format("[cursor] failed to load cursor image '{}'", path->string()));
 			return false;
 		}
 
 		if (cursor.hotspot_x >= static_cast<u32>(width) || cursor.hotspot_y >= static_cast<u32>(height)) {
-			log::Warning("{}", format("[cursor] hotspot outside cursor image '{}'", cursor.name));
+			log::Warning("{}", lf::format("[cursor] hotspot outside cursor image '{}'", cursor.name));
 			return false;
 		}
 
@@ -65,3 +66,4 @@ namespace lf {
 		});
 	}
 }
+

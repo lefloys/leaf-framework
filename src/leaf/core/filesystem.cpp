@@ -20,7 +20,7 @@ namespace lf::fs {
 	report<string> ReadTextFile(string_view path) {
 		std::ifstream file(string(path), std::ios::binary);
 		if (!file) {
-			return unexpected(error(generic_errc::input_error, format("failed to open '{}'", path)));
+			return unexpected(error(generic_errc::input_error, lf::format("failed to open '{}'", path)));
 		}
 
 		string text(
@@ -29,8 +29,9 @@ namespace lf::fs {
 		if (!file.eof() && file.fail()) {
 			return unexpected(error(
 				generic_errc::input_error,
-				format("failed to read '{}'", path)));
+				lf::format("failed to read '{}'", path)));
 		}
 		return text;
 	}
 } // namespace lf::fs
+

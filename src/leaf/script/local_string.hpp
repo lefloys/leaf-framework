@@ -22,7 +22,8 @@ namespace lf {
 			if (obj.is<string>()) {
 				return { obj.get<string>() };
 			}
-			throw lf::runtime_exception(format("cannot convert type '{}' to local_string", obj.current_type_name()));
+			throw lf::runtime_exception(lf::format("cannot convert type '{}' to local_string", obj.current_type_name()));
 		}
 	};
 } // namespace lf
+

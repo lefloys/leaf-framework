@@ -1,13 +1,12 @@
 #include "rml_backend.hpp"
 
-#include <leaf/core/format.hpp>
-#include <leaf/logging/logging.hpp>
-#include <leaf/core/profiler.hpp>
-#include <leaf/platform/platform.hpp>
-#include <leaf/graphics/timepoint.hpp>
-#include <leaf/script/virtual_filesystem.hpp>
-
-#include <embed/font.h>
+#include "leaf/core/format.hpp"
+#include "leaf/core/logging.hpp"
+#include "leaf/core/profiler.hpp"
+#include "leaf/platform/platform.hpp"
+#include "leaf/graphics/timepoint.hpp"
+#include "leaf/script/virtual_filesystem.hpp"
+#include "embed/font.h"
 
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/SystemInterface.h>
@@ -273,7 +272,7 @@ void main() {
 		try {
 			path = ResolveVirtualPath(source.c_str());
 		} catch (const lf::exception& e) {
-			log::Warning("{}", format("[rml] failed to resolve texture '{}': {}", source, e.what()));
+			log::Warning("{}", lf::format("[rml] failed to resolve texture '{}': {}", source, e.what()));
 			return 0;
 		}
 
@@ -462,3 +461,4 @@ void main() {
 	}
 
 } // namespace lf
+

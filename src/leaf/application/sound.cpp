@@ -1,11 +1,11 @@
 #include "sound.hpp"
 
-#include <leaf/core/format.hpp>
-#include <leaf/logging/logging.hpp>
-#include <leaf/script/database.hpp>
-#include <leaf/script/settings.hpp>
-#include <leaf/script/sound_prototype.hpp>
-#include <leaf/script/virtual_filesystem.hpp>
+#include "leaf/core/format.hpp"
+#include "leaf/core/logging.hpp"
+#include "leaf/script/database.hpp"
+#include "leaf/script/prototypes/sound.hpp"
+#include "leaf/script/settings.hpp"
+#include "leaf/script/virtual_filesystem.hpp"
 
 #include <memory>
 #include <mutex>
@@ -147,7 +147,7 @@ namespace lf {
 			return error::no_error;
 		}
 		if (!fs::exists(path)) {
-			return error(generic_errc::input_error, format("missing sound '{}'", path.string()));
+			return error(generic_errc::input_error, lf::format("missing sound '{}'", path.string()));
 		}
 
 		return sound_engine().play(path, volume);
@@ -157,7 +157,7 @@ namespace lf {
 		lua.set_function("play_sound", [](string_view name, sol::object type, f32 volume) {
 			identifier<SoundPrototype, u16, void> id = Database<SoundPrototype>::find(name);
 			if (!id) {
-				log::Warning("{}", format("[sound] missing sound prototype '{}'", name));
+				log::Warning("{}", lf::format("[sound] missing sound prototype '{}'", name));
 				return false;
 			}
 
@@ -170,15 +170,16 @@ namespace lf {
 			f32 final_volume = clamp_volume(volume) * clamp_volume(sound.volume) * settings_volume_for_sound_type(type_id);
 			auto path = ResolveVirtualPathReport(sound.path);
 			if (!path) {
-				log::Warning("{}", format("[sound] {}", path.error().message));
+				log::Warning("{}", lf::format("[sound] {}", path.error().message));
 				return false;
 			}
 
 			if (error err = PlaySoundFile(*path, final_volume)) {
-				log::Warning("{}", format("[sound] {}", err.message));
+				log::Warning("{}", lf::format("[sound] {}", err.message));
 				return false;
 			}
 			return true;
 		});
 	}
 }
+
