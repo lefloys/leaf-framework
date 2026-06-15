@@ -9,6 +9,7 @@
 #include "types.hpp"
 #include "unit.hpp"
 #include "unordered_map.hpp"
+#include "identifier.hpp"
 #include "version.hpp"
 #include "vector.hpp"
 #include "concepts.hpp"
@@ -31,6 +32,9 @@ lf::error process(...) requires false;
 
 namespace lf::bin {
 	using ::process;
+
+	template<typename Stream, typename T, typename... Args>
+	error process(Stream& stream, T& value, Args&... args);
 
 	/*!
 	** @ingroup binary
@@ -326,6 +330,34 @@ namespace lf::bin {
 	template<typename T, typename Pred>
 	presence<T, Pred> maybe(string_view name, T& value, Pred present, T fallback = {}) {
 		return { name, value, present, fallback };
+	}
+
+	template<readable_byte_stream Stream, typename T, typename VNum, typename GNum>
+	error process(Stream& stream, ::lf::identifier<T, VNum, GNum>& value) {
+		if constexpr (std::is_same_v<GNum, void>) {
+			VNum idx = 0;
+			IF_ERROR_RETURN_ERROR(stream(field("id", idx)));
+			value = ::lf::identifier<T, VNum, GNum>(idx);
+			return {};
+		} else {
+			VNum idx = 0;
+			GNum gen = 0;
+			IF_ERROR_RETURN_ERROR(stream(field("id", idx), field("gen", gen)));
+			value = ::lf::identifier<T, VNum, GNum>(idx, gen);
+			return {};
+		}
+	}
+
+	template<writable_byte_stream Stream, typename T, typename VNum, typename GNum>
+	error process(Stream& stream, const ::lf::identifier<T, VNum, GNum>& value) {
+		if constexpr (std::is_same_v<GNum, void>) {
+			VNum idx = value.get();
+			return stream(field("id", idx));
+		} else {
+			VNum idx = value.get();
+			GNum gen = value.gen();
+			return stream(field("id", idx), field("gen", gen));
+		}
 	}
 
 	template<byte_stream Stream, typename... Ps>

@@ -89,6 +89,25 @@ namespace lf {
 			.modifiers = modifiers,
 			.position = pointer_position,
 		});
+		if (!entered) {
+			for (size_t index = 0; index < controls.size(); ++index) {
+				if (index < KEY_ENUM_MAX) {
+					continue;
+				}
+				input_state& state = controls[index];
+				if (state == input_state::Down || state == input_state::Pressed) {
+					state = input_state::Released;
+					deferred_releases[index] = false;
+					events.push_back({
+						.type = INPUT_EVENT_CONTROL,
+						.control = { INPUT_CONTROL_BUTTON, static_cast<u16>(index - KEY_ENUM_MAX) },
+						.state = state,
+						.modifiers = modifiers,
+						.position = pointer_position,
+					});
+				}
+			}
+		}
 	}
 
 	void window_t::scroll(pos2<f32> delta) {
@@ -110,6 +129,23 @@ namespace lf {
 			.position = pointer_position,
 		});
 		if (!focused) {
+			for (size_t index = 0; index < controls.size(); ++index) {
+				if (index < KEY_ENUM_MAX) {
+					continue;
+				}
+				input_state& state = controls[index];
+				if (state == input_state::Down || state == input_state::Pressed) {
+					state = input_state::Released;
+					deferred_releases[index] = false;
+					events.push_back({
+						.type = INPUT_EVENT_CONTROL,
+						.control = { INPUT_CONTROL_BUTTON, static_cast<u16>(index - KEY_ENUM_MAX) },
+						.state = state,
+						.modifiers = modifiers,
+						.position = pointer_position,
+					});
+				}
+			}
 			controls.fill(input_state::Up);
 			deferred_releases.fill(false);
 			modifiers = {};

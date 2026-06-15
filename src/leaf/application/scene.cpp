@@ -777,6 +777,31 @@ namespace lf {
 			return true;
 		});
 
+		lua.set_function("mouse_down", [this](sol::optional<string_view> button) -> bool {
+			if (!this->display) {
+				return false;
+			}
+			string_view value = button.value_or("left");
+			if (value == "left") {
+				return Window::MouseDown(this->display, BUTTON_LEFT);
+			}
+			if (value == "right") {
+				return Window::MouseDown(this->display, BUTTON_RIGHT);
+			}
+			if (value == "middle") {
+				return Window::MouseDown(this->display, BUTTON_MIDDLE);
+			}
+			return false;
+		});
+
+		lua.set_function("mouse_x", [this]() -> f32 {
+			return this->has_mouse_position ? this->last_mouse_position.x : 0.0f;
+		});
+
+		lua.set_function("mouse_y", [this]() -> f32 {
+			return this->has_mouse_position ? this->last_mouse_position.y : 0.0f;
+		});
+
 		lua.set_function("ui_click", [this](string_view id) -> bool {
 			Rml::Element* element = require_element(id, "ui_click");
 			if (!element) {
@@ -1848,7 +1873,11 @@ end
 				context->ProcessMouseMove(static_cast<int>(event.position.x), static_cast<int>(event.position.y), rml_modifiers(event.modifiers));
 				break;
 			case INPUT_EVENT_POINTER_ENTER:
-				if (event.state == input_state::Up) context->ProcessMouseLeave();
+				if (event.state == input_state::Up) {
+					context->ProcessMouseLeave();
+					ReleaseWindowDocumentEvents(*document);
+					update_cursor(nullptr, false, true);
+				}
 				break;
 			case INPUT_EVENT_SCROLL:
 				context->ProcessMouseWheel(Rml::Vector2f{ -event.delta.x, -event.delta.y }, rml_modifiers(event.modifiers));
@@ -1857,6 +1886,12 @@ end
 				if (accepts_text_input(event.character)) context->ProcessTextInput(static_cast<Rml::Character>(event.character));
 				break;
 			case INPUT_EVENT_FOCUS:
+				if (event.state == input_state::Up) {
+					context->ProcessMouseLeave();
+					ReleaseWindowDocumentEvents(*document);
+					update_cursor(nullptr, false, true);
+				}
+				break;
 			case INPUT_EVENT_DROP:
 				break;
 			}
