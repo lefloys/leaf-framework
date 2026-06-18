@@ -36,16 +36,16 @@ namespace lf {
 	namespace GraphicsProgram {
 		handle<graphics_program> Create();
 		void Destroy(handle<graphics_program> program);
-		void VertexLayout(handle<graphics_program> program, const vertex_layout& layout);
-		void VertexShader(handle<graphics_program> program, u64 size, const void* data);
-		void FragmentShader(handle<graphics_program> program, u64 size, const void* data);
-		void RasterState(handle<graphics_program> program, CullMode cull_mode, FrontFace front_face,
+		void VertexLayout(view<graphics_program> program, const vertex_layout& layout);
+		void VertexShader(view<graphics_program> program, u64 size, const void* data);
+		void FragmentShader(view<graphics_program> program, u64 size, const void* data);
+		void RasterState(view<graphics_program> program, CullMode cull_mode, FrontFace front_face,
 						 FillMode fill_mode);
-		void BlendState(handle<graphics_program> program, bool enabled, rt_blend_factor src_color,
+		void BlendState(view<graphics_program> program, bool enabled, rt_blend_factor src_color,
 						rt_blend_factor dst_color, rt_blend_op color_op, rt_blend_factor src_alpha,
 						rt_blend_factor dst_alpha, rt_blend_op alpha_op);
-		void Link(handle<graphics_program> program);
-		uniform_location UniformLocation(handle<graphics_program> program, const char* name);
+		void Link(view<graphics_program> program);
+		uniform_location UniformLocation(view<graphics_program> program, const char* name);
 	} // namespace GraphicsProgram
 
 } // namespace lf

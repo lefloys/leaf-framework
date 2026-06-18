@@ -154,6 +154,15 @@ namespace lf::lockstep {
 		vector<heartbeat_request_record> requested_heartbeats;
 		vector<PayloadId> received_payloads;
 		bool disconnect_acknowledged = false;
+		// True once we've received any client_heartbeat. Clients only start
+		// heartbeating once they've decoded the snapshot and reached the
+		// joined state on their side, so the absence of one means the client
+		// is still receiving / loading the snapshot — even if WE've already
+		// finished pushing all the bulk chunks and flipped connection_state
+		// to joined. Used by Session::outgoing_snapshots() to keep the host
+		// "Saving the world for X" overlay up until the peer is actually
+		// playing.
+		bool client_heartbeat_seen = false;
 	};
 
 	struct Session::Impl {
@@ -840,6 +849,10 @@ namespace lf::lockstep {
 			if (!connection || connection->connection_state != state::joined) {
 				return {};
 			}
+			// Mark the peer as actually playing — they wouldn't be sending
+			// heartbeats yet if they were still receiving / decoding the
+			// snapshot. The "Saving the world for X" overlay reads this.
+			connection->client_heartbeat_seen = true;
 			session.resend_heartbeats(*connection, heartbeat.requests.sequences);
 			packet_record record = record_received_heartbeat(
 				connection->received_heartbeats,
@@ -1905,6 +1918,66 @@ namespace lf::lockstep {
 		vector<SessionEvent> events = std::move(impl->events);
 		impl->events.clear();
 		return events;
+	}
+
+	optional<SnapshotProgress> Session::incoming_snapshot() const {
+		if (!impl || impl->session_mode != mode::client) {
+			return nullopt;
+		}
+		const auto& client = static_cast<const client_session&>(*impl);
+		if (!client.snapshot.active) {
+			return nullopt;
+		}
+		SnapshotProgress p;
+		p.session_id   = client.session_id;
+		p.chunks_done  = client.snapshot.received_count;
+		p.chunks_total = client.snapshot.chunk_count;
+		p.bytes_done   = static_cast<u64>(client.snapshot.received_count) * static_cast<u64>(client.snapshot.chunk_size);
+		p.bytes_total  = static_cast<u64>(client.snapshot.bytes.size());
+		// Clamp because the final chunk is short and the multiplication above
+		// can overrun the true byte total by chunk_size-1.
+		if (p.bytes_done > p.bytes_total) {
+			p.bytes_done = p.bytes_total;
+		}
+		return p;
+	}
+
+	vector<SnapshotProgress> Session::outgoing_snapshots() const {
+		vector<SnapshotProgress> out;
+		if (!impl || impl->session_mode != mode::host) {
+			return out;
+		}
+		const auto& host = static_cast<const host_session&>(*impl);
+		for (const host_connection& c : host.connections) {
+			// Include a peer in the "Saving the world for X" overlay while
+			// the lockstep machinery is still on the join path for them:
+			//   - downloading_snapshot: the framework's own state, true
+			//     during the bulk send.
+			//   - joined but no heartbeat seen yet: bulk send finished, but
+			//     the client hasn't completed snapshot decode + catch-up.
+			//     The framework flips connection_state to joined the moment
+			//     send_snapshot_end goes out the door, even though the peer
+			//     can still be busy receiving missing chunks via NACK or
+			//     decoding the world. The overlay stays up until the peer
+			//     starts heartbeating, which is the real "I'm playing" signal.
+			const bool in_join_handshake =
+				c.connection_state == state::downloading_snapshot ||
+				(c.connection_state == state::joined && !c.client_heartbeat_seen);
+			if (!in_join_handshake) {
+				continue;
+			}
+			SnapshotProgress p;
+			p.session_id   = c.session_id;
+			p.chunks_done  = c.next_snapshot_chunk;
+			p.chunks_total = c.snapshot_chunk_count;
+			p.bytes_done   = static_cast<u64>(c.next_snapshot_chunk) * static_cast<u64>(c.snapshot_chunk_size);
+			p.bytes_total  = static_cast<u64>(c.snapshot_bytes.size());
+			if (p.bytes_done > p.bytes_total) {
+				p.bytes_done = p.bytes_total;
+			}
+			out.push_back(p);
+		}
+		return out;
 	}
 
 	void Session::set_login_payload(span<const byte> bytes) {

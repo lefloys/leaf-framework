@@ -129,22 +129,27 @@ namespace lf {
 			.position = pointer_position,
 		});
 		if (!focused) {
+			// Synthesize release events for every held key/button so listeners
+			// that track "is X held" via keydown/keyup events don't see a
+			// permanent down-state when the user alt-tabs mid-press. Without
+			// this, controls.fill(Up) below silently zeroes the internal state
+			// while every script-side "move_down=true" flag stays stuck.
 			for (size_t index = 0; index < controls.size(); ++index) {
-				if (index < KEY_ENUM_MAX) {
+				input_state& state = controls[index];
+				if (state != input_state::Down && state != input_state::Pressed) {
 					continue;
 				}
-				input_state& state = controls[index];
-				if (state == input_state::Down || state == input_state::Pressed) {
-					state = input_state::Released;
-					deferred_releases[index] = false;
-					events.push_back({
-						.type = INPUT_EVENT_CONTROL,
-						.control = { INPUT_CONTROL_BUTTON, static_cast<u16>(index - KEY_ENUM_MAX) },
-						.state = state,
-						.modifiers = modifiers,
-						.position = pointer_position,
-					});
-				}
+				state = input_state::Released;
+				deferred_releases[index] = false;
+				events.push_back({
+					.type = INPUT_EVENT_CONTROL,
+					.control = index < KEY_ENUM_MAX
+						? input_control{ INPUT_CONTROL_KEY, static_cast<u16>(index) }
+						: input_control{ INPUT_CONTROL_BUTTON, static_cast<u16>(index - KEY_ENUM_MAX) },
+					.state = state,
+					.modifiers = modifiers,
+					.position = pointer_position,
+				});
 			}
 			controls.fill(input_state::Up);
 			deferred_releases.fill(false);
@@ -172,13 +177,19 @@ namespace lf {
 	}
 
 	window_t::~window_t() {
-		platform_window_clear_owner(platform);
-		if (cursor) {
-			destroy_platform_cursor(cursor);
-			cursor = nullptr;
+		if (platform) {
+			platform_window_cursor(platform, nullptr);
+			platform_window_clear_owner(platform);
 		}
-		rtSwapchainDestroy(swapchain);
-		destroy_platform_window(platform);
+		current_cursor.clear();
+		if (swapchain) {
+			rtSwapchainDestroy(swapchain);
+			swapchain = nullptr;
+		}
+		if (platform) {
+			destroy_platform_window(platform);
+			platform = nullptr;
+		}
 	}
 
 	void resource_traits<window>::destroy(native_handle handle) {
@@ -198,6 +209,9 @@ namespace lf {
 			detail::default_window_size.width,
 			detail::default_window_size.height,
 		});
+		if (!window->platform) {
+			throw runtime_exception("failed to create platform window");
+		}
 		window->size = detail::default_window_size;
 		window->windowed_position = platform_window_position(window->platform);
 		window->windowed_size = detail::default_window_size;
@@ -229,6 +243,9 @@ namespace lf {
 	}
 
 	void Window::Show(view<window> window) {
+		if (!window) {
+			return;
+		}
 		dim2<u32> size = Size(window);
 		log::Debug("Showing window size={}x{} fullscreen={}", size.width, size.height, window.value->fullscreen ? "true" : "false");
 		platform_window_show(window.value->platform);
@@ -328,23 +345,12 @@ namespace lf {
 		return window.value->fullscreen;
 	}
 
-	void Window::SetCursor(view<window> window, const u08* rgba, u32 width, u32 height, u32 hotspot_x, u32 hotspot_y) {
-		PlatformCursor* cursor = create_platform_cursor(rgba, width, height, hotspot_x, hotspot_y);
-		PlatformCursor* old_cursor = window.value->cursor;
-		window.value->cursor = cursor;
+	void Window::ApplyCursor(view<window> window, string_view name, PlatformCursor* cursor) {
+		if (window.value->current_cursor == name) {
+			return;
+		}
 		platform_window_cursor(window.value->platform, cursor);
-		if (old_cursor) {
-			destroy_platform_cursor(old_cursor);
-		}
-	}
-
-	void Window::ResetCursor(view<window> window) {
-		PlatformCursor* old_cursor = window.value->cursor;
-		window.value->cursor = nullptr;
-		platform_window_cursor(window.value->platform, nullptr);
-		if (old_cursor) {
-			destroy_platform_cursor(old_cursor);
-		}
+		window.value->current_cursor.assign(name);
 	}
 
 	bool Window::Drawable(view<const window> window) {

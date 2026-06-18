@@ -19,8 +19,16 @@ if(DEFINED VCPKG_INSTALLED_DIR AND _miniaudio_TRIPLET)
     list(APPEND _miniaudio_INCLUDE_HINTS "${VCPKG_INSTALLED_DIR}/${_miniaudio_TRIPLET}/include")
 endif()
 
+if(DEFINED VCPKG_INSTALLED_DIR)
+    list(APPEND _miniaudio_INCLUDE_HINTS "${VCPKG_INSTALLED_DIR}/x64-windows/include")
+endif()
+
 if(DEFINED _VCPKG_INSTALLED_DIR AND _miniaudio_TRIPLET)
     list(APPEND _miniaudio_INCLUDE_HINTS "${_VCPKG_INSTALLED_DIR}/${_miniaudio_TRIPLET}/include")
+endif()
+
+if(DEFINED _VCPKG_INSTALLED_DIR)
+    list(APPEND _miniaudio_INCLUDE_HINTS "${_VCPKG_INSTALLED_DIR}/x64-windows/include")
 endif()
 
 if(DEFINED CMAKE_TOOLCHAIN_FILE AND _miniaudio_TRIPLET)
@@ -31,6 +39,10 @@ endif()
 
 if(DEFINED ENV{VCPKG_ROOT} AND _miniaudio_TRIPLET)
     list(APPEND _miniaudio_INCLUDE_HINTS "$ENV{VCPKG_ROOT}/installed/${_miniaudio_TRIPLET}/include")
+endif()
+
+if(DEFINED ENV{VCPKG_ROOT})
+    list(APPEND _miniaudio_INCLUDE_HINTS "$ENV{VCPKG_ROOT}/installed/x64-windows/include")
 endif()
 
 if(_miniaudio_TRIPLET)

@@ -604,6 +604,13 @@ namespace lf {
 		this->script_installers.assign(script_installers.begin(), script_installers.end());
 		this->fixed_updaters.assign(fixed_updaters.begin(), fixed_updaters.end());
 		load(initial, args);
+		// Start the render and fixed-update threads BEFORE Window::Show so the
+		// first visible frame is already a real rendered frame. Showing the
+		// window first leaves a window-of-time where the OS composites whatever
+		// the framebuffer happened to contain (typically black), which was the
+		// "startup is just black for a moment" symptom.
+		start_threads();
+		Window::Show(display);
 	}
 
 	Scene::Scene(
@@ -636,9 +643,21 @@ namespace lf {
 		this->script_installers.assign(script_installers.begin(), script_installers.end());
 		this->fixed_updaters.assign(fixed_updaters.begin(), fixed_updaters.end());
 		load(initial, args);
+		// See the no-display launch overload above for why threads start before
+		// Window::Show — first visible frame must be a real rendered frame.
+		start_threads();
+		Window::Show(this->display);
 	}
 
 	unique<window> Scene::release_window() {
+		// Stop the render + fixed-update threads BEFORE moving the window out.
+		// Both threads dereference display every frame (Window::ShouldClose,
+		// Window::BeginFrame, etc.) — if we let the move happen while they
+		// were still running, their next iteration would see an empty unique
+		// and crash on a null window_t pointer. This was the cause of the
+		// "Access violation reading 0x0 in Window::ShouldClose" at startup
+		// handoff from the loading scene to run_main's gameplay scene.
+		stop();
 		return std::move(display);
 	}
 
@@ -654,6 +673,8 @@ namespace lf {
 			attribute = "click";
 		} else if (event == "change") {
 			attribute = "change";
+		} else if (event == "input") {
+			attribute = "input";
 		} else if (event == "mousedown") {
 			attribute = "mousedown";
 		} else if (event == "mousemove") {
@@ -707,10 +728,20 @@ namespace lf {
 		: context(&context),
 		  display(std::move(display)) {}
 
+	void Scene::install_handlers(
+		span<const ScriptInstaller> new_script_installers,
+		span<const FixedUpdater> new_fixed_updaters
+	) {
+		std::lock_guard lock(scene_mutex);
+		this->script_installers.assign(new_script_installers.begin(), new_script_installers.end());
+		this->fixed_updaters.assign(new_fixed_updaters.begin(), new_fixed_updaters.end());
+	}
+
 	void Scene::load(
 		string_view initial,
 		string_view args
 	) {
+		std::lock_guard lock(scene_mutex);
 		unload_document();
 		scene_args = string(args);
 		pending_load_request.reset();
@@ -986,100 +1017,134 @@ namespace lf {
 				Window::SetShouldClose(this->display, true);
 			}
 		};
-		game["scene"] = [this](sol::this_state state, sol::object) {
-			sol::state_view lua(state);
-			sol::table scene = lua.create_table();
-			scene["set_rml"] = [this](sol::object, string_view id, string_view rml) {
-				set_rml(id, rml);
-			};
-			scene["set_text"] = [this](sol::object, string_view id, string_view text) {
-				if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
-					Rml::String next(rml_escape(text));
-					if (element->GetInnerRML() != next) {
-						element->SetInnerRML(next);
-					}
-				}
-			};
-			scene["set_property"] = [this](sol::object, string_view id, string_view name, string_view value) {
-				if (Rml::Element* element = find_element(id)) {
-					element->SetProperty(Rml::String(name), Rml::String(value));
-				}
-			};
-			scene["set_attribute"] = [this](sol::object, string_view id, string_view name, sol::object value) {
-				Rml::Element* element = find_element(id);
-				if (element) {
-					if (value.is<f32>()) {
-						set_attribute(id, name, value.as<f32>());
-					} else if (value.is<f64>()) {
-						set_attribute(id, name, static_cast<f32>(value.as<f64>()));
-					} else {
-						set_attribute(id, name, lua_value_to_string(value));
-					}
-				}
-			};
-			scene["focus"] = [this](sol::object, string_view id) -> bool {
-				Rml::Element* element = find_element(id);
-				return element ? element->Focus(true) : false;
-			};
-			scene["focused"] = [this](sol::object) -> string {
-				if (!document) {
-					return {};
-				}
-				Rml::Context* context = document->GetContext();
-				Rml::Element* focused = context ? context->GetFocusElement() : nullptr;
-				return focused ? string(focused->GetId()) : string();
-			};
-			scene["remove_element"] = [this](sol::object, string_view id) {
-				Rml::Element* element = find_element(id);
-				if (!element) {
-					return;
-				}
-				if (Rml::Element* parent = element->GetParentNode()) {
-					parent->RemoveChild(element);
-				}
-			};
-			scene["element_exists"] = [this](sol::object, string_view tag_or_id, sol::optional<string_view> maybe_id) -> bool {
-				Rml::Element* element = document->GetElementById(Rml::String(maybe_id.value_or(tag_or_id)));
-				if (!element) {
-					return false;
-				}
-				if (!maybe_id) {
-					return true;
-				}
-				return element->GetTagName() == Rml::String(tag_or_id);
-			};
-			scene["element_left"] = [this](sol::object, string_view id) -> f32 {
-				if (Rml::Element* element = find_element(id)) {
-					return element->GetAbsoluteLeft();
-				}
-				return 0.0f;
-			};
-			scene["element_top"] = [this](sol::object, string_view id) -> f32 {
-				if (Rml::Element* element = find_element(id)) {
-					return element->GetAbsoluteTop();
-				}
-				return 0.0f;
-			};
-			scene["element_width"] = [this](sol::object, string_view id) -> f32 {
-				if (Rml::Element* element = find_element(id)) {
-					return element->GetOffsetWidth();
-				}
-				return 0.0f;
-			};
-			scene["element_height"] = [this](sol::object, string_view id) -> f32 {
-				if (Rml::Element* element = find_element(id)) {
-					return element->GetOffsetHeight();
-				}
-				return 0.0f;
-			};
-			scene["context_width"] = [this](sol::object) -> i32 {
-				return document->GetContext()->GetDimensions().x;
-			};
-			scene["context_height"] = [this](sol::object) -> i32 {
-				return document->GetContext()->GetDimensions().y;
-			};
-			return scene;
+		// The `scene` helper table is exposed as a top-level Lua global rather
+		// than a method on `game`. RML attribute-script chunks (mousedown=...,
+		// click=..., etc.) execute as freshly-compiled chunks with no upvalue
+		// access to whatever locals the main scene file declared. Globals
+		// survive across chunks; method results captured into `local scene` do
+		// not. Building it once here and assigning to globals also avoids
+		// allocating a fresh table on every Lua call.
+		sol::table scene_table = lua.create_table();
+		scene_table["set_rml"] = [this](sol::object, string_view id, string_view rml) {
+			set_rml(id, rml);
 		};
+		scene_table["set_text"] = [this](sol::object, string_view id, string_view text) {
+			if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
+				Rml::String next(rml_escape(text));
+				if (element->GetInnerRML() != next) {
+					element->SetInnerRML(next);
+				}
+			}
+		};
+		scene_table["set_property"] = [this](sol::object, string_view id, string_view name, string_view value) {
+			if (Rml::Element* element = find_element(id)) {
+				element->SetProperty(Rml::String(name), Rml::String(value));
+			}
+		};
+		scene_table["set_attribute"] = [this](sol::object, string_view id, string_view name, sol::object value) {
+			Rml::Element* element = find_element(id);
+			if (element) {
+				if (value.is<f32>()) {
+					set_attribute(id, name, value.as<f32>());
+				} else if (value.is<f64>()) {
+					set_attribute(id, name, static_cast<f32>(value.as<f64>()));
+				} else {
+					set_attribute(id, name, lua_value_to_string(value));
+				}
+			}
+		};
+		scene_table["focus"] = [this](sol::object, string_view id) -> bool {
+			Rml::Element* element = find_element(id);
+			return element ? element->Focus(true) : false;
+		};
+		// Sets a form input's value in place without rebuilding the element.
+		// Used by list-driven menus (save browser) where clicking a row must
+		// fill a fixed input field without destroying/recreating it — which
+		// would drop focus and visually move it.
+		scene_table["set_input_value"] = [this](sol::object, string_view id, string_view value) -> bool {
+			Rml::Element* element = find_element(id);
+			if (!element) {
+				return false;
+			}
+			if (auto* input = rmlui_dynamic_cast<Rml::ElementFormControlInput*>(element)) {
+				input->SetValue(Rml::String(value));
+				return true;
+			}
+			if (auto* control = rmlui_dynamic_cast<Rml::ElementFormControl*>(element)) {
+				control->SetValue(Rml::String(value));
+				return true;
+			}
+			return false;
+		};
+		// Toggles a CSS class on an element. Lets list selection update only
+		// the highlighted row instead of re-rendering the whole list.
+		scene_table["set_class"] = [this](sol::object, string_view id, string_view class_name, bool on) -> bool {
+			Rml::Element* element = find_element(id);
+			if (!element) {
+				return false;
+			}
+			element->SetClass(Rml::String(class_name), on);
+			return true;
+		};
+		scene_table["focused"] = [this](sol::object) -> string {
+			if (!document) {
+				return {};
+			}
+			Rml::Context* context = document->GetContext();
+			Rml::Element* focused = context ? context->GetFocusElement() : nullptr;
+			return focused ? string(focused->GetId()) : string();
+		};
+		scene_table["remove_element"] = [this](sol::object, string_view id) {
+			Rml::Element* element = find_element(id);
+			if (!element) {
+				return;
+			}
+			if (Rml::Element* parent = element->GetParentNode()) {
+				parent->RemoveChild(element);
+			}
+		};
+		scene_table["element_exists"] = [this](sol::object, string_view tag_or_id, sol::optional<string_view> maybe_id) -> bool {
+			Rml::Element* element = document->GetElementById(Rml::String(maybe_id.value_or(tag_or_id)));
+			if (!element) {
+				return false;
+			}
+			if (!maybe_id) {
+				return true;
+			}
+			return element->GetTagName() == Rml::String(tag_or_id);
+		};
+		scene_table["element_left"] = [this](sol::object, string_view id) -> f32 {
+			if (Rml::Element* element = find_element(id)) {
+				return element->GetAbsoluteLeft();
+			}
+			return 0.0f;
+		};
+		scene_table["element_top"] = [this](sol::object, string_view id) -> f32 {
+			if (Rml::Element* element = find_element(id)) {
+				return element->GetAbsoluteTop();
+			}
+			return 0.0f;
+		};
+		scene_table["element_width"] = [this](sol::object, string_view id) -> f32 {
+			if (Rml::Element* element = find_element(id)) {
+				return element->GetOffsetWidth();
+			}
+			return 0.0f;
+		};
+		scene_table["element_height"] = [this](sol::object, string_view id) -> f32 {
+			if (Rml::Element* element = find_element(id)) {
+				return element->GetOffsetHeight();
+			}
+			return 0.0f;
+		};
+		scene_table["context_width"] = [this](sol::object) -> i32 {
+			return document->GetContext()->GetDimensions().x;
+		};
+		scene_table["context_height"] = [this](sol::object) -> i32 {
+			return document->GetContext()->GetDimensions().y;
+		};
+		lua.globals()["scene"] = scene_table;
+		lua["_G"]["scene"] = scene_table;
 
 		lua.set_function("rml_escape", [](sol::object value) {
 			if (value.get_type() == sol::type::lua_nil) {
@@ -1098,7 +1163,6 @@ namespace lf {
 		sound_type["master"] = lua.create_table_with("id", "master");
 		lua["sound_type"] = sound_type;
 		InstallSoundScript(lua);
-		InstallCursorScript(lua, display);
 		InstallPrototypeInspectorScript(lua);
 
 		lua.set_function("localize", [](string_view section, string_view key, sol::variadic_args args) {
@@ -1221,6 +1285,15 @@ namespace lf {
 			}
 		});
 
+		// Current wall-clock time as unix seconds. The Lua `os` library is not
+		// opened (it exposes os.execute and friends), so menus that need to
+		// show relative timestamps ("7 months ago") get the reference time
+		// from here instead of os.time().
+		lua.set_function("now_unix", []() -> double {
+			return static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(
+				std::chrono::system_clock::now().time_since_epoch()).count());
+		});
+
 		lua.set_function("profile", [](bool enabled) {
 			SetProfilerEnabled(enabled);
 		});
@@ -1298,11 +1371,135 @@ namespace lf {
 	}
 
 	Scene::~Scene() {
+		// Stop threads BEFORE tearing down anything they could be touching.
+		// jthread destruction would normally join automatically, but we need
+		// the join to happen here (while document/context are still valid)
+		// rather than after member destruction order has already started
+		// invalidating things underneath the threads.
+		stop();
 		unload_document();
 		if (!owned_context_name.empty()) {
 			Rml::RemoveContext(owned_context_name);
 			owned_context_name.clear();
 			context = nullptr;
+		}
+	}
+
+	void Scene::set_render_rate(double hz) {
+		configured_render_hz.store(hz);
+	}
+
+	void Scene::set_fixed_update_rate(double hz) {
+		configured_fixed_update_hz.store(hz);
+	}
+
+	void Scene::set_pre_fixed_update(std::function<void()> callback) {
+		// Locked because the fixed-update thread reads pre_fixed_update each
+		// iteration; without the lock, replacing it on the main thread races
+		// with std::function's copy/destruct on the worker.
+		std::lock_guard lock(scene_mutex);
+		pre_fixed_update = std::move(callback);
+	}
+
+	void Scene::set_fixed_update_error_handler(std::function<void(const std::exception&)> handler) {
+		std::lock_guard lock(scene_mutex);
+		fixed_update_error_handler = std::move(handler);
+	}
+
+	double Scene::render_rate_hz() const {
+		return render_rate.rate();
+	}
+
+	void Scene::stop() {
+		// Idempotent: jthread::request_stop / join on a default-constructed
+		// or already-joined thread are no-ops, but the threads_started gate
+		// keeps the bool flag consistent for anyone polling it.
+		if (render_thread.joinable()) {
+			render_thread.request_stop();
+		}
+		if (fixed_update_thread.joinable()) {
+			fixed_update_thread.request_stop();
+		}
+		if (render_thread.joinable()) {
+			render_thread.join();
+		}
+		if (fixed_update_thread.joinable()) {
+			fixed_update_thread.join();
+		}
+		threads_started = false;
+	}
+
+	void Scene::start_threads() {
+		if (threads_started.exchange(true)) {
+			return;
+		}
+		render_thread = std::jthread([this](std::stop_token stop) { render_loop(stop); });
+		if (configured_fixed_update_hz.load() > 0.0) {
+			fixed_update_thread = std::jthread([this](std::stop_token stop) { fixed_update_loop(stop); });
+		}
+	}
+
+	void Scene::render_loop(std::stop_token stop) {
+		double applied_hz = -1.0;
+		while (!stop.stop_requested()) {
+			// Re-read the configured rate every iteration so set_render_rate
+			// from any thread takes effect on the very next frame.
+			const double desired_hz = configured_render_hz.load();
+			if (desired_hz != applied_hz) {
+				render_rate.limit(desired_hz);
+				applied_hz = desired_hz;
+			}
+			render_rate.wait();
+			if (stop.stop_requested()) {
+				return;
+			}
+			std::unique_lock lock(scene_mutex);
+			if (!render_frame()) {
+				return;
+			}
+			render_rate.mark();
+		}
+	}
+
+	void Scene::fixed_update_loop(std::stop_token stop) {
+		using clock = std::chrono::steady_clock;
+		double applied_hz = -1.0;
+		auto interval = clock::duration::zero();
+		auto next_tick = clock::now();
+		while (!stop.stop_requested()) {
+			const double desired_hz = configured_fixed_update_hz.load();
+			if (desired_hz <= 0.0) {
+				// Hot-disabled: yield and recheck. The loop stays alive so
+				// re-enabling later just works.
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
+				next_tick = clock::now();
+				continue;
+			}
+			if (desired_hz != applied_hz) {
+				interval = std::chrono::duration_cast<clock::duration>(
+					std::chrono::duration<double>(1.0 / desired_hz));
+				applied_hz = desired_hz;
+				next_tick = clock::now();
+			}
+			next_tick += interval;
+			std::this_thread::sleep_until(next_tick);
+			if (stop.stop_requested()) {
+				return;
+			}
+			try {
+				std::unique_lock lock(scene_mutex);
+				if (pre_fixed_update) {
+					pre_fixed_update();
+				}
+				fixed_update();
+			} catch (const std::exception& e) {
+				if (fixed_update_error_handler) {
+					fixed_update_error_handler(e);
+				} else {
+					log::Error("[scene] fixed update threw: {}", e.what());
+				}
+				return;
+			}
 		}
 	}
 
@@ -1325,6 +1522,7 @@ namespace lf {
 		}
 		document->RemoveEventListener("click", script_events.get());
 		document->RemoveEventListener("change", script_events.get());
+		document->RemoveEventListener("input", script_events.get());
 		document->RemoveEventListener("mousedown", script_events.get());
 		document->RemoveEventListener("mousemove", script_events.get());
 		document->RemoveEventListener("mouseup", script_events.get());
@@ -1339,6 +1537,7 @@ namespace lf {
 		}
 		document->AddEventListener("click", script_events.get());
 		document->AddEventListener("change", script_events.get());
+		document->AddEventListener("input", script_events.get());
 		document->AddEventListener("mousedown", script_events.get());
 		document->AddEventListener("mousemove", script_events.get());
 		document->AddEventListener("mouseup", script_events.get());
@@ -1686,6 +1885,12 @@ end
 	}
 
 	bool Scene::update() {
+		// Lock against the render / fixed-update threads. process_input mutates
+		// the RmlUi context (ProcessMouseButton* etc.) and the Lua `update`
+		// callback typically mutates the DOM via set_rml / set_property —
+		// none of which is safe while render_thread is inside context->Update
+		// or context->Render. Same mutex everyone else uses.
+		std::unique_lock lock(scene_mutex);
 		process_input();
 		if (run_pending_scripts() && pending_load_request) {
 			return !Window::ShouldClose(display);
@@ -1957,6 +2162,7 @@ end
 	}
 
 	void Scene::set_rml(string_view id, string_view rml) {
+		std::lock_guard lock(scene_mutex);
 		if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
 			Rml::String next(rml);
 			if (element->GetInnerRML() != next) {
@@ -1985,6 +2191,7 @@ end
 	}
 
 	void Scene::set_attribute(string_view id, string_view name, string_view value) {
+		std::lock_guard lock(scene_mutex);
 		if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
 			Rml::String attribute_name(name);
 			Rml::String next(value);
@@ -1995,12 +2202,14 @@ end
 	}
 
 	void Scene::set_attribute(string_view id, string_view name, f32 value) {
+		std::lock_guard lock(scene_mutex);
 		if (Rml::Element* element = document->GetElementById(Rml::String(id))) {
 			element->SetAttribute(Rml::String(name), value);
 		}
 	}
 
 	void Scene::queue_script(string script, string source_name) {
+		std::lock_guard lock(scene_mutex);
 		pending_scripts.push_back({ std::move(source_name), std::move(script) });
 	}
 
@@ -2008,6 +2217,10 @@ end
 		std::optional<LoadRequest> request = std::move(pending_load_request);
 		pending_load_request.reset();
 		return request;
+	}
+
+	void Scene::request_load(string_view path, string_view args) {
+		pending_load_request = LoadRequest{ string(path), string(args) };
 	}
 
 	bool Scene::has_text_input_focus() const {
@@ -2036,7 +2249,8 @@ end
 
 	string Scene::filter_text_input(string_view text) const {
 		if (!document) {
-			return string(text);
+			log::Error("[scene] filter_text_input called before a document was loaded");
+			throw runtime_exception("filter_text_input called before a document was loaded");
 		}
 
 		Rml::Context* context = document->GetContext();
@@ -2061,19 +2275,6 @@ end
 
 	string_view Scene::title() const {
 		return title_text;
-	}
-
-	Scene make_scene(
-		Rml::Context& context,
-		unique<window> display,
-		string_view initial,
-		string_view args,
-		span<const Scene::ScriptInstaller> script_installers,
-		span<const Scene::FixedUpdater> fixed_updaters
-	) {
-		Scene scene(context, std::move(display));
-		scene.launch(initial, args, script_installers, fixed_updaters);
-		return scene;
 	}
 } // namespace lf
 

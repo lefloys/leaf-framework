@@ -265,13 +265,6 @@ namespace lf {
 		}
 
 		/*!
-		** @brief Converts to the owned handle.
-		*/
-		operator handle<Resource>() const {
-			return resource;
-		}
-
-		/*!
 		** @brief Converts to a mutable non-owning view.
 		*/
 		operator view<Resource>() const {

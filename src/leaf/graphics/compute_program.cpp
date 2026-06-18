@@ -11,12 +11,12 @@ namespace lf {
 		rtComputeProgramDestroy(program);
 	}
 
-	void ComputeProgram::Shader(handle<compute_program> program, u64 size, const void* data) {
+	void ComputeProgram::Shader(view<compute_program> program, u64 size, const void* data) {
 		rtComputeProgramShader(program, size, data);
 		detail::check_rutile_error("failed to set compute shader");
 	}
 
-	void ComputeProgram::Link(handle<compute_program> program) {
+	void ComputeProgram::Link(view<compute_program> program) {
 		rtComputeProgramLink(program);
 		detail::check_rutile_error("failed to link compute program");
 	}

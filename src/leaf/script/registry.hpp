@@ -5,6 +5,10 @@
 #include "leaf/core/dynamic_object.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/core/vector.hpp"
+#include "leaf/script/prototype.hpp"
+
+#include <type_traits>
+
 namespace lf {
 	struct PrototypeTypeFunctions {
 		void (*clear)() = nullptr;
@@ -14,6 +18,8 @@ namespace lf {
 		void (*reserve)(size_t) = nullptr;
 		size_t (*count)() = nullptr;
 		string_view (*name)(size_t) = nullptr;
+		void (*load_assets)() = nullptr;
+		void (*unload_assets)() = nullptr;
 	};
 
 	struct PrototypeTypeRegistry {
@@ -28,8 +34,36 @@ namespace lf {
 			funcs.reserve = [](size_t count) { db::prototypes.reserve(db::prototypes.size() + count); };
 			funcs.count = []() { return db::prototypes.size(); };
 			funcs.name = [](size_t index) -> string_view { return db::prototypes[index].name; };
+			if constexpr (std::is_base_of_v<AssetPrototype, T>) {
+				funcs.load_assets = []() {
+					for (T& p : db::prototypes) {
+						static_cast<AssetPrototype&>(p).load_asset();
+					}
+				};
+				funcs.unload_assets = []() {
+					for (T& p : db::prototypes) {
+						static_cast<AssetPrototype&>(p).unload_asset();
+					}
+				};
+			}
 		}
 
 		inline static vector<PrototypeTypeFunctions> functions = {};
 	};
+
+	inline void LoadAssetPrototypes() {
+		for (const PrototypeTypeFunctions& funcs : PrototypeTypeRegistry::functions) {
+			if (funcs.load_assets) {
+				funcs.load_assets();
+			}
+		}
+	}
+
+	inline void UnloadAssetPrototypes() {
+		for (const PrototypeTypeFunctions& funcs : PrototypeTypeRegistry::functions) {
+			if (funcs.unload_assets) {
+				funcs.unload_assets();
+			}
+		}
+	}
 } // namespace lf

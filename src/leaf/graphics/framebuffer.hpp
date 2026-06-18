@@ -7,9 +7,9 @@ namespace lf {
 	namespace Framebuffer {
 		handle<framebuffer> Create();
 		void Destroy(handle<framebuffer> framebuffer);
-		handle<texture_view> ColorView(handle<framebuffer> framebuffer, u32 slot);
-		void ColorView(handle<framebuffer> framebuffer, u32 slot, handle<texture_view> view);
-		void DepthView(handle<framebuffer> framebuffer, handle<texture_view> view);
+		view<texture_view> ColorView(view<framebuffer> framebuffer, u32 slot);
+		void ColorView(view<framebuffer> framebuffer, u32 slot, view<texture_view> attachment);
+		void DepthView(view<framebuffer> framebuffer, view<texture_view> attachment);
 	} // namespace Framebuffer
 } // namespace lf
 
