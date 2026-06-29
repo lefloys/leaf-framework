@@ -300,7 +300,7 @@ namespace lf {
 	LEAF_RESOURCE_TRAITS(texture_view, rt_texture_view, rtTextureViewDestroy);
 	LEAF_RESOURCE_TRAITS(graphics_program, rt_graphics_program, rtGraphicsProgramDestroy);
 	LEAF_RESOURCE_TRAITS(compute_program, rt_compute_program, rtComputeProgramDestroy);
-	LEAF_RESOURCE_TRAITS(command_buffer, rt_command_buffer, rtCmdDestroy);
+	LEAF_RESOURCE_TRAITS(command_buffer, rt_command_buffer, rtCommandBufferDestroy);
 
 #undef LEAF_RESOURCE_TRAITS
 

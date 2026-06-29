@@ -2,13 +2,13 @@
 
 namespace lf {
 	handle<command_buffer> CommandBuffer::Create() {
-		rt_command_buffer command_buffer = rtCmdCreate();
+		rt_command_buffer command_buffer = rtCommandBufferCreate();
 		detail::check_rutile_error("failed to create command buffer");
 		return { command_buffer };
 	}
 
 	void CommandBuffer::Destroy(handle<command_buffer> command_buffer) {
-		rtCmdDestroy(command_buffer);
+		rtCommandBufferDestroy(command_buffer);
 	}
 
 	void CommandBuffer::Begin(view<command_buffer> command_buffer, view<queue> queue) {

@@ -3,6 +3,7 @@
   "version-string": "0.1.0",
   "dependencies": [
     "catch2",
+    "cli11",
     "glfw3",
     "glm",
     "glslang",
@@ -11,6 +12,7 @@
     "rmlui",
     "sol2",
     "spirv-cross",
+    "spirv-headers",
     "stb",
     "vulkan-headers",
     "vulkan-loader",

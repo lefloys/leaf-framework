@@ -163,9 +163,9 @@ void main() {
 		GraphicsProgram::VertexShader(program, std::strlen(kUiVertexShader), kUiVertexShader);
 		GraphicsProgram::FragmentShader(program, std::strlen(kUiFragmentShader), kUiFragmentShader);
 		vertex_attribute attributes[] = {
-			{ 0, static_cast<u32>(offsetof(UiVertex, position)), Format::Rg32Float },
-			{ 1, static_cast<u32>(offsetof(UiVertex, uv)), Format::Rg32Float },
-			{ 2, static_cast<u32>(offsetof(UiVertex, color)), Format::Rgba32Float },
+			{ "position", static_cast<u32>(offsetof(UiVertex, position)), Format::Rg32Float },
+			{ "uv", static_cast<u32>(offsetof(UiVertex, uv)), Format::Rg32Float },
+			{ "color", static_cast<u32>(offsetof(UiVertex, color)), Format::Rgba32Float },
 		};
 		vertex_layout layout{ sizeof(UiVertex), attributes, 3 };
 		GraphicsProgram::VertexLayout(program, layout);

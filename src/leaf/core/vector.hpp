@@ -12,6 +12,8 @@ namespace lf {
 	template <typename T, typename Alloc = std::allocator<T>>
 	class vector : public std::vector<T, Alloc> {
 	  public:
+		using std::vector<T, Alloc>::vector;
+		using std::vector<T, Alloc>::operator=;
 		using size_type = typename std::vector<T, Alloc>::size_type;
 
 		T& at(size_type index) {

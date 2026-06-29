@@ -306,13 +306,7 @@ namespace lf {
 			return;
 		}
 		window.value->vsync = enabled;
-		if (rt_rtSwapchainSetVsync) {
-			rtSwapchainSetVsync(window.value->swapchain, enabled);
-			detail::check_rutile_error("failed to set swapchain vsync");
-			log::Info("Vsync {}", enabled ? "enabled" : "disabled");
-		} else {
-			log::Warning("Swapchain does not support changing vsync");
-		}
+		log::Warning("Swapchain vsync control is not supported by this Rutile version");
 	}
 
 	void Window::RequestFullscreen(view<window> window, bool fullscreen) {

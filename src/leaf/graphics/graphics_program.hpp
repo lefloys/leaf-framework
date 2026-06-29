@@ -22,7 +22,7 @@ namespace lf {
 	};
 
 	struct vertex_attribute {
-		u32 location = 0;
+		const char* name = nullptr;
 		u32 offset = 0;
 		Format format = Format::Unknown;
 	};

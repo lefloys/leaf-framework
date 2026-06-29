@@ -52,25 +52,22 @@ namespace lf {
 		rt_vertex_attribute attributes[16] = {};
 		const u32 attribute_count = layout.attribute_count > 16 ? 16 : layout.attribute_count;
 		for (u32 i = 0; i < attribute_count; ++i) {
-			attributes[i] = {
-				layout.attributes[i].location,
-				layout.attributes[i].offset,
-				detail::to_rutile(layout.attributes[i].format),
-			};
+			attributes[i] = { layout.attributes[i].name, layout.attributes[i].offset,
+							  detail::to_rutile(layout.attributes[i].format) };
 		}
 
 		rt_vertex_layout rutile_layout = { layout.stride, attributes, attribute_count };
-		rtGraphicsProgramVertexLayout(program, &rutile_layout);
+		rtGraphicsProgramLayout(program, &rutile_layout);
 		detail::check_rutile_error("failed to set graphics program vertex layout");
 	}
 
 	void GraphicsProgram::VertexShader(view<graphics_program> program, u64 size, const void* data) {
-		rtGraphicsProgramVertexShader(program, size, data);
+		rtGraphicsProgramSource(program, size, data);
 		detail::check_rutile_error("failed to set graphics program vertex shader");
 	}
 
 	void GraphicsProgram::FragmentShader(view<graphics_program> program, u64 size, const void* data) {
-		rtGraphicsProgramFragmentShader(program, size, data);
+		rtGraphicsProgramSource(program, size, data);
 		detail::check_rutile_error("failed to set graphics program fragment shader");
 	}
 
@@ -90,7 +87,7 @@ namespace lf {
 	}
 
 	void GraphicsProgram::Link(view<graphics_program> program) {
-		rtGraphicsProgramLink(program);
+		rtGraphicsProgramFinalize(program);
 		detail::check_rutile_error("failed to link graphics program");
 	}
 
