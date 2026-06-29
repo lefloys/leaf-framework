@@ -11,19 +11,21 @@ namespace lf {
 		rtFramebufferDestroy(framebuffer);
 	}
 
-	handle<texture_view> Framebuffer::ColorView(handle<framebuffer> framebuffer, u32 slot) {
-		rt_texture_view view = rtFramebufferColorView(framebuffer, slot);
+	view<texture_view> Framebuffer::ColorView(view<framebuffer> framebuffer, u32 slot) {
+		rt_texture_view value = rtFramebufferColorView(framebuffer, slot);
 		detail::check_rutile_error("failed to get framebuffer color view");
-		return { view };
+		lf::view<texture_view> result;
+		result.value = value;
+		return result;
 	}
 
-	void Framebuffer::ColorView(handle<framebuffer> framebuffer, u32 slot, handle<texture_view> view) {
-		rtFramebufferSetColorView(framebuffer, slot, view);
+	void Framebuffer::ColorView(view<framebuffer> framebuffer, u32 slot, view<texture_view> attachment) {
+		rtFramebufferSetColorView(framebuffer, slot, attachment);
 		detail::check_rutile_error("failed to set framebuffer color view");
 	}
 
-	void Framebuffer::DepthView(handle<framebuffer> framebuffer, handle<texture_view> view) {
-		rtFramebufferDepthView(framebuffer, view);
+	void Framebuffer::DepthView(view<framebuffer> framebuffer, view<texture_view> attachment) {
+		rtFramebufferDepthView(framebuffer, attachment);
 		detail::check_rutile_error("failed to set framebuffer depth view");
 	}
 } // namespace lf

@@ -163,9 +163,9 @@ void main() {
 		GraphicsProgram::VertexShader(program, std::strlen(kUiVertexShader), kUiVertexShader);
 		GraphicsProgram::FragmentShader(program, std::strlen(kUiFragmentShader), kUiFragmentShader);
 		vertex_attribute attributes[] = {
-			{ 0, static_cast<u32>(offsetof(UiVertex, position)), Format::Rg32Float },
-			{ 1, static_cast<u32>(offsetof(UiVertex, uv)), Format::Rg32Float },
-			{ 2, static_cast<u32>(offsetof(UiVertex, color)), Format::Rgba32Float },
+			{ "position", static_cast<u32>(offsetof(UiVertex, position)), Format::Rg32Float },
+			{ "uv", static_cast<u32>(offsetof(UiVertex, uv)), Format::Rg32Float },
+			{ "color", static_cast<u32>(offsetof(UiVertex, color)), Format::Rgba32Float },
 		};
 		vertex_layout layout{ sizeof(UiVertex), attributes, 3 };
 		GraphicsProgram::VertexLayout(program, layout);
@@ -196,6 +196,12 @@ void main() {
 		LF_PROFILE_SCOPE("RmlRenderer::FrameEnd");
 		flush_queued_geometry();
 		current_command_buffer = {};
+		// Reclaim retired geometries/textures now that the frame's flush has
+		// copied any vertex data the GPU needs into batch_vertex_buffers.
+		// Without this, ReleaseGeometry-pushed entries pile up forever (the
+		// only other callers of collect_garbage are shutdown paths) and the
+		// per-frame set_rml churn on overlays leaks ~1 MB/s of UiVertex[].
+		collect_garbage();
 	}
 	void RmlRenderInterface::flush_released_resources() {
 		LF_PROFILE_SCOPE("RmlRenderer::FlushReleasedResources");

@@ -9,6 +9,7 @@
 
 #include <array>
 #include <mutex>
+#include <string>
 #include <vector>
 
 namespace lf {
@@ -16,7 +17,7 @@ namespace lf {
 		static constexpr size_t control_count = KEY_ENUM_MAX + BUTTON_ENUM_MAX;
 
 		PlatformWindow* platform = nullptr;
-		PlatformCursor* cursor = nullptr;
+		std::string current_cursor;
 		rt_swapchain swapchain = RT_NULL_HANDLE;
 		unique<command_buffer> frame_command_buffer;
 		view<framebuffer> current_framebuffer;

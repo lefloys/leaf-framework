@@ -739,13 +739,22 @@ keybind {
 			const f32 height_extra = height_outside_content(*this);
 			const f32 width = clamp_range(content_width + width_extra, limits.min_width, limits.max_width);
 			const f32 height = clamp_range(content_height + height_extra, limits.min_height, limits.max_height);
-			const std::optional<Rml::String> authored_width = local_property(*this, "width");
-			const bool preserve_width = authored_width && authored_width->find('%') != Rml::String::npos;
+			// An authored inline width/height in the <window style="..."> attribute
+			// is authoritative — the caller asked for that specific size and the
+			// content layout is built around it. fit_to_content otherwise reads
+			// the previous auto-fitted px we wrote here and shrinks the window to
+			// whatever the children currently measure, which on first layout (when
+			// inline-block children haven't fanned out across the full width yet)
+			// collapses to one child's width and leaves the rest of the body
+			// overlapping. Percent widths flexed before; preserve any inline
+			// width/height now.
+			const bool preserve_width = inline_style_has_property(*this, "width");
+			const bool preserve_height = inline_style_has_property(*this, "height");
 
 			if (!preserve_width && std::abs(width - GetOffsetWidth()) > 0.5f) {
 				set_px(*this, "width", std::max(0.0f, width - width_extra));
 			}
-			if (std::abs(height - GetOffsetHeight()) > 0.5f) {
+			if (!preserve_height && std::abs(height - GetOffsetHeight()) > 0.5f) {
 				set_px(*this, "height", std::max(0.0f, height - height_extra));
 			}
 		}
@@ -1114,7 +1123,14 @@ keybind {
 		}
 
 		void ElementWindow::focus() {
-			Focus(true);
+			// Do NOT call Focus(true) here. This runs during the mousedown
+			// capture-phase listener installed on the window, before the event
+			// reaches the actual click target. Stealing keyboard focus to the
+			// window robs every form control (input, textarea, select) inside
+			// it of focus, so typing goes nowhere and clicking a second input
+			// never visually unfocuses the first. The window only needs z-order
+			// raising and the "window-focused" class for styling — neither of
+			// those requires the window itself to be the focused element.
 			const i32 z_index = next_window_z_index();
 			if (Rml::ElementDocument* document = GetOwnerDocument()) {
 				Rml::ElementList windows;

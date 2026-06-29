@@ -14,6 +14,7 @@
 #include "vector.hpp"
 #include "concepts.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <concepts>
 #include <cstring>
@@ -164,6 +165,9 @@ namespace lf::bin {
 	struct read_options {
 		read_limits limits;
 		progress_observer* progress = nullptr;
+		// Smooth byte-cursor progress: (cursor, input_size). Fixed total,
+		// monotonic — preferred over `progress` for load bars.
+		std::function<void(size_t, size_t)> byte_progress;
 	};
 
 	/*!
@@ -172,6 +176,10 @@ namespace lf::bin {
 	*/
 	struct write_options {
 		progress_observer* progress = nullptr;
+		// Smooth byte-output progress: (bytes_written, byte_progress_total).
+		// Set byte_progress_total to measure(value) for an exact denominator.
+		std::function<void(size_t, size_t)> byte_progress;
+		size_t byte_progress_total = 0;
 	};
 
 	/*!
@@ -869,6 +877,25 @@ namespace lf::bin {
 			m_progress = progress;
 		}
 
+		/*!
+		** @brief Installs a callback reporting raw byte progress.
+		**
+		** Unlike the logical progress_observer (whose total grows as nested
+		** containers are discovered, causing a jumpy ratio), this reports
+		** (cursor, input_size) — a fixed total and a monotonically advancing
+		** cursor, ideal for a smooth load bar. Calls are throttled so a large
+		** read doesn't invoke the callback millions of times.
+		*/
+		void set_byte_progress(std::function<void(size_t, size_t)> progress) {
+			m_byte_progress = std::move(progress);
+			m_byte_progress_last = 0;
+			const size_t total = m_input.size();
+			m_byte_progress_interval = std::clamp<size_t>(total / 400, size_t{ 4096 }, size_t{ 1u << 20 });
+			if (m_byte_progress) {
+				m_byte_progress(0, total);
+			}
+		}
+
 		void add_progress_total(size_t amount) {
 			if (m_progress) {
 				m_progress->add_total(amount);
@@ -905,9 +932,16 @@ namespace lf::bin {
 		string m_context;
 		progress_observer* m_progress = nullptr;
 		progress_observer m_owned_progress;
+		std::function<void(size_t, size_t)> m_byte_progress;
+		size_t m_byte_progress_last = 0;
+		size_t m_byte_progress_interval = 0;
 
 		void advance(size_t amount) {
 			m_cursor += amount;
+			if (m_byte_progress && m_cursor - m_byte_progress_last >= m_byte_progress_interval) {
+				m_byte_progress_last = m_cursor;
+				m_byte_progress(m_cursor, m_input.size());
+			}
 		}
 	};
 
@@ -1047,6 +1081,7 @@ namespace lf::bin {
 		error bytes(span<const lf::byte> in) {
 			if (in.empty()) { return {}; }
 			m_output.insert(m_output.end(), in.begin(), in.end());
+			notify_bytes();
 			return {};
 		}
 
@@ -1063,11 +1098,13 @@ namespace lf::bin {
 			const size_t cursor = m_output.size();
 			m_output.resize(cursor + sizeof(T));
 			std::memcpy(m_output.data() + cursor, &value, sizeof(T));
+			notify_bytes();
 			return {};
 		}
 
 		error padding(size_t size) {
 			m_output.resize(m_output.size() + size);
+			notify_bytes();
 			return {};
 		}
 
@@ -1108,6 +1145,23 @@ namespace lf::bin {
 			m_progress = progress;
 		}
 
+		/*!
+		** @brief Installs a callback reporting raw byte-output progress.
+		**
+		** Reports (bytes_written, total) where total is the caller-supplied
+		** final size (from measure()). Output only grows, so the bar is smooth.
+		** Throttled so a large write doesn't call back on every field.
+		*/
+		void set_byte_progress(std::function<void(size_t, size_t)> progress, size_t total) {
+			m_byte_progress = std::move(progress);
+			m_byte_progress_total = total;
+			m_byte_progress_last = 0;
+			m_byte_progress_interval = std::clamp<size_t>(total / 400, size_t{ 4096 }, size_t{ 1u << 20 });
+			if (m_byte_progress) {
+				m_byte_progress(0, total);
+			}
+		}
+
 		void add_progress_total(size_t amount) {
 			if (m_progress) {
 				m_progress->add_total(amount);
@@ -1146,6 +1200,17 @@ namespace lf::bin {
 		write_refs m_refs;
 		progress_observer* m_progress = nullptr;
 		string m_context;
+		std::function<void(size_t, size_t)> m_byte_progress;
+		size_t m_byte_progress_total = 0;
+		size_t m_byte_progress_last = 0;
+		size_t m_byte_progress_interval = 0;
+
+		void notify_bytes() {
+			if (m_byte_progress && m_output.size() - m_byte_progress_last >= m_byte_progress_interval) {
+				m_byte_progress_last = m_output.size();
+				m_byte_progress(m_output.size(), m_byte_progress_total);
+			}
+		}
 	};
 
 	/*!
@@ -2200,6 +2265,9 @@ namespace lf::bin {
 		T value{};
 		read_stream stream(bytes, options.limits);
 		stream.set_progress(options.progress);
+		if (options.byte_progress) {
+			stream.set_byte_progress(std::move(options.byte_progress));
+		}
 		if (auto err = process(stream, value); err) {
 			return unexpected(err);
 		}
@@ -2263,6 +2331,9 @@ namespace lf::bin {
 	report<vector<lf::byte>> write_graph(const T& value, write_options options = {}) {
 		write_stream stream;
 		stream.set_progress(options.progress);
+		if (options.byte_progress) {
+			stream.set_byte_progress(std::move(options.byte_progress), options.byte_progress_total);
+		}
 		if (auto err = process(stream, value); err) {
 			return unexpected(err);
 		}

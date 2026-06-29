@@ -43,15 +43,4 @@ namespace lf {
 		rtBufferRead(buffer, offset, size, data);
 		detail::check_rutile_error("failed to read buffer");
 	}
-
-	void* Buffer::Map(view<buffer> buffer, u64 offset, u64 size) {
-		void* data = rtBufferMap(buffer, offset, size);
-		detail::check_rutile_error("failed to map buffer");
-		return data;
-	}
-
-	void Buffer::Unmap(view<buffer> buffer) {
-		rtBufferUnmap(buffer);
-		detail::check_rutile_error("failed to unmap buffer");
-	}
 } // namespace lf

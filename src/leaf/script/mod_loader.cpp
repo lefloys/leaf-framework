@@ -1062,7 +1062,6 @@ end
 		if (err) {
 			return err.add_context("loading prototypes from mods' data.lua");
 		}
-		log::Info("{}", "[mod-loader] prototypes created");
 		progress.set("stage", "loading-mod-prototypes", mod_stage_progress(3));
 		progress.set("process", "prototypes-ready", PROGRESS_OF(1, 1));
 		log::Debug("{}", lf::format("[mod-loader] prototypes: {}", prototype_counts_to_string()));
@@ -1078,7 +1077,7 @@ end
 		progress.set("stage", "loading-assets", mod_stage_progress(5));
 		progress.set("process", "assets-ready", PROGRESS_OF(1, 1));
 
-		log::Info("{}", "[mod-loader] linking prototype references");
+		log::Info("{}", "[mod-loader] linking prototypes");
 		for (size_t i = 0; i < PrototypeTypeRegistry::functions.size(); ++i) {
 			if (progress.cancelled()) {
 				return CANCELLED_ERROR;
@@ -1093,14 +1092,10 @@ end
 				return error(generic_errc::parse_error, e.what()).add_context("linking prototypes");
 			}
 		}
-		log::Info("{}", "[mod-loader] prototype references linked");
-
 		progress.set("stage", "linking-prototypes", mod_stage_progress(4));
 		progress.set("process", "prototype-references-linked", PROGRESS_OF(1, 1));
 		progress.set("stage", "finalizing-startup", mod_stage_progress(5));
 		progress.set("process", "finalizing-startup", PROGRESS_OF(0, 1));
-		progress.set("stage", "finalizing-startup", mod_stage_progress(6));
-		progress.set("process", "mods-loaded", PROGRESS_OF(1, 1));
 #undef PROGRESS_OF
 #undef CANCELLED_ERROR
 		return error::no_error;

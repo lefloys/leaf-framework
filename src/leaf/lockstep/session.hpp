@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leaf/core/memory.hpp"
+#include "leaf/core/optional.hpp"
 #include "leaf/core/span.hpp"
 #include "leaf/core/time.hpp"
 #include "leaf/core/types.hpp"
@@ -59,6 +60,19 @@ namespace lf::lockstep {
 		SessionId session_id = 0;
 		Tick tick = 0;
 		vector<byte> bytes;
+	};
+
+	// Snapshot transfer progress for one peer. Host: one per client that's
+	// currently downloading the map. Client: at most one (the incoming
+	// transfer from the host). Used by the Factorio-style "Saving the world
+	// for <name>" host overlay and the "Downloading map" client loading bar
+	// to display real, measured progress rather than a hardcoded fraction.
+	struct SnapshotProgress {
+		SessionId session_id   = 0;
+		u32       chunks_done  = 0;
+		u32       chunks_total = 0;
+		u64       bytes_done   = 0;
+		u64       bytes_total  = 0;
 	};
 
 	struct Options {
@@ -121,6 +135,13 @@ namespace lf::lockstep {
 		bool joined() const;
 		bool waiting_for_response() const;
 		span<const PendingPayload> pending() const;
+
+		// Snapshot transfer progress. Client variant returns the in-flight
+		// download if one is active. Host variant returns one entry per
+		// peer that's currently in downloading_snapshot — drives the
+		// "Saving the world for <name>" overlay during a join handshake.
+		optional<SnapshotProgress> incoming_snapshot() const;
+		vector<SnapshotProgress>   outgoing_snapshots() const;
 
 	  private:
 		explicit Session(unique_ptr<Impl> impl);

@@ -22,6 +22,12 @@ namespace lf {
 		gnum gen() const {
 			return gen_value;
 		}
+		friend bool operator==(const identifier& lhs, const identifier& rhs) {
+			return lhs.idx_value == rhs.idx_value && lhs.gen_value == rhs.gen_value;
+		}
+		friend bool operator!=(const identifier& lhs, const identifier& rhs) {
+			return !(lhs == rhs);
+		}
 
 	  private:
 		vnum idx_value = 0;
@@ -44,6 +50,12 @@ namespace lf {
 
 		explicit operator bool() const {
 			return idx_value;
+		}
+		friend bool operator==(const identifier& lhs, const identifier& rhs) {
+			return lhs.idx_value == rhs.idx_value;
+		}
+		friend bool operator!=(const identifier& lhs, const identifier& rhs) {
+			return !(lhs == rhs);
 		}
 
 	  private:

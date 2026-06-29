@@ -35,8 +35,6 @@ namespace lf {
 					   const void* data);
 		timepoint Subdata(view<buffer> buffer, u64 offset, u64 size, const void* data);
 		void Read(view<buffer> buffer, u64 offset, u64 size, void* data);
-		void* Map(view<buffer> buffer, u64 offset, u64 size);
-		void Unmap(view<buffer> buffer);
 	} // namespace Buffer
 } // namespace lf
 

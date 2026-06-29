@@ -16,7 +16,7 @@ namespace lf {
 	timepoint Texture::Copy(view<queue> queue, view<texture> src_texture, u32 src_mip,
 							view<texture> dst_texture, u32 dst_mip) {
 		auto lock = detail::lock_queue(queue);
-		rt_timepoint timepoint = rtTextureCopy(queue, src_texture, src_mip, dst_texture, dst_mip);
+		rt_timepoint timepoint = rtTextureCopy(src_texture, src_mip, dst_texture, dst_mip);
 		detail::check_rutile_error("failed to copy texture");
 		return timepoint;
 	}
@@ -25,8 +25,7 @@ namespace lf {
 							u32 offset_x, u32 offset_y, u32 offset_z, rt_format format,
 							const void* data) {
 		auto lock = detail::lock_queue(queue);
-		rt_timepoint timepoint =
-			rtTextureData(queue, texture, type, mip, offset_x, offset_y, offset_z, format, data);
+		rt_timepoint timepoint = rtTextureData(texture, type, mip, offset_x, offset_y, offset_z, format, data);
 		detail::check_rutile_error("failed to upload texture data");
 		return timepoint;
 	}
@@ -35,9 +34,8 @@ namespace lf {
 							   u32 src_y, u32 src_z, view<texture> dst_texture, u32 dst_mip,
 							   u32 dst_x, u32 dst_y, u32 dst_z, u32 width, u32 height, u32 depth) {
 		auto lock = detail::lock_queue(queue);
-		rt_timepoint timepoint =
-			rtTextureSubcopy(queue, src_texture, src_mip, src_x, src_y, src_z, dst_texture, dst_mip,
-							 dst_x, dst_y, dst_z, width, height, depth);
+		rt_timepoint timepoint = rtTextureSubcopy(src_texture, src_mip, src_x, src_y, src_z, dst_texture, dst_mip,
+												  dst_x, dst_y, dst_z, width, height, depth);
 		detail::check_rutile_error("failed to copy texture region");
 		return timepoint;
 	}
@@ -46,8 +44,7 @@ namespace lf {
 							   u32 offset_y, u32 offset_z, u32 width, u32 height, u32 depth,
 							   const void* data) {
 		auto lock = detail::lock_queue(queue);
-		rt_timepoint timepoint = rtTextureSubdata(queue, texture, mip, offset_x, offset_y, offset_z,
-												  width, height, depth, data);
+		rt_timepoint timepoint = rtTextureSubdata(texture, mip, offset_x, offset_y, offset_z, width, height, depth, data);
 		detail::check_rutile_error("failed to upload texture region");
 		return timepoint;
 	}

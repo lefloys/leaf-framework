@@ -4,13 +4,16 @@
 
 namespace lf {
 	handle<texture_view> TextureView::Create() {
-		return {};
+		rt_texture_view texture_view = rtTextureViewCreate();
+		detail::check_rutile_error("failed to create texture view");
+		return { texture_view };
 	}
 
 	handle<texture_view> TextureView::CreateFromTexture(view<texture> texture) {
-		rt_texture_view texture_view = rtTextureViewCreate(texture);
-		detail::check_rutile_error("failed to create texture view");
-		return { texture_view };
+		auto view_handle = Create();
+		rtTextureViewBind(view_handle, texture);
+		detail::check_rutile_error("failed to bind texture view");
+		return view_handle;
 	}
 
 	void TextureView::Destroy(handle<texture_view> texture_view) {
@@ -42,7 +45,7 @@ namespace lf {
 	timepoint TextureView::CopyToBuffer(view<queue> queue, view<texture_view> texture_view,
 										view<buffer> buffer) {
 		auto lock = detail::lock_queue(queue);
-		rt_timepoint timepoint = rtTextureViewCopyToBuffer(queue, texture_view, buffer);
+		rt_timepoint timepoint = rtTextureViewCopyToBuffer(texture_view, buffer);
 		detail::check_rutile_error("failed to copy texture view to buffer");
 		return timepoint;
 	}

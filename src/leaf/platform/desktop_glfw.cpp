@@ -240,6 +240,9 @@ namespace lf {
 	}
 
 	void platform_window_owner(PlatformWindow* wnd, window_t* owner) {
+		if (!wnd) {
+			return;
+		}
 		glfwSetWindowUserPointer(to_glfw(wnd), owner);
 		glfwSetMouseButtonCallback(to_glfw(wnd), mouse_button_callback);
 		glfwSetKeyCallback(to_glfw(wnd), key_callback);
@@ -253,6 +256,9 @@ namespace lf {
 	}
 
 	void platform_window_clear_owner(PlatformWindow* wnd) {
+		if (!wnd) {
+			return;
+		}
 		glfwSetWindowUserPointer(to_glfw(wnd), nullptr);
 	}
 
