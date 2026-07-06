@@ -6,8 +6,6 @@
 
 # Additional files
 .claude/
-cloc-*.exe
-SignalSetup*.exe
 vcpkg_installed/
 steam-sdk/
 
