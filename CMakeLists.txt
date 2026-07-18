@@ -71,6 +71,13 @@ find_package("Stb" REQUIRED)
 find_package("sol2" CONFIG REQUIRED)
 find_package("yaml-cpp" CONFIG REQUIRED)
 find_package("unofficial-lua" CONFIG REQUIRED)
+if(TARGET unofficial::lua::lua)
+    set(LEAF_LUA_TARGET unofficial::lua::lua)
+elseif(TARGET lua)
+    set(LEAF_LUA_TARGET lua)
+else()
+    message(FATAL_ERROR "The installed Lua package does not provide a supported CMake target.")
+endif()
 if(NOT LEAF_HEADLESS)
     find_package("glfw3" CONFIG REQUIRED)
     find_package("RmlUi" CONFIG REQUIRED)
@@ -107,7 +114,7 @@ target_link_libraries("${PROJECT_NAME}"
         sol2::sol2
     PRIVATE
         yaml-cpp::yaml-cpp
-        unofficial::lua::lua
+        ${LEAF_LUA_TARGET}
 )
 if(NOT LEAF_HEADLESS)
     target_link_libraries("${PROJECT_NAME}"
@@ -140,14 +147,19 @@ function(leaf_copy_rutile_backends target_name)
     endif()
 
     rutile_get_runtime_targets(rutile_backends)
+    if(NOT rutile_backends)
+        return()
+    endif()
+    set(runtime_files)
     foreach(rutile_backend IN LISTS rutile_backends)
-        add_dependencies("${target_name}" "${rutile_backend}")
-        add_custom_command(TARGET "${target_name}" POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<TARGET_FILE:${rutile_backend}>"
-                "$<TARGET_FILE_DIR:${target_name}>"
-        )
+        list(APPEND runtime_files "$<TARGET_FILE:${rutile_backend}>")
     endforeach()
+    add_custom_target("${target_name}-rutile-backends"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${runtime_files} "$<TARGET_FILE_DIR:${target_name}>"
+        COMMAND_EXPAND_LISTS
+        DEPENDS ${rutile_backends}
+    )
+    add_dependencies("${target_name}" "${target_name}-rutile-backends")
 endfunction()
 
 function(leaf_export_glfw_symbols target_name)

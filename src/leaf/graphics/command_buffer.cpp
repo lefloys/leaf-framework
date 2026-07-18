@@ -1,7 +1,5 @@
 #include "command_buffer.hpp"
 
-#include <rt_ext_compute.h>
-
 namespace lf {
 	handle<command_buffer> CommandBuffer::Create() {
 		rt_command_buffer command_buffer = rtCommandBufferCreate();
