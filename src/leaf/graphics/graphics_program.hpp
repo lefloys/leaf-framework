@@ -1,6 +1,8 @@
 #ifndef LEAF_GRAPHICS_GRAPHICS_PROGRAM_HPP
 #define LEAF_GRAPHICS_GRAPHICS_PROGRAM_HPP
 
+#include <leaf/core/span.hpp>
+#include <leaf/core/string.hpp>
 #include <leaf/graphics/format.hpp>
 
 namespace lf {
@@ -37,15 +39,13 @@ namespace lf {
 		handle<graphics_program> Create();
 		void Destroy(handle<graphics_program> program);
 		void VertexLayout(view<graphics_program> program, const vertex_layout& layout);
-		void VertexShader(view<graphics_program> program, u64 size, const void* data);
-		void FragmentShader(view<graphics_program> program, u64 size, const void* data);
-		void RasterState(view<graphics_program> program, CullMode cull_mode, FrontFace front_face,
-						 FillMode fill_mode);
-		void BlendState(view<graphics_program> program, bool enabled, rt_blend_factor src_color,
-						rt_blend_factor dst_color, rt_blend_op color_op, rt_blend_factor src_alpha,
-						rt_blend_factor dst_alpha, rt_blend_op alpha_op);
-		void Link(view<graphics_program> program);
-		uniform_location UniformLocation(view<graphics_program> program, const char* name);
+		void Source(view<graphics_program> program, u64 size, const void* data);
+		void Source(view<graphics_program> program, span<const byte> data);
+		void RasterState(view<graphics_program> program, CullMode cull_mode, FrontFace front_face, FillMode fill_mode);
+		void BlendState(view<graphics_program> program, bool enabled, rt_blend_factor src_color, rt_blend_factor dst_color, rt_blend_op color_op, rt_blend_factor src_alpha, rt_blend_factor dst_alpha, rt_blend_op alpha_op);
+		void Finalize(view<graphics_program> program);
+		void Reset(view<graphics_program> program);
+		uniform_location UniformLocation(view<graphics_program> program, string_view name);
 	} // namespace GraphicsProgram
 
 } // namespace lf

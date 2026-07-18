@@ -4,7 +4,6 @@
 #include "leaf/config.hpp"
 
 #include <rutile.h>
-#include <rt_ext_compute.h>
 #include <rt_ext_glfw.h>
 #include <rt_ext_swapchain.h>
 
@@ -56,7 +55,7 @@ namespace lf {
 
 	error init_graphics(span<string_view> args, bool headless) {
 		log::Info("[leaf] Starting graphics...");
-		constexpr string_view DefaultGraphicsAPI = "rt-vulkan";
+		constexpr string_view DefaultGraphicsAPI = "rt-vk13";
 		log::Debug("[leaf] Graphics init for '{}'", DefaultGraphicsAPI);
 		if (auto err = rtLoad(DefaultGraphicsAPI.data(), nullptr, 0)) {
 			log::Error("[leaf] Failed to load graphics backend '{}'", DefaultGraphicsAPI);
@@ -64,12 +63,6 @@ namespace lf {
 		}
 		log::Debug("[leaf] Loaded graphics backend '{}'", DefaultGraphicsAPI);
 		rtSetOutput(rutile_log_output, nullptr);
-		if (!rtLoad_RT_EXT_COMPUTE()) {
-			rtUnload();
-			return error(generic_errc::unknown, "required Rutile compute extension is not available");
-		}
-		log::Trace("[leaf] Loaded Rutile compute extension");
-
 		if (!headless) {
 			if (!rtLoad_RT_EXT_SWAPCHAIN() || !rtLoad_RT_EXT_GLFW()) {
 				rtUnload();

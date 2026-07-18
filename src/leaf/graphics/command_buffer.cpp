@@ -16,14 +16,12 @@ namespace lf {
 		detail::check_rutile_error("failed to begin command buffer");
 	}
 
-	void CommandBuffer::BeginRendering(view<command_buffer> command_buffer,
-									   view<framebuffer> framebuffer) {
+	void CommandBuffer::BeginRendering(view<command_buffer> command_buffer, view<framebuffer> framebuffer) {
 		rtCmdBeginRendering(command_buffer, framebuffer);
 		detail::check_rutile_error("failed to begin rendering");
 	}
 
-	void CommandBuffer::ClearColor(view<command_buffer> command_buffer, u32 color_index, f32 r,
-								   f32 g, f32 b, f32 a) {
+	void CommandBuffer::ClearColor(view<command_buffer> command_buffer, u32 color_index, f32 r, f32 g, f32 b, f32 a) {
 		rtCmdClearColor(command_buffer, color_index, r, g, b, a);
 		detail::check_rutile_error("failed to clear color");
 	}
@@ -38,71 +36,34 @@ namespace lf {
 		detail::check_rutile_error("failed to clear stencil");
 	}
 
-	void CommandBuffer::UseGraphicsProgram(view<command_buffer> command_buffer,
-										   view<graphics_program> program) {
+	void CommandBuffer::UseGraphicsProgram(view<command_buffer> command_buffer, view<graphics_program> program) {
 		rtCmdUseGraphicsProgram(command_buffer, program);
 		detail::check_rutile_error("failed to bind graphics program");
 	}
 
-	void CommandBuffer::SetScissor(view<command_buffer> command_buffer, u32 x, u32 y, u32 width,
-								   u32 height) {
+	void CommandBuffer::SetScissor(view<command_buffer> command_buffer, u32 x, u32 y, u32 width, u32 height) {
 		rtCmdSetScissor(command_buffer, x, y, width, height);
 		detail::check_rutile_error("failed to set scissor");
 	}
 
-	void CommandBuffer::UseComputeProgram(view<command_buffer> command_buffer,
-										  view<compute_program> program) {
-		rtCmdUseComputeProgram(command_buffer, program);
-		detail::check_rutile_error("failed to bind compute program");
-	}
-
-	void CommandBuffer::UniformBuffer(view<command_buffer> command_buffer,
-									  uniform_location location, view<buffer> buffer,
-									  u64 offset, u64 size) {
+	void CommandBuffer::UniformBuffer(view<command_buffer> command_buffer, uniform_location location, view<buffer> buffer, u64 offset, u64 size) {
 		rtCmdUniformBuffer(command_buffer, location, buffer, offset, size);
 		detail::check_rutile_error("failed to bind uniform buffer");
 	}
 
-	void CommandBuffer::UniformTexture(view<command_buffer> command_buffer,
-									   uniform_location location,
-									   view<texture_view> texture_view) {
+	void CommandBuffer::UniformTexture(view<command_buffer> command_buffer, uniform_location location, view<texture_view> texture_view) {
 		rtCmdUniformTexture(command_buffer, location, texture_view);
 		detail::check_rutile_error("failed to bind uniform texture");
 	}
 
-	void CommandBuffer::StorageBuffer(view<command_buffer> command_buffer, u32 binding,
-									  view<buffer> buffer, u64 offset, u64 size) {
-		rtCmdStorageBuffer(command_buffer, binding, buffer, offset, size);
-		detail::check_rutile_error("failed to bind storage buffer");
-	}
-
-	void CommandBuffer::StorageTexture(view<command_buffer> command_buffer, u32 binding,
-									   view<texture_view> texture_view) {
-		rtCmdStorageTexture(command_buffer, binding, texture_view);
-		detail::check_rutile_error("failed to bind storage texture");
-	}
-
-	void CommandBuffer::ComputeBarrier(view<command_buffer> command_buffer) {
-		rtCmdComputeBarrier(command_buffer);
-		detail::check_rutile_error("failed to insert compute barrier");
-	}
-
-	void CommandBuffer::BindVertexBuffer(view<command_buffer> command_buffer, view<buffer> buffer,
-										 u64 offset) {
+	void CommandBuffer::BindVertexBuffer(view<command_buffer> command_buffer, view<buffer> buffer, u64 offset) {
 		rtCmdBindVertexBuffer(command_buffer, buffer, offset);
 		detail::check_rutile_error("failed to bind vertex buffer");
 	}
 
-	void CommandBuffer::Draw(view<command_buffer> command_buffer, u32 vertex_count,
-							 u32 first_vertex) {
+	void CommandBuffer::Draw(view<command_buffer> command_buffer, u32 vertex_count, u32 first_vertex) {
 		rtCmdDraw(command_buffer, vertex_count, first_vertex);
 		detail::check_rutile_error("failed to draw");
-	}
-
-	void CommandBuffer::Dispatch(view<command_buffer> command_buffer, u32 group_count_x,
-								 u32 group_count_y, u32 group_count_z) {
-		rtCmdDispatch(command_buffer, group_count_x, group_count_y, group_count_z);
-		detail::check_rutile_error("failed to dispatch");
 	}
 
 	void CommandBuffer::EndRendering(view<command_buffer> command_buffer) {

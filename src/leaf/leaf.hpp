@@ -8,7 +8,6 @@
 #include <leaf/graphics/buffer.hpp>
 #include <leaf/graphics/canvas.hpp>
 #include <leaf/graphics/command_buffer.hpp>
-#include <leaf/graphics/compute_program.hpp>
 #include <leaf/graphics/framebuffer.hpp>
 #include <leaf/graphics/graphics_program.hpp>
 #include <leaf/graphics/queue.hpp>

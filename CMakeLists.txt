@@ -19,8 +19,9 @@ endif()
 option(LEAF_BUILD_EXAMPLES "Build leaf-framework examples." ${PROJECT_IS_TOP_LEVEL})
 option(LEAF_BUILD_TESTS "Build leaf-framework tests." ${PROJECT_IS_TOP_LEVEL})
 option(LEAF_BUILD_TOOLS "Build leaf-framework developer tools." ON)
-option(LEAF_BUILD_RUTILE_VULKAN "Build the Vulkan Rutile runtime." ON)
+option(LEAF_BUILD_RUTILE_VK13 "Build the Vulkan 1.3 Rutile runtime." ON)
 option(LEAF_BUILD_RUTILE_DX12 "Build the DirectX 12 Rutile runtime on Windows." ON)
+option(LEAF_BUILD_RUTILE_GL33 "Build the OpenGL 3.3 Rutile runtime." OFF)
 option(LEAF_BUILD_RUTILE_VALIDATION_LAYER "Build the Rutile validation layer." ON)
 option(LEAF_BUILD_RUTILE_LOGGING_LAYER "Build the Rutile logging layer." ON)
 option(LEAF_HEADLESS "Build Leaf without headed window/application support." OFF)
@@ -77,8 +78,9 @@ if(NOT LEAF_HEADLESS)
 endif()
 
 # Rutile subproject defaults.
-set(RUTILE_BUILD_VULKAN "${LEAF_BUILD_RUTILE_VULKAN}")
+set(RUTILE_BUILD_VK13 "${LEAF_BUILD_RUTILE_VK13}")
 set(RUTILE_BUILD_DX12 "${LEAF_BUILD_RUTILE_DX12}")
+set(RUTILE_BUILD_GL33 "${LEAF_BUILD_RUTILE_GL33}")
 set(RUTILE_BUILD_VALIDATION_LAYER "${LEAF_BUILD_RUTILE_VALIDATION_LAYER}")
 set(RUTILE_BUILD_LOGGING_LAYER "${LEAF_BUILD_RUTILE_LOGGING_LAYER}")
 set(RUTILE_BUILD_EXAMPLES "${LEAF_BUILD_EXAMPLES}")
@@ -118,6 +120,18 @@ endif()
 if(WIN32)
     target_link_libraries("${PROJECT_NAME}" PUBLIC ws2_32)
 endif()
+
+set(LEAF_RML_RTSL "${CMAKE_CURRENT_SOURCE_DIR}/src/leaf/application/rml_backend.rtsl")
+set_source_files_properties("${LEAF_RML_RTSL}" PROPERTIES HEADER_FILE_ONLY TRUE)
+target_sources("${PROJECT_NAME}" PRIVATE "${LEAF_RML_RTSL}")
+rtsl_add_program("${PROJECT_NAME}"
+    RTSLC rtslc
+    OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/rtsl"
+    EMBED
+    EMBED_NAME leaf_rml_ui_rtslp
+    SOURCES "${LEAF_RML_RTSL}"
+)
+
 add_subdirectory(src)
 
 function(leaf_copy_rutile_backends target_name)
@@ -162,7 +176,7 @@ function(leaf_configure_executable target_name)
     if(NOT LEAF_HEADLESS)
         leaf_configure_store_executable("${target_name}")
     endif()
-    if(WIN32)
+    if(MSVC)
         set_property(TARGET "${target_name}" APPEND_STRING PROPERTY LINK_FLAGS " /NODEFAULTLIB:lua.lib /NODEFAULTLIB:yaml-cpp.lib /FORCE:MULTIPLE")
     endif()
     leaf_export_glfw_symbols("${target_name}")

@@ -1,5 +1,7 @@
 #include "graphics_program.hpp"
 
+#include <utility>
+
 namespace lf::detail {
 	rt_format to_rutile(Format format) {
 		switch (format) {
@@ -12,27 +14,27 @@ namespace lf::detail {
 
 	rt_cull_mode to_rutile(CullMode mode) {
 		switch (mode) {
+		case CullMode::None: return RT_CULL_NONE;
 		case CullMode::Front: return RT_CULL_FRONT;
 		case CullMode::Back: return RT_CULL_BACK;
-		case CullMode::None:
-		default: return RT_CULL_NONE;
 		}
+		std::unreachable();
 	}
 
 	rt_front_face to_rutile(FrontFace face) {
 		switch (face) {
+		case FrontFace::CounterClockwise: return RT_FRONT_FACE_CCW;
 		case FrontFace::Clockwise: return RT_FRONT_FACE_CW;
-		case FrontFace::CounterClockwise:
-		default: return RT_FRONT_FACE_CCW;
 		}
+		std::unreachable();
 	}
 
 	rt_fill_mode to_rutile(FillMode mode) {
 		switch (mode) {
+		case FillMode::Solid: return RT_FILL_SOLID;
 		case FillMode::Wireframe: return RT_FILL_WIREFRAME;
-		case FillMode::Solid:
-		default: return RT_FILL_SOLID;
 		}
+		std::unreachable();
 	}
 } // namespace lf::detail
 
@@ -47,8 +49,7 @@ namespace lf {
 		rtGraphicsProgramDestroy(program);
 	}
 
-	void GraphicsProgram::VertexLayout(view<graphics_program> program,
-									   const vertex_layout& layout) {
+	void GraphicsProgram::VertexLayout(view<graphics_program> program, const vertex_layout& layout) {
 		rt_vertex_attribute attributes[16] = {};
 		const u32 attribute_count = layout.attribute_count > 16 ? 16 : layout.attribute_count;
 		for (u32 i = 0; i < attribute_count; ++i) {
@@ -61,38 +62,39 @@ namespace lf {
 		detail::check_rutile_error("failed to set graphics program vertex layout");
 	}
 
-	void GraphicsProgram::VertexShader(view<graphics_program> program, u64 size, const void* data) {
+	void GraphicsProgram::Source(view<graphics_program> program, u64 size, const void* data) {
 		rtGraphicsProgramSource(program, size, data);
-		detail::check_rutile_error("failed to set graphics program vertex shader");
+		detail::check_rutile_error("failed to set graphics program source");
 	}
 
-	void GraphicsProgram::FragmentShader(view<graphics_program> program, u64 size, const void* data) {
-		rtGraphicsProgramSource(program, size, data);
-		detail::check_rutile_error("failed to set graphics program fragment shader");
+	void GraphicsProgram::Source(view<graphics_program> program, span<const byte> data) {
+		Source(program, data.size(), data.data());
 	}
 
-	void GraphicsProgram::RasterState(view<graphics_program> program, CullMode cull_mode,
-									  FrontFace front_face, FillMode fill_mode) {
+	void GraphicsProgram::RasterState(view<graphics_program> program, CullMode cull_mode, FrontFace front_face, FillMode fill_mode) {
 		rtGraphicsProgramRasterState(program, detail::to_rutile(cull_mode), detail::to_rutile(front_face), detail::to_rutile(fill_mode));
 		detail::check_rutile_error("failed to set graphics program raster state");
 	}
 
-	void GraphicsProgram::BlendState(view<graphics_program> program, bool enabled,
-									 rt_blend_factor src_color, rt_blend_factor dst_color,
-									 rt_blend_op color_op, rt_blend_factor src_alpha,
-									 rt_blend_factor dst_alpha, rt_blend_op alpha_op) {
+	void GraphicsProgram::BlendState(view<graphics_program> program, bool enabled, rt_blend_factor src_color, rt_blend_factor dst_color, rt_blend_op color_op, rt_blend_factor src_alpha, rt_blend_factor dst_alpha, rt_blend_op alpha_op) {
 		rtGraphicsProgramBlendState(program, enabled, src_color, dst_color, color_op, src_alpha,
 									dst_alpha, alpha_op);
 		detail::check_rutile_error("failed to set graphics program blend state");
 	}
 
-	void GraphicsProgram::Link(view<graphics_program> program) {
+	void GraphicsProgram::Finalize(view<graphics_program> program) {
 		rtGraphicsProgramFinalize(program);
-		detail::check_rutile_error("failed to link graphics program");
+		detail::check_rutile_error("failed to finalize graphics program");
 	}
 
-	uniform_location GraphicsProgram::UniformLocation(view<graphics_program> program, const char* name) {
-		rt_uniform_location location = rtGraphicsProgramUniformLocation(program, name);
+	void GraphicsProgram::Reset(view<graphics_program> program) {
+		rtGraphicsProgramReset(program);
+		detail::check_rutile_error("failed to reset graphics program");
+	}
+
+	uniform_location GraphicsProgram::UniformLocation(view<graphics_program> program, string_view name) {
+		const string null_terminated_name(name);
+		rt_uniform_location location = rtGraphicsProgramUniformLocation(program, null_terminated_name.c_str());
 		detail::check_rutile_error("failed to query graphics program uniform location");
 		return location;
 	}

@@ -10,11 +10,13 @@
 
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/SystemInterface.h>
+#include <rtsl/sdk/program.hpp>
 #include <stb_image.h>
 
 #include <algorithm>
-#include <cstring>
 #include <memory>
+
+extern "C" const rtsl::ProgramBytes leaf_rml_ui_rtslp;
 
 namespace lf {
 	class RmlSystemInterface : public Rml::SystemInterface {
@@ -38,55 +40,6 @@ namespace lf {
 		f32 texture_mode = 0.0f;
 		f32 padding = 0.0f;
 	};
-
-	constexpr const char* kUiVertexShader = R"(
-#version 460
-layout(location = 0) in vec2 in_position;
-layout(location = 1) in vec2 in_uv;
-layout(location = 2) in vec4 in_color;
-
-layout(location = 0) out vec2 out_uv;
-layout(location = 1) out vec4 out_color;
-
-layout(set = 0, binding = 0) uniform UiDraw {
-	vec2 viewport_size;
-	vec2 translation;
-	float texture_mode;
-	float padding;
-} u_ui;
-
-void main() {
-	vec2 pixel = in_position + u_ui.translation;
-	vec2 ndc = vec2(pixel.x / u_ui.viewport_size.x * 2.0 - 1.0,
-					1.0 - pixel.y / u_ui.viewport_size.y * 2.0);
-	gl_Position = vec4(ndc, 0.0, 1.0);
-	out_uv = in_uv;
-	out_color = in_color;
-}
-)";
-
-	constexpr const char* kUiFragmentShader = R"(
-#version 460
-layout(location = 0) in vec2 in_uv;
-layout(location = 1) in vec4 in_color;
-layout(location = 0) out vec4 out_color;
-
-layout(set = 0, binding = 0) uniform UiDraw {
-	vec2 viewport_size;
-	vec2 translation;
-	float texture_mode;
-	float padding;
-} u_ui;
-layout(set = 0, binding = 1) uniform sampler2D UiTexture;
-
-void main() {
-	if (u_ui.texture_mode < 0.5) {
-		out_color = in_color;
-		return;
-	}
-	out_color = texture(UiTexture, in_uv) * in_color;
-}
-)";
 
 	struct RmlRenderInterface::Geometry {
 		vector<UiVertex> vertices;
@@ -160,8 +113,7 @@ void main() {
 	RmlRenderInterface::RmlRenderInterface() {
 		upload_queue = Queue::Query(QueueCapability::Graphics);
 		program = unique(GraphicsProgram::Create());
-		GraphicsProgram::VertexShader(program, std::strlen(kUiVertexShader), kUiVertexShader);
-		GraphicsProgram::FragmentShader(program, std::strlen(kUiFragmentShader), kUiFragmentShader);
+		GraphicsProgram::Source(program, leaf_rml_ui_rtslp.view());
 		vertex_attribute attributes[] = {
 			{ "position", static_cast<u32>(offsetof(UiVertex, position)), Format::Rg32Float },
 			{ "uv", static_cast<u32>(offsetof(UiVertex, uv)), Format::Rg32Float },
@@ -173,7 +125,7 @@ void main() {
 		GraphicsProgram::BlendState(program, true, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA,
 									RT_BLEND_OP_ADD, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA,
 									RT_BLEND_OP_ADD);
-		GraphicsProgram::Link(program);
+		GraphicsProgram::Finalize(program);
 		uniform_location = GraphicsProgram::UniformLocation(program, "UiDraw");
 		texture_location = GraphicsProgram::UniformLocation(program, "UiTexture");
 		create_white_texture();
