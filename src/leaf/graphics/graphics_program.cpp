@@ -77,8 +77,7 @@ namespace lf {
 	}
 
 	void GraphicsProgram::BlendState(view<graphics_program> program, bool enabled, rt_blend_factor src_color, rt_blend_factor dst_color, rt_blend_op color_op, rt_blend_factor src_alpha, rt_blend_factor dst_alpha, rt_blend_op alpha_op) {
-		rtGraphicsProgramBlendState(program, enabled, src_color, dst_color, color_op, src_alpha,
-									dst_alpha, alpha_op);
+		rtGraphicsProgramBlendState(program, enabled, src_color, dst_color, color_op, src_alpha, dst_alpha, alpha_op);
 		detail::check_rutile_error("failed to set graphics program blend state");
 	}
 
@@ -93,8 +92,7 @@ namespace lf {
 	}
 
 	uniform_location GraphicsProgram::UniformLocation(view<graphics_program> program, string_view name) {
-		const string null_terminated_name(name);
-		rt_uniform_location location = rtGraphicsProgramUniformLocation(program, null_terminated_name.c_str());
+		rt_uniform_location location = rtGraphicsProgramUniformLocation(program, string(name).c_str());
 		detail::check_rutile_error("failed to query graphics program uniform location");
 		return location;
 	}

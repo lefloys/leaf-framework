@@ -6,7 +6,7 @@
 #include <mutex>
 
 namespace lf {
-	enum class QueueCapability {
+	enum class QueueCapability : u08 {
 		Transfer,
 		Compute,
 		Graphics,
