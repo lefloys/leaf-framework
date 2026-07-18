@@ -16,6 +16,7 @@ namespace lf {
 		void SetScissor(view<command_buffer> command_buffer, u32 x, u32 y, u32 width, u32 height);
 		void UniformBuffer(view<command_buffer> command_buffer, uniform_location location, view<buffer> buffer, u64 offset, u64 size);
 		void UniformTexture(view<command_buffer> command_buffer, uniform_location location, view<texture_view> texture_view);
+		void StorageBuffer(view<command_buffer> command_buffer, u32 binding, view<buffer> buffer, u64 offset, u64 size);
 		void BindVertexBuffer(view<command_buffer> command_buffer, view<buffer> buffer, u64 offset);
 		void Draw(view<command_buffer> command_buffer, u32 vertex_count, u32 first_vertex);
 		void EndRendering(view<command_buffer> command_buffer);
