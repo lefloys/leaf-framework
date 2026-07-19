@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "leaf/core/filesystem.hpp"
+#include "leaf/core/logging.hpp"
 #include "leaf/script/mod_enabled.hpp"
 #include "leaf/script/mod_loader.hpp"
 #include "leaf/script/prototype.hpp"
@@ -91,7 +92,8 @@ namespace {
 		lf::error load() {
 			lf::ModCollection mods;
 			mods.add_privileged_dir(root / "mods");
-			return lf::LoadMods(mods);
+			lf::Progress progress;
+			return lf::LoadMods(mods, progress);
 		}
 	};
 
@@ -103,13 +105,6 @@ namespace {
 		}
 	}
 } // namespace
-
-namespace lf {
-	template <>
-	PrototypeFieldList inspect_runtime_fields(const TestModPrototype&) {
-		return {};
-	}
-} // namespace lf
 
 /// Verifies that mod loader data:extend adds prototypes to existing raw tables.
 TEST_CASE("mod loader data:extend adds prototypes to existing raw tables", "[mod-loader]") {

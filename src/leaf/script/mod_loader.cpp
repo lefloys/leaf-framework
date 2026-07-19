@@ -8,6 +8,7 @@
 #include "leaf/script/virtual_filesystem.hpp"
 #include "leaf/core/logging.hpp"
 
+#include <leaf/graphics/graphics.hpp>
 #include <leaf/graphics/queue.hpp>
 
 #include <sol/sol.hpp>
@@ -806,7 +807,16 @@ end
 				}
 				dict& type_table = it->second.get<dict>();
 				fn.reserve(type_table.size());
+				// Iterate in sorted name order so prototype ids are deterministic;
+				// dict is an unordered map and its iteration order is unspecified.
+				vector<string_view> names;
+				names.reserve(type_table.size());
 				for (const auto& [name, data] : type_table) {
+					names.push_back(name);
+				}
+				std::sort(names.begin(), names.end());
+				for (string_view name : names) {
+					const object& data = type_table.find(name)->second;
 					if (!data.is<dict>()) {
 						return error(generic_errc::type_mismatch, lf::format("data.raw[{}][{}] must be a table/dict", fn.type(), name));
 					}
@@ -1071,8 +1081,12 @@ end
 		if (progress.cancelled()) {
 			return CANCELLED_ERROR;
 		}
-		if (error err = TexturePrototype::BuildAtlas(Queue::Query(QueueCapability::Graphics))) {
-			return err.add_context("building texture atlas");
+		if (graphics_available()) {
+			if (error err = TexturePrototype::BuildAtlas(Queue::Query(QueueCapability::Graphics))) {
+				return err.add_context("building texture atlas");
+			}
+		} else {
+			log::Debug("{}", "[mod-loader] graphics backend not loaded, skipping texture atlas build");
 		}
 		progress.set("stage", "loading-assets", mod_stage_progress(5));
 		progress.set("process", "assets-ready", PROGRESS_OF(1, 1));

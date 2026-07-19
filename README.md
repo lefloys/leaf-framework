@@ -4,6 +4,15 @@ leaf-framework is a C++23 framework for application loops, RML scene support, Lu
 
 This directory is also a standalone CMake project, so Leaf can be built independently from the game.
 
+## Layout
+
+- `src/leaf` is the framework source, organized into modules: `application`, `core`, `graphics`, `lockstep`, `math`, `network`, `platform`, `pmg`, `script`, `store`, and `system`.
+- `Rutile` is the graphics API used by Leaf (see [Rutile/README.md](Rutile/README.md)).
+- `example` contains sample projects (`core`, `lockstep`, `network`, `steam`).
+- `tests` is the CTest test suite.
+- `docs` is the generated Doxygen reference; `docsrc` holds its sources.
+- `tools` and `cmake` hold build tooling; `steam-sdk` is the Steamworks SDK drop-in location.
+
 ## How To Compile
 
 ### Windows
@@ -86,4 +95,4 @@ ctest --test-dir out/build/linux-debug --output-on-failure
 
 Leaf requires `miniaudio` through `find_package(miniaudio REQUIRED)`. The local `cmake/Findminiaudio.cmake` module creates the `miniaudio::miniaudio` imported target for vcpkg installs that provide only `miniaudio.h`.
 
-Rutile's Vulkan backend requires the Vulkan SDK, Vulkan headers, the Vulkan loader, glslang, SPIRV-Cross, and Vulkan Memory Allocator. The DirectX 12 backend uses the Windows SDK that ships with Visual Studio.
+Rutile's Vulkan backend requires the Vulkan SDK, Vulkan headers, the Vulkan loader, SPIRV-Cross, and Vulkan Memory Allocator. The DirectX 12 backend uses the Windows SDK that ships with Visual Studio.

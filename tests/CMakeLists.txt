@@ -1,7 +1,12 @@
 add_executable(leaf-framework-tests
     binary_tests.cpp
     dynamic_object_tests.cpp
+    error_tests.cpp
+    fixed_tests.cpp
+    localization_tests.cpp
     logging_tests.cpp
+    math_tests.cpp
+    string_time_tests.cpp
     lockstep_network_tests.cpp
     mod_loader_tests.cpp
     pmg_tests.cpp

@@ -95,6 +95,12 @@ namespace lf {
 		rtUnload();
 	}
 
+	bool graphics_available() {
+		// The Rutile dispatch table is populated by rtLoad; before that the
+		// function pointers are null and any rt* call would crash.
+		return rt_rtQueueQuery != nullptr;
+	}
+
 	string_view GraphicsBackendName() { return rtGetName(); }
 }
 

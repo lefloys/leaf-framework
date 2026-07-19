@@ -10,6 +10,7 @@ namespace lf {
 	string_view GraphicsBackendName();
 
 	error init_graphics(span<string_view> args, bool headless);
+	bool graphics_available();
 	void exit_graphics();
 	error rutile_error();
 }

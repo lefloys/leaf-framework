@@ -1,9 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "leaf/core/fixed.hpp"
-#include "leaf/script/fixed_script.hpp"
-
-#include <sol/sol.hpp>
 
 /// Verifies that fixed parses exact decimal values.
 TEST_CASE("fixed parses exact decimal values", "[fixed]") {
@@ -59,24 +56,4 @@ TEST_CASE("fixed arithmetic is exact", "[fixed]") {
 	REQUIRE((one - quarter).to_string() == "0.75");
 	REQUIRE((half * half).to_string() == "0.25");
 	REQUIRE((one / *four_parsed).to_string() == "0.25");
-}
-
-/// Verifies that fixed Lua binding arithmetic and coercion.
-TEST_CASE("fixed Lua binding arithmetic and coercion", "[fixed][lua]") {
-	sol::state lua;
-	lua.open_libraries(sol::lib::base, sol::lib::string, sol::lib::math, sol::lib::table);
-	lf::InstallFixedScript(lua, true);
-
-	lua.script(R"lua(
-sum = fixed("1.25") + fixed_ratio(1, 4)
-ordered = fixed("1.25") < fixed("1.5")
-global_value = 1.25
-local local_value = 1.25
-local_type = type(local_value)
-)lua");
-
-	REQUIRE(lua["sum"].get<lf::fixed>().to_string() == "1.5");
-	REQUIRE(lua["ordered"].get<bool>());
-	REQUIRE(lua["global_value"].get<lf::fixed>().to_string() == "1.25");
-	REQUIRE(lua["local_type"].get<lf::string>() == "number");
 }

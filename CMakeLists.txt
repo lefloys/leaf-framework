@@ -127,6 +127,18 @@ endif()
 if(WIN32)
     target_link_libraries("${PROJECT_NAME}" PUBLIC ws2_32)
 endif()
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # __int128 arithmetic in core/fixed.cpp needs compiler-rt builtins (__divti3 etc.)
+    # when linking with lld-link on Windows.
+    execute_process(
+        COMMAND "${CMAKE_CXX_COMPILER}" --rtlib=compiler-rt -print-libgcc-file-name
+        OUTPUT_VARIABLE LEAF_CLANG_BUILTINS_LIB
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(EXISTS "${LEAF_CLANG_BUILTINS_LIB}")
+        target_link_libraries("${PROJECT_NAME}" PUBLIC "${LEAF_CLANG_BUILTINS_LIB}")
+    endif()
+endif()
 
 set(LEAF_RML_RTSL "${CMAKE_CURRENT_SOURCE_DIR}/src/leaf/application/rml_backend.rtsl")
 set_source_files_properties("${LEAF_RML_RTSL}" PROPERTIES HEADER_FILE_ONLY TRUE)
@@ -205,6 +217,7 @@ if(LEAF_BUILD_TOOLS)
 endif()
 
 if(LEAF_BUILD_TESTS)
+    enable_testing()
     find_package("Catch2" CONFIG REQUIRED)
     add_subdirectory("tests")
 endif()
