@@ -8,7 +8,7 @@
 namespace lf {
 	struct TextureSourceFrame {
 		string path;
-		std::optional<rect<u32>> rect;
+		std::optional<lf::rect<u32>> rect;
 	};
 
 	struct TexturePrototype : public Prototype<identifier<TexturePrototype, u16, void>> {

@@ -341,6 +341,8 @@ namespace lf {
 		std::atomic<double> configured_render_hz{ 0.0 };
 		std::atomic<double> configured_fixed_update_hz{ 60.0 };
 		RateMeter render_rate;
+		RateMeter update_rate;
+		double applied_update_hz = -1.0;
 		std::function<void()> pre_fixed_update;
 		std::function<void(const std::exception&)> fixed_update_error_handler;
 		std::jthread render_thread;

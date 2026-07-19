@@ -1,5 +1,10 @@
 #include "sound.hpp"
 
+#include "leaf/application/sound.hpp"
+#include "leaf/core/format.hpp"
+#include "leaf/core/logging.hpp"
+#include "leaf/script/virtual_filesystem.hpp"
+
 namespace lf {
 	SoundPrototype::SoundPrototype(const dict& data) : Prototype(data) {
 		load_field(data, "path", path);
@@ -9,5 +14,26 @@ namespace lf {
 		if (has_field(data, "volume")) {
 			load_field(data, "volume", volume);
 		}
+	}
+
+	void SoundPrototype::load_asset() {
+		if (asset || path.empty()) {
+			return;
+		}
+		auto resolved = ResolveVirtualPathReport(path);
+		if (!resolved) {
+			log::Warning("{}", lf::format("[sound] {}", resolved.error().message));
+			return;
+		}
+		auto loaded = LoadSoundAsset(*resolved);
+		if (!loaded) {
+			log::Warning("{}", lf::format("[sound] {}", loaded.error().message));
+			return;
+		}
+		asset = std::move(*loaded);
+	}
+
+	void SoundPrototype::unload_asset() {
+		asset.reset();
 	}
 }

@@ -742,6 +742,24 @@ namespace lf {
 		string_view args
 	) {
 		std::lock_guard lock(scene_mutex);
+		// Keep scene-persistent custom elements alive across document swaps.
+		// In particular, the world element owns expensive GPU resources and
+		// live view state; destroying and recreating it on every loading/game
+		// transition caused visible stalls and discarded its prepared state.
+		vector<std::pair<string, Rml::ElementPtr>> persistent_elements;
+		if (document) {
+			Rml::ElementList persistent;
+			document->QuerySelectorAll(persistent, "[persist='scene']");
+			clear_script_events();
+			for (Rml::Element* element : persistent) {
+				if (!element || element->GetId().empty() || !element_persists_for_scene(*element)) {
+					continue;
+				}
+				if (Rml::Element* parent = element->GetParentNode()) {
+					persistent_elements.emplace_back(string(element->GetId()), parent->RemoveChild(element));
+				}
+			}
+		}
 		unload_document();
 		scene_args = string(args);
 		pending_load_request.reset();
@@ -773,6 +791,16 @@ namespace lf {
 		document = context->LoadDocumentFromMemory(Rml::String(document_source));
 		if (!document) {
 			throw runtime_exception("failed to load RML document from scene source");
+		}
+		for (auto& [id, persistent] : persistent_elements) {
+			Rml::Element* placeholder = document->GetElementById(Rml::String(id));
+			if (!placeholder || !persistent || !element_persists_for_scene(*placeholder)) {
+				continue;
+			}
+			copy_persistent_placeholder_attributes(*persistent, *placeholder);
+			if (Rml::Element* parent = placeholder->GetParentNode()) {
+				parent->ReplaceChild(std::move(persistent), placeholder);
+			}
 		}
 		refresh_title();
 
@@ -1453,7 +1481,6 @@ namespace lf {
 			if (stop.stop_requested()) {
 				return;
 			}
-			std::unique_lock lock(scene_mutex);
 			if (!render_frame()) {
 				return;
 			}
@@ -1885,6 +1912,15 @@ end
 	}
 
 	bool Scene::update() {
+		// The render thread is rate-limited, but this UI/input loop used to spin
+		// as fast as it could, repeatedly running Lua and contending for the DOM
+		// mutex. Cap it to the configured presentation rate as well.
+		const double desired_hz = configured_render_hz.load();
+		if (desired_hz != applied_update_hz) {
+			update_rate.limit(desired_hz);
+			applied_update_hz = desired_hz;
+		}
+		update_rate.wait();
 		// Lock against the render / fixed-update threads. process_input mutates
 		// the RmlUi context (ProcessMouseButton* etc.) and the Lua `update`
 		// callback typically mutates the DOM via set_rml / set_property —
@@ -2147,7 +2183,13 @@ end
 		if (!cmd) {
 			return !Window::ShouldClose(window_view());
 		}
-		render(cmd);
+		{
+			// Only RmlUi/DOM work needs the scene lock. Swapchain acquire and
+			// present can block while a window is occluded or alt-tabbed and must
+			// never prevent input or Lua updates from running.
+			std::unique_lock lock(scene_mutex);
+			render(cmd);
+		}
 		Window::EndFrame(window_view());
 		return !Window::ShouldClose(window_view());
 	}

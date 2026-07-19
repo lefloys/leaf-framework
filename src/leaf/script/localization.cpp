@@ -5,9 +5,14 @@
 #include "leaf/core/unordered_map.hpp"
 
 #include <cctype>
+#include <shared_mutex>
 #include <sstream>
 
 namespace lf {
+	std::shared_mutex& localization_mutex() {
+		static std::shared_mutex mutex;
+		return mutex;
+	}
 	static constexpr string_view DefaultLanguage = "en-US";
 	using section_map = lf::unordered_map_string<lf::unordered_map_string<string>>;
 
@@ -216,6 +221,7 @@ namespace lf {
 	}
 
 	error LoadLocaleFiles(span<const ModInfo> mods, string_view language) {
+		std::unique_lock lock(localization_mutex());
 		cached_locale_mods().assign(mods.begin(), mods.end());
 		selected_entries().clear();
 		fallback_entries().clear();
@@ -246,6 +252,7 @@ namespace lf {
 	}
 
 	void ClearLocalization() {
+		std::unique_lock lock(localization_mutex());
 		selected_entries().clear();
 		fallback_entries().clear();
 		available_languages().clear();
@@ -284,6 +291,7 @@ namespace lf {
 	}
 
 	string Localize(string_view section, string_view key, span<const string> parameters) {
+		std::shared_lock lock(localization_mutex());
 		if (key.empty()) {
 			return {};
 		}

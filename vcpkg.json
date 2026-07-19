@@ -6,7 +6,6 @@
     "cli11",
     "glfw3",
     "glm",
-    "glslang",
     "lua",
     "miniaudio",
     "rmlui",
