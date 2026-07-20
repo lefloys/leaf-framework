@@ -5,6 +5,8 @@
 #include "leaf/graphics/texture_atlas.hpp"
 #include "leaf/script/prototype.hpp"
 
+#include <functional>
+
 namespace lf {
 	struct TextureSourceFrame {
 		string path;
@@ -23,7 +25,7 @@ namespace lf {
 		inline static texture_atlas atlas;
 
 		static constexpr string_view type() noexcept { return "texture"; }
-		static error BuildAtlas(view<queue> queue);
+		static error BuildAtlas(view<queue> queue, const std::function<void(size_t, size_t)>& progress = {});
 		static void ClearAtlas();
 	};
 } // namespace lf

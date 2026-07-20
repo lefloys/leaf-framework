@@ -167,13 +167,14 @@ namespace lf {
 		});
 	}
 
-	void window_t::resize(dim2<u32> new_size) {
-		if (new_size.width == 0 || new_size.height == 0) {
+	void window_t::resize(dim2<u32> new_size, dim2<u32> framebuffer_size) {
+		if (new_size.width == 0 || new_size.height == 0 ||
+			framebuffer_size.width == 0 || framebuffer_size.height == 0) {
 			return;
 		}
 		std::lock_guard guard(input_mutex);
 		size = new_size;
-		pending_resize = new_size;
+		pending_resize = framebuffer_size;
 	}
 
 	window_t::~window_t() {
@@ -257,8 +258,8 @@ namespace lf {
 		if (!window.value->fullscreen) {
 			window.value->windowed_size = size;
 		}
-		window.value->resize(size);
 		platform_window_size(window.value->platform, size);
+		window.value->resize(size, platform_framebuffer_size(window.value->platform));
 		log::Debug("Window width set to {}; size={}x{}", width, size.width, size.height);
 	}
 
@@ -271,8 +272,8 @@ namespace lf {
 		if (!window.value->fullscreen) {
 			window.value->windowed_size = size;
 		}
-		window.value->resize(size);
 		platform_window_size(window.value->platform, size);
+		window.value->resize(size, platform_framebuffer_size(window.value->platform));
 		log::Debug("Window height set to {}; size={}x{}", height, size.width, size.height);
 	}
 
@@ -295,7 +296,9 @@ namespace lf {
 			fullscreen,
 			window.value->windowed_position,
 			window.value->windowed_size);
-		window.value->resize(platform_window_size(window.value->platform));
+		window.value->resize(
+			platform_window_size(window.value->platform),
+			platform_framebuffer_size(window.value->platform));
 		window.value->fullscreen = fullscreen;
 		dim2<u32> after = Window::Size(window);
 		log::Debug("Fullscreen change applied; size={}x{}", after.width, after.height);

@@ -10,6 +10,7 @@
 #include "leaf/graphics/texture_view.hpp"
 #include "leaf/math/rect.hpp"
 
+#include <functional>
 
 namespace lf {
 	struct atlas_source_frame {
@@ -29,6 +30,7 @@ namespace lf {
 	struct texture_atlas_options {
 		u32 padding = 2;
 		u32 minimum_extent = 64;
+		std::function<void(size_t completed, size_t total)> progress;
 	};
 
 	struct texture_atlas {

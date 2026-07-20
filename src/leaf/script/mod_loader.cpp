@@ -1082,7 +1082,11 @@ end
 			return CANCELLED_ERROR;
 		}
 		if (graphics_available()) {
-			if (error err = TexturePrototype::BuildAtlas(Queue::Query(QueueCapability::Graphics))) {
+			auto atlas_progress = [&progress](size_t completed, size_t total) {
+				const f32 value = total == 0 ? 1.0f : static_cast<f32>(completed) / static_cast<f32>(total);
+				progress.set("process", "building-texture-atlas", value);
+			};
+			if (error err = TexturePrototype::BuildAtlas(Queue::Query(QueueCapability::Graphics), atlas_progress)) {
 				return err.add_context("building texture atlas");
 			}
 		} else {
@@ -1178,6 +1182,5 @@ end
 		detail::loaded_settings.clear();
 	}
 } // namespace lf
-
 
 

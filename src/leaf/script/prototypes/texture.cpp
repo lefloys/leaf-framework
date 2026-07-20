@@ -83,7 +83,7 @@ namespace lf {
 		}
 	}
 
-	error TexturePrototype::BuildAtlas(view<queue> queue) {
+	error TexturePrototype::BuildAtlas(view<queue> queue, const std::function<void(size_t, size_t)>& progress) {
 		vector<atlas_source_frame> source_frames;
 		const auto& textures = Database<TexturePrototype>::prototypes;
 		for (size_t texture_index = 0; texture_index < textures.size(); ++texture_index) {
@@ -101,7 +101,9 @@ namespace lf {
 			}
 		}
 
-		atlas = build_texture_atlas(queue, source_frames);
+		texture_atlas_options options;
+		options.progress = progress;
+		atlas = build_texture_atlas(queue, source_frames, std::move(options));
 		for (TexturePrototype& texture : Database<TexturePrototype>::prototypes) {
 			texture.atlas_frames.clear();
 		}

@@ -183,10 +183,15 @@ static void framebuffer_size_callback(GLFWwindow* wnd, int width, int height) {
 	if (!window) {
 		return;
 	}
-	window->resize({
-		static_cast<u32>(window_width),
-		static_cast<u32>(window_height),
-	});
+	window->resize(
+		{
+			static_cast<u32>(window_width),
+			static_cast<u32>(window_height),
+		},
+		{
+			static_cast<u32>(width),
+			static_cast<u32>(height),
+		});
 }
 
 namespace lf {
@@ -278,6 +283,13 @@ namespace lf {
 		int width = 0;
 		int height = 0;
 		glfwGetWindowSize(to_glfw(wnd), &width, &height);
+		return { static_cast<u32>(width), static_cast<u32>(height) };
+	}
+
+	dim2<u32> platform_framebuffer_size(PlatformWindow* wnd) {
+		int width = 0;
+		int height = 0;
+		glfwGetFramebufferSize(to_glfw(wnd), &width, &height);
 		return { static_cast<u32>(width), static_cast<u32>(height) };
 	}
 

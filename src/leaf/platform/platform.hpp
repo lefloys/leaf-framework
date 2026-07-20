@@ -38,6 +38,7 @@ namespace lf {
 	void platform_window_show(PlatformWindow* window);
 	void platform_window_size(PlatformWindow* window, dim2<u32> size);
 	dim2<u32> platform_window_size(PlatformWindow* window);
+	dim2<u32> platform_framebuffer_size(PlatformWindow* window);
 	bool platform_window_drawable(PlatformWindow* window);
 	void platform_window_position(PlatformWindow* window, pos2<i32> position);
 	pos2<i32> platform_window_position(PlatformWindow* window);

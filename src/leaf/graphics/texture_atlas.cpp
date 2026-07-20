@@ -6,9 +6,12 @@
 #include "leaf/script/virtual_filesystem.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include <stb_image.h>
@@ -183,21 +186,55 @@ namespace lf {
 
 	texture_atlas build_texture_atlas(view<queue> queue, span<const atlas_source_frame> source_frames, texture_atlas_options options) {
 		vector<loaded_atlas_frame> loaded_frames;
-		loaded_frames.reserve(source_frames.size());
-		for (const atlas_source_frame& source : source_frames) {
-			loaded_frames.push_back(load_frame(source, options));
+		loaded_frames.resize(source_frames.size());
+		const size_t progress_total = source_frames.size() + 3;
+		if (options.progress) {
+			options.progress(0, progress_total);
 		}
+
+		std::atomic_size_t next_frame = 0;
+		size_t completed_frames = 0;
+		std::mutex progress_mutex;
+		const size_t hardware_threads = std::max<size_t>(1, std::thread::hardware_concurrency());
+		const size_t worker_count = std::min(source_frames.size(), hardware_threads);
+		std::vector<std::jthread> workers;
+		workers.reserve(worker_count);
+		for (size_t worker = 0; worker < worker_count; ++worker) {
+			workers.emplace_back([&] {
+				for (;;) {
+					const size_t index = next_frame.fetch_add(1, std::memory_order_relaxed);
+					if (index >= source_frames.size()) {
+						break;
+					}
+					loaded_frames[index] = load_frame(source_frames[index], options);
+					{
+						std::lock_guard lock(progress_mutex);
+						++completed_frames;
+						if (options.progress) {
+							options.progress(completed_frames, progress_total);
+						}
+					}
+				}
+			});
+		}
+		workers.clear();
 		if (loaded_frames.empty()) {
 			loaded_frames.push_back(make_fallback_frame(0, 0));
 		}
 
 		texture_atlas atlas;
 		pack_frames(loaded_frames, atlas.width, atlas.height, options);
+		if (options.progress) {
+			options.progress(source_frames.size() + 1, progress_total);
+		}
 		auto atlas_pixels = vector<u08>{};
 		atlas_pixels.resize(static_cast<size_t>(atlas.width) * static_cast<size_t>(atlas.height) * 4u, 0);
 		for (const loaded_atlas_frame& frame : loaded_frames) {
 			blit_frame(atlas_pixels, atlas.width, atlas.height, frame, options.padding);
 			atlas.frames.push_back(packed_frame_from(frame, atlas.width, atlas.height, options.padding));
+		}
+		if (options.progress) {
+			options.progress(source_frames.size() + 2, progress_total);
 		}
 
 		atlas.atlas_texture = unique(Texture::Create());
@@ -206,6 +243,9 @@ namespace lf {
 		atlas.view.reset(TextureView::CreateFromTexture(atlas.atlas_texture));
 		TextureView::Filter(atlas.view, RT_FILTER_NEAREST, RT_FILTER_LINEAR, RT_MIP_FILTER_LINEAR);
 		TextureView::Address(atlas.view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
+		if (options.progress) {
+			options.progress(progress_total, progress_total);
+		}
 		log::Debug("[textures] atlas {}x{} with {} frames", atlas.width, atlas.height, loaded_frames.size());
 		return atlas;
 	}

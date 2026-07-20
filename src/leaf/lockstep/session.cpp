@@ -124,6 +124,7 @@ namespace lf::lockstep {
 		u16 chunk_size = 1000;
 		u32 chunk_count = 0;
 		u32 received_count = 0;
+		u64 received_bytes = 0;
 		u32 next_request_chunk = 0;
 		u32 request_round = 0;
 		vector<byte> bytes;
@@ -1017,6 +1018,7 @@ namespace lf::lockstep {
 			std::copy(bytes.begin(), bytes.end(), session.snapshot.bytes.begin() + static_cast<i64>(offset));
 			session.snapshot.received_chunks[chunk_index] = 1;
 			++session.snapshot.received_count;
+			session.snapshot.received_bytes += bytes.size();
 			session.try_finish_snapshot();
 			return {};
 		}
@@ -1147,7 +1149,11 @@ namespace lf::lockstep {
 			throw runtime_exception("lockstep session is disconnected");
 		}
 		for (const host_connection& connection : connections) {
-			if (connection.snapshot_requested || connection.connection_state == state::downloading_snapshot) {
+			// A snapshot must have a baseline before the simulation can move on.
+			// Once begin_snapshot() has captured it, however, the client can buffer
+			// every subsequent closure while the bulk bytes are still in flight.
+			// Pausing for the whole download made one slow join freeze the server.
+			if (connection.snapshot_requested) {
 				return;
 			}
 		}
@@ -1170,7 +1176,8 @@ namespace lf::lockstep {
 			closure.commands.emplace_back(to_wire_payload(command));
 		}
 		for (host_connection& connection : connections) {
-			if (connection.connection_state != state::joined) {
+			if (connection.connection_state != state::joined &&
+				connection.connection_state != state::downloading_snapshot) {
 				continue;
 			}
 			const PacketSequence heartbeat_sequence = connection.next_heartbeat_sequence;
@@ -1932,7 +1939,7 @@ namespace lf::lockstep {
 		p.session_id   = client.session_id;
 		p.chunks_done  = client.snapshot.received_count;
 		p.chunks_total = client.snapshot.chunk_count;
-		p.bytes_done   = static_cast<u64>(client.snapshot.received_count) * static_cast<u64>(client.snapshot.chunk_size);
+		p.bytes_done   = client.snapshot.received_bytes;
 		p.bytes_total  = static_cast<u64>(client.snapshot.bytes.size());
 		// Clamp because the final chunk is short and the multiplication above
 		// can overrun the true byte total by chunk_size-1.

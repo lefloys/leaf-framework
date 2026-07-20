@@ -46,7 +46,7 @@ namespace lf {
 		void scroll(pos2<f32> delta);
 		void focus(bool focused);
 		void drop(string path);
-		void resize(dim2<u32> size);
+		void resize(dim2<u32> size, dim2<u32> framebuffer_size);
 
 		~window_t();
 	};

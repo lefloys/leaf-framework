@@ -367,7 +367,11 @@ keybind {
 		}
 
 		i32 next_window_z_index() {
-			static i32 next_z = 10;
+			// Window focus is applied during the capture phase of mousedown. Keep
+			// focused windows above authored HUD/overlay layers; starting at 10
+			// demoted hosts such as z-index:15000 between mouse-down and mouse-up,
+			// changing the hit target and preventing RmlUi from emitting click.
+			static i32 next_z = 100000;
 			return next_z++;
 		}
 
@@ -601,7 +605,7 @@ keybind {
 				move(event);
 			} else if (event == "click") {
 				click(event);
-			} else if (event == "mouseup" || event == "blur") {
+			} else if (event == "mouseup") {
 				end();
 			}
 		}
@@ -662,7 +666,6 @@ keybind {
 
 			bound_document->AddEventListener("mousemove", this, true);
 			bound_document->AddEventListener("mouseup", this, true);
-			bound_document->AddEventListener("blur", this, true);
 		}
 
 		void ElementWindow::unbind_document_events() {
@@ -672,7 +675,6 @@ keybind {
 
 			bound_document->RemoveEventListener("mousemove", this, true);
 			bound_document->RemoveEventListener("mouseup", this, true);
-			bound_document->RemoveEventListener("blur", this, true);
 			bound_document = nullptr;
 		}
 
@@ -739,22 +741,17 @@ keybind {
 			const f32 height_extra = height_outside_content(*this);
 			const f32 width = clamp_range(content_width + width_extra, limits.min_width, limits.max_width);
 			const f32 height = clamp_range(content_height + height_extra, limits.min_height, limits.max_height);
-			// An authored inline width/height in the <window style="..."> attribute
-			// is authoritative — the caller asked for that specific size and the
-			// content layout is built around it. fit_to_content otherwise reads
-			// the previous auto-fitted px we wrote here and shrinks the window to
-			// whatever the children currently measure, which on first layout (when
-			// inline-block children haven't fanned out across the full width yet)
-			// collapses to one child's width and leaves the rest of the body
-			// overlapping. Percent widths flexed before; preserve any inline
-			// width/height now.
+			// Authored dimensions are the requested minimum size, not permission for
+			// content to live outside the window's interactive box. Never shrink an
+			// authored dimension, but grow it when the laid-out children need more
+			// room. Otherwise visible overflow can fall outside hit testing.
 			const bool preserve_width = inline_style_has_property(*this, "width");
 			const bool preserve_height = inline_style_has_property(*this, "height");
 
-			if (!preserve_width && std::abs(width - GetOffsetWidth()) > 0.5f) {
+			if ((!preserve_width || width > GetOffsetWidth() + 0.5f) && std::abs(width - GetOffsetWidth()) > 0.5f) {
 				set_px(*this, "width", std::max(0.0f, width - width_extra));
 			}
-			if (!preserve_height && std::abs(height - GetOffsetHeight()) > 0.5f) {
+			if ((!preserve_height || height > GetOffsetHeight() + 0.5f) && std::abs(height - GetOffsetHeight()) > 0.5f) {
 				set_px(*this, "height", std::max(0.0f, height - height_extra));
 			}
 		}
@@ -1192,4 +1189,3 @@ namespace lf {
 		}
 	}
 }
-
