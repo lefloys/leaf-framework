@@ -3,13 +3,15 @@
 #include <memory>
 #include <vector>
 
-namespace lf::detail {
+namespace rt::detail {
+	// @GPT : Why anonymous namespace. who asked for that
 	namespace {
 		struct queue_lock_entry {
 			rt_queue queue = RT_NULL_HANDLE;
+			// @GPT : unique ptr to a lock ??
 			std::unique_ptr<std::mutex> mutex;
 		};
-
+		// @GPT : what the fuck is this registry. what the fuck is wrong with you
 		struct queue_lock_registry {
 			std::mutex mutex;
 			std::vector<queue_lock_entry> entries;
@@ -51,9 +53,9 @@ namespace lf::detail {
 	std::unique_lock<std::mutex> lock_queue(rt_queue queue) {
 		return std::unique_lock(queue_locks().get(queue));
 	}
-} // namespace lf::detail
+} // namespace rt::detail
 
-namespace lf {
+namespace rt {
 	handle<queue> Queue::Query(QueueCapability capability) {
 		rt_queue queue = rtQueueQuery(detail::to_rutile(capability));
 		detail::check_rutile_error("failed to query queue");
@@ -81,4 +83,4 @@ namespace lf {
 		detail::check_rutile_error("failed to flush queue");
 		return timepoint;
 	}
-} // namespace lf
+} // namespace rt

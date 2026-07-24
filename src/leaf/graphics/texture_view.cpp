@@ -2,7 +2,7 @@
 
 #include "queue.hpp"
 
-namespace lf {
+namespace rt {
 	handle<texture_view> TextureView::Create() {
 		rt_texture_view texture_view = rtTextureViewCreate();
 		detail::check_rutile_error("failed to create texture view");
@@ -19,7 +19,7 @@ namespace lf {
 	void TextureView::Destroy(handle<texture_view> texture_view) {
 		rtTextureViewDestroy(texture_view);
 	}
-
+	// @GPT : this file also. remove the fucking newlines...
 	void TextureView::Filter(view<texture_view> texture_view, rt_filter mag_filter,
 							 rt_filter min_filter, rt_mip_filter mip_filter) {
 		rtTextureViewFilter(texture_view, mag_filter, min_filter, mip_filter);
@@ -55,4 +55,4 @@ namespace lf {
 		detail::check_rutile_error("failed to query texture view extent");
 		return extent;
 	}
-} // namespace lf
+} // namespace rt

@@ -9,7 +9,8 @@
 
 #include <type_traits>
 
-namespace lf {
+namespace rt {
+	// @GPT : ??? 
 	struct canvas_color {
 		f32 r = 1.0f;
 		f32 g = 1.0f;
@@ -20,13 +21,14 @@ namespace lf {
 	template <typename Vertex, typename = void>
 	struct canvas_vertex_traits {
 		static Vertex make(pos2<f32> position, pos2<f32> uv, canvas_color color) {
+			// @GPT : Hardcoded things? like position? what is this
 			Vertex vertex{};
 			if constexpr (requires { vertex.position = position; }) {
 				vertex.position = position;
 			} else if constexpr (requires { vertex.pos = position; }) {
 				vertex.pos = position;
 			} else {
-				static_assert(sizeof(Vertex) == 0, "Canvas vertex needs lf::canvas_vertex_traits specialization or a position/pos field assignable from lf::pos2<f32>");
+				static_assert(sizeof(Vertex) == 0, "Canvas vertex needs rt::canvas_vertex_traits specialization or a position/pos field assignable from lf::pos2<f32>");
 			}
 			if constexpr (requires { vertex.uv = uv; }) {
 				vertex.uv = uv;
@@ -152,4 +154,4 @@ namespace lf {
 			Draw(command_buffer, canvas.vertex_count(), 0);
 		}
 	} // namespace CommandBuffer
-} // namespace lf
+} // namespace rt

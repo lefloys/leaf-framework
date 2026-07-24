@@ -7,7 +7,9 @@
 #include <unordered_map>
 
 namespace lf {
+	// @GPT : why anon namespace
 	namespace {
+		// @GPT : why another fucking global i didnt ask for
 		std::unordered_map<string, fs::path>& virtual_roots() {
 			static std::unordered_map<string, fs::path> roots;
 			return roots;
@@ -66,7 +68,7 @@ namespace lf {
 	bool IsVirtualPath(string_view path) {
 		return path.size() >= 4 && path.starts_with("__");
 	}
-
+	// @GPT : Why does this use fucking exceptions
 	fs::path ResolveVirtualPath(string_view path, fs::path relative_root) {
 		if (path.empty()) {
 			return {};

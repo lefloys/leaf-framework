@@ -11,12 +11,13 @@
 #include <mutex>
 #include <string>
 #include <vector>
-
-namespace lf {
+// @GPT : why is this file called "window_private.hpp" wdym Private. what ??
+namespace rt {
 	struct window_t {
 		static constexpr size_t control_count = KEY_ENUM_MAX + BUTTON_ENUM_MAX;
 
 		PlatformWindow* platform = nullptr;
+		// @GPT : string cursor?
 		std::string current_cursor;
 		rt_swapchain swapchain = RT_NULL_HANDLE;
 		unique<command_buffer> frame_command_buffer;
@@ -31,7 +32,9 @@ namespace lf {
 		std::vector<input_event> events;
 		pos2<f32> pointer_position;
 		bool pointer_inside = false;
+		
 		bool fullscreen = false;
+		// @GPT : what the so many bools?? soo many bools...
 		bool fullscreen_change_requested = false;
 		bool requested_fullscreen = false;
 		bool vsync = false;
@@ -50,4 +53,4 @@ namespace lf {
 
 		~window_t();
 	};
-} // namespace lf
+} // namespace rt

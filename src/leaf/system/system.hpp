@@ -16,6 +16,7 @@ namespace lf {
 	ShutdownHandlerId AddShutdownHandler(ShutdownHandler handler, void* user_data = nullptr);
 	void RemoveShutdownHandler(ShutdownHandlerId id);
 	void RequestShutdown();
+	void ShowErrorBox(string_view title, string_view message);
 	void OverwriteAppdataDir(string_view new_path);
 	string_view GetAppdataDir();
 	string_view GetInstallDir();

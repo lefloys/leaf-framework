@@ -1,20 +1,22 @@
 #include "buffer.hpp"
 
-namespace lf::detail {
+namespace rt::detail {
 	rt_buffer_mode to_rutile(BufferMode mode) {
+		// @GPT : you are supposed to code the enum and then use fucking std::unreachable for default nothing like this
 		switch (mode) {
 		case BufferMode::Dynamic: return RT_BUFFER_DYNAMIC;
 		case BufferMode::Static:
 		default: return RT_BUFFER_STATIC;
 		}
-	}
+	} 
 
 	rt_buffer_usage to_rutile(BufferUsage usage) {
+		// @GPT : What the fuck.
 		return static_cast<rt_buffer_usage>(static_cast<u32>(usage));
 	}
-} // namespace lf::detail
+} // namespace rt::detail
 
-namespace lf {
+namespace rt {
 	handle<buffer> Buffer::Create() {
 		rt_buffer buffer = rtBufferCreate();
 		detail::check_rutile_error("failed to create buffer");
@@ -25,10 +27,9 @@ namespace lf {
 		rtBufferDestroy(buffer);
 	}
 
-	timepoint Buffer::Data(view<buffer> buffer, BufferMode mode, BufferUsage usage, u64 size,
-						   const void* data) {
-		rt_timepoint timepoint =
-			rtBufferData(buffer, detail::to_rutile(mode), detail::to_rutile(usage), size, data);
+	// @GPT : Why void* why not lf::span<const lf::byte>
+	timepoint Buffer::Data(view<buffer> buffer, BufferMode mode, BufferUsage usage, u64 size, const void* data) {
+		rt_timepoint timepoint = rtBufferData(buffer, detail::to_rutile(mode), detail::to_rutile(usage), size, data);
 		detail::check_rutile_error("failed to upload buffer data");
 		return timepoint;
 	}
@@ -43,4 +44,4 @@ namespace lf {
 		rtBufferRead(buffer, offset, size, data);
 		detail::check_rutile_error("failed to read buffer");
 	}
-} // namespace lf
+} // namespace rt

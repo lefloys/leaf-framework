@@ -1,6 +1,7 @@
 #include "leaf/system/system.hpp"
 #include "leaf/system/socket.hpp"
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <limits.h>
@@ -31,6 +32,12 @@ namespace lf {
 		}
 	}
 
+	void ShowErrorBox(string_view title, string_view message) {
+		(void)title;
+		std::fputs(message.data(), stderr);
+		std::fputc('\n', stderr);
+	}
+
 	error init_system(span<string_view> args) {
 		install_crash_handler();
 		const char* xdg_data_home = std::getenv("XDG_DATA_HOME");
@@ -40,6 +47,9 @@ namespace lf {
 			system_data.appdata_dir = (std::filesystem::path(home) / ".local" / "share").string();
 		} else {
 			system_data.appdata_dir = ".";
+		}
+		if (const char* appdata_override = std::getenv("LEAF_APPDATA_DIR"); appdata_override && appdata_override[0]) {
+			system_data.appdata_dir = appdata_override;
 		}
 
 		char executable_path[PATH_MAX] = {};

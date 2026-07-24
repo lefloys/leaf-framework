@@ -3,5 +3,5 @@
 #include <leaf/graphics/window.hpp>
 
 namespace lf {
-	bool SetCursorPrototype(view<window> display, string_view name);
+	bool SetCursorPrototype(rt::view<rt::window> display, string_view name);
 }

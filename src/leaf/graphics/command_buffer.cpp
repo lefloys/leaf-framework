@@ -1,6 +1,6 @@
 #include "command_buffer.hpp"
 
-namespace lf {
+namespace rt {
 	handle<command_buffer> CommandBuffer::Create() {
 		rt_command_buffer command_buffer = rtCommandBufferCreate();
 		detail::check_rutile_error("failed to create command buffer");
@@ -56,8 +56,8 @@ namespace lf {
 		detail::check_rutile_error("failed to bind uniform texture");
 	}
 
-	void CommandBuffer::StorageBuffer(view<command_buffer> command_buffer, u32 binding, view<buffer> buffer, u64 offset, u64 size) {
-		rtCmdStorageBuffer(command_buffer, binding, buffer, offset, size);
+	void CommandBuffer::StorageBuffer(view<command_buffer> command_buffer, uniform_location location, view<buffer> buffer, u64 offset, u64 size) {
+		rtCmdStorageBuffer(command_buffer, location, buffer, offset, size);
 		detail::check_rutile_error("failed to bind storage buffer");
 	}
 
@@ -80,4 +80,4 @@ namespace lf {
 		rtCmdEnd(command_buffer);
 		detail::check_rutile_error("failed to end command buffer");
 	}
-} // namespace lf
+} // namespace rt

@@ -3,8 +3,10 @@
 
 #include <leaf/graphics/resource.hpp>
 
-namespace lf {
+// @GPT : ffs namespaces
+namespace rt {
 	namespace TextureView {
+		// @GPT : ffs newlines
 		handle<texture_view> Create();
 		handle<texture_view> CreateFromTexture(view<texture> texture);
 		void Destroy(handle<texture_view> texture_view);
@@ -18,6 +20,6 @@ namespace lf {
 							   view<buffer> buffer);
 		rt_extent_3d Extent(view<texture_view> texture_view);
 	} // namespace TextureView
-} // namespace lf
+} // namespace rt
 
 #endif /* LEAF_GRAPHICS_TEXTURE_VIEW_HPP */

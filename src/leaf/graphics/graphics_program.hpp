@@ -5,8 +5,8 @@
 #include <leaf/core/string.hpp>
 #include <leaf/graphics/format.hpp>
 
-namespace lf {
-
+namespace rt {
+	// @GPT : ive said it multiple times now. you need to set them equal to rutiles values. like "None = RT_CULL_NONE" etc. 
 	enum class CullMode {
 		None,
 		Front,
@@ -29,6 +29,7 @@ namespace lf {
 		Format format = Format::Unknown;
 	};
 
+	// @GPT : why another vertex layout struct
 	struct vertex_layout {
 		u32 stride = 0;
 		const vertex_attribute* attributes = nullptr;
@@ -48,6 +49,6 @@ namespace lf {
 		uniform_location UniformLocation(view<graphics_program> program, string_view name);
 	} // namespace GraphicsProgram
 
-} // namespace lf
+} // namespace rt
 
 #endif /* LEAF_GRAPHICS_GRAPHICS_PROGRAM_HPP */

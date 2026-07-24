@@ -28,9 +28,6 @@ namespace Rml {
 } // namespace Rml
 
 namespace lf {
-	struct input_event;
-	struct command_buffer;
-
 	/*!
 	** @ingroup application
 	** @brief Runtime representation of an RML/Lua scene.
@@ -85,7 +82,7 @@ namespace lf {
 		** @brief Launches the scene using an existing window.
 		*/
 		void launch(
-			handle<window> display,
+			rt::handle<rt::window> display,
 			string_view initial,
 			string_view args = {},
 			span<const ScriptInstaller> script_installers = {},
@@ -95,24 +92,24 @@ namespace lf {
 		/*!
 		** @brief Releases ownership of the scene-owned window, if any.
 		*/
-		unique<window> release_window();
+		rt::unique<rt::window> release_window();
 
 		/*!
 		** @brief Gets a non-owning view of the scene window.
 		*/
-		view<window> window_view() const;
+		rt::view<rt::window> window_view() const;
 
 		/*!
 		** @brief Creates an RML context for a window and owns the window.
 		*/
-		Scene(handle<window> display);
+		Scene(rt::handle<rt::window> display);
 
 		/*!
 		** @brief Loads a scene into an existing RML context.
 		** @param context RML context that owns the scene document.
 		** @param display Window owned by the scene.
 		*/
-		Scene(Rml::Context& context, handle<window> display);
+		Scene(Rml::Context& context, rt::handle<rt::window> display);
 
 		Scene(Scene&&) noexcept = delete;
 		Scene& operator=(Scene&&) noexcept = delete;
@@ -169,7 +166,7 @@ namespace lf {
 		** @brief Dispatches a platform input event to the scene.
 		** @param event Input event to process.
 		*/
-		void input(const input_event& event);
+		void input(const rt::input_event& event);
 
 		/*!
 		** @brief Dispatches pending window input to RML and the scene.
@@ -184,7 +181,7 @@ namespace lf {
 		/*!
 		** @brief Updates and renders the scene document into a command buffer.
 		*/
-		void render(view<command_buffer> cmd);
+		void render(rt::view<rt::command_buffer> cmd);
 
 		/*!
 		** @brief Renders one scene frame using the scene's owned window.
@@ -307,7 +304,7 @@ namespace lf {
 		sol::state lua;
 		Rml::Context* context = nullptr;
 		string owned_context_name;
-		unique<window> display;
+		rt::unique<rt::window> display;
 		string scene_args;
 		std::vector<ScriptInstaller> script_installers;
 		std::vector<FixedUpdater> fixed_updaters;

@@ -85,12 +85,12 @@ if(NOT LEAF_HEADLESS)
 endif()
 
 # Rutile subproject defaults.
-set(RUTILE_BUILD_VK13 "${LEAF_BUILD_RUTILE_VK13}")
-set(RUTILE_BUILD_DX12 "${LEAF_BUILD_RUTILE_DX12}")
-set(RUTILE_BUILD_GL33 "${LEAF_BUILD_RUTILE_GL33}")
-set(RUTILE_BUILD_VALIDATION_LAYER "${LEAF_BUILD_RUTILE_VALIDATION_LAYER}")
-set(RUTILE_BUILD_LOGGING_LAYER "${LEAF_BUILD_RUTILE_LOGGING_LAYER}")
-set(RUTILE_BUILD_EXAMPLES "${LEAF_BUILD_EXAMPLES}")
+set(RUTILE_BUILD_VULKAN "${LEAF_BUILD_RUTILE_VK13}" CACHE BOOL "Build the Vulkan 1.3 Rutile runtime." FORCE)
+set(RUTILE_BUILD_DIRECTX12 "${LEAF_BUILD_RUTILE_DX12}" CACHE BOOL "Build the DirectX 12 Rutile runtime on Windows." FORCE)
+set(RUTILE_BUILD_OPENGL "${LEAF_BUILD_RUTILE_GL33}" CACHE BOOL "Build the OpenGL 3.3 Rutile runtime on Windows." FORCE)
+set(RUTILE_BUILD_VALIDATION_LAYER "${LEAF_BUILD_RUTILE_VALIDATION_LAYER}" CACHE BOOL "Build the Rutile validation layer." FORCE)
+set(RUTILE_BUILD_LOGGING_LAYER "${LEAF_BUILD_RUTILE_LOGGING_LAYER}" CACHE BOOL "Build the Rutile logging layer." FORCE)
+set(RUTILE_BUILD_EXAMPLES "${LEAF_BUILD_EXAMPLES}" CACHE BOOL "Build Rutile examples." FORCE)
 if(NOT TARGET "Rutile::rutile")
     add_subdirectory("Rutile")
 endif()
@@ -143,12 +143,13 @@ endif()
 set(LEAF_RML_RTSL "${CMAKE_CURRENT_SOURCE_DIR}/src/leaf/application/rml_backend.rtsl")
 set_source_files_properties("${LEAF_RML_RTSL}" PROPERTIES HEADER_FILE_ONLY TRUE)
 target_sources("${PROJECT_NAME}" PRIVATE "${LEAF_RML_RTSL}")
-rtsl_add_program("${PROJECT_NAME}"
-    RTSLC rtslc
+rtsl_add_program("${PROJECT_NAME}-rml-rtsl"
     OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/rtsl"
-    EMBED
-    EMBED_NAME leaf_rml_ui_rtslp
+    SYMBOL leaf_rml_ui_rtslp
     SOURCES "${LEAF_RML_RTSL}"
+)
+rtsl_embed_program("${PROJECT_NAME}"
+    PROGRAMS "${PROJECT_NAME}-rml-rtsl"
 )
 
 add_subdirectory(src)
@@ -165,11 +166,12 @@ function(leaf_copy_rutile_backends target_name)
     set(runtime_files)
     foreach(rutile_backend IN LISTS rutile_backends)
         list(APPEND runtime_files "$<TARGET_FILE:${rutile_backend}>")
-    endforeach()
-    add_custom_target("${target_name}-rutile-backends"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${runtime_files} "$<TARGET_FILE_DIR:${target_name}>"
-        COMMAND_EXPAND_LISTS
-        DEPENDS ${rutile_backends}
+	endforeach()
+	add_custom_target("${target_name}-rutile-backends"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target_name}>"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different ${runtime_files} "$<TARGET_FILE_DIR:${target_name}>"
+		COMMAND_EXPAND_LISTS
+		DEPENDS ${rutile_backends}
     )
     add_dependencies("${target_name}" "${target_name}-rutile-backends")
 endfunction()

@@ -25,7 +25,7 @@ namespace lf {
 		inline static texture_atlas atlas;
 
 		static constexpr string_view type() noexcept { return "texture"; }
-		static error BuildAtlas(view<queue> queue, const std::function<void(size_t, size_t)>& progress = {});
+		static error BuildAtlas(rt::view<rt::queue> queue, const std::function<void(size_t, size_t)>& progress = {}, const std::function<void(string_view)>& phase = {});
 		static void ClearAtlas();
 	};
 } // namespace lf

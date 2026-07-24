@@ -1,6 +1,7 @@
 #include "leaf/system/system.hpp"
 #include "leaf/system/socket.hpp"
 #include <Shlobj.h>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 #include <windows.h>
@@ -29,6 +30,12 @@ namespace lf {
 		}
 	}
 
+	void ShowErrorBox(string_view title, string_view message) {
+		const string title_string(title);
+		const string message_string(message);
+		MessageBoxA(nullptr, message_string.c_str(), title_string.c_str(), MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+	}
+
 	static BOOL WINAPI console_shutdown_handler(DWORD control_type) {
 		switch (control_type) {
 		case CTRL_C_EVENT:
@@ -49,6 +56,9 @@ namespace lf {
 			system_data.appdata_dir[MAX_PATH - 1] = '\0';
 		} else {
 			system_data.appdata_dir[0] = '\0';
+		}
+		if (const char* appdata_override = std::getenv("LEAF_APPDATA_DIR"); appdata_override && appdata_override[0]) {
+			OverwriteAppdataDir(appdata_override);
 		}
 
 		DWORD length = GetModuleFileNameA(nullptr, system_data.install_dir, MAX_PATH);

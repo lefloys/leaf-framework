@@ -1,6 +1,6 @@
 #include "framebuffer.hpp"
 
-namespace lf {
+namespace rt {
 	handle<framebuffer> Framebuffer::Create() {
 		rt_framebuffer framebuffer = rtFramebufferCreate();
 		detail::check_rutile_error("failed to create framebuffer");
@@ -14,7 +14,7 @@ namespace lf {
 	view<texture_view> Framebuffer::ColorView(view<framebuffer> framebuffer, u32 slot) {
 		rt_texture_view value = rtFramebufferColorView(framebuffer, slot);
 		detail::check_rutile_error("failed to get framebuffer color view");
-		lf::view<texture_view> result;
+		view<texture_view> result;
 		result.value = value;
 		return result;
 	}
@@ -28,4 +28,4 @@ namespace lf {
 		rtFramebufferDepthView(framebuffer, attachment);
 		detail::check_rutile_error("failed to set framebuffer depth view");
 	}
-} // namespace lf
+} // namespace rt

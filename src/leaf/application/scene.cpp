@@ -11,6 +11,8 @@
 #include <leaf/core/profiler.hpp>
 #include <leaf/graphics/graphics.hpp>
 #include <leaf/graphics/command_buffer.hpp>
+#include <leaf/graphics/framebuffer.hpp>
+#include <leaf/graphics/texture_view.hpp>
 #include <leaf/graphics/window.hpp>
 #include <leaf/core/logging.hpp>
 #include <leaf/platform/platform.hpp>
@@ -34,13 +36,18 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <functional>
+#include <sstream>
 #include <thread>
 #include <utility>
 #include <unordered_map>
 
 namespace lf {
 	namespace {
+		using namespace rt;
+
 		string rml_escape(string_view value) {
 			string escaped;
 			escaped.reserve(value.size());
@@ -244,53 +251,53 @@ namespace lf {
 			return {};
 		}
 
-		string key_name(input_key key) {
-			if (key >= KEY_A && key <= KEY_Z) {
-				return string(1, static_cast<char>('a' + key - KEY_A));
+		string key_name(rt::input_key key) {
+			if (key >= rt::KEY_A && key <= rt::KEY_Z) {
+				return string(1, static_cast<char>('a' + key - rt::KEY_A));
 			}
-			if (key >= KEY_0 && key <= KEY_9) {
-				return string(1, static_cast<char>('0' + key - KEY_0));
+			if (key >= rt::KEY_0 && key <= rt::KEY_9) {
+				return string(1, static_cast<char>('0' + key - rt::KEY_0));
 			}
-			if (key >= KEY_F1 && key <= KEY_F24) {
-				return lf::format("f{}", static_cast<int>(key - KEY_F1 + 1));
+			if (key >= rt::KEY_F1 && key <= rt::KEY_F24) {
+				return lf::format("f{}", static_cast<int>(key - rt::KEY_F1 + 1));
 			}
 
 			switch (key) {
-			case KEY_ESCAPE: return "escape";
-			case KEY_TAB: return "tab";
-			case KEY_ENTER: return "enter";
-			case KEY_SPACE: return "space";
-			case KEY_BACKSPACE: return "backspace";
-			case KEY_DELETE: return "delete";
-			case KEY_INSERT: return "insert";
-			case KEY_HOME: return "home";
-			case KEY_END: return "end";
-			case KEY_PAGE_UP: return "page-up";
-			case KEY_PAGE_DOWN: return "page-down";
-			case KEY_LEFT_ARROW: return "left";
-			case KEY_RIGHT_ARROW: return "right";
-			case KEY_UP_ARROW: return "up";
-			case KEY_DOWN_ARROW: return "down";
-			case KEY_ALT_LEFT: return "alt-left";
-			case KEY_ALT_RIGHT: return "alt-right";
-			case KEY_CTRL_LEFT: return "ctrl-left";
-			case KEY_CTRL_RIGHT: return "ctrl-right";
-			case KEY_SHIFT_LEFT: return "shift-left";
-			case KEY_SHIFT_RIGHT: return "shift-right";
-			case KEY_SUPER_LEFT: return "super-left";
-			case KEY_SUPER_RIGHT: return "super-right";
-			case KEY_BACKQUOTE: return "backquote";
-			case KEY_BACKSLASH: return "backslash";
-			case KEY_BRACKET_LEFT: return "bracket-left";
-			case KEY_BRACKET_RIGHT: return "bracket-right";
-			case KEY_COMMA: return "comma";
-			case KEY_EQUAL: return "equal";
-			case KEY_HASH: return "hash";
-			case KEY_MINUS: return "minus";
-			case KEY_PERIOD: return "period";
-			case KEY_QUOTE: return "quote";
-			case KEY_SEMICOLON: return "semicolon";
-			case KEY_SLASH: return "slash";
+			case rt::KEY_ESCAPE: return "escape";
+			case rt::KEY_TAB: return "tab";
+			case rt::KEY_ENTER: return "enter";
+			case rt::KEY_SPACE: return "space";
+			case rt::KEY_BACKSPACE: return "backspace";
+			case rt::KEY_DELETE: return "delete";
+			case rt::KEY_INSERT: return "insert";
+			case rt::KEY_HOME: return "home";
+			case rt::KEY_END: return "end";
+			case rt::KEY_PAGE_UP: return "page-up";
+			case rt::KEY_PAGE_DOWN: return "page-down";
+			case rt::KEY_LEFT_ARROW: return "left";
+			case rt::KEY_RIGHT_ARROW: return "right";
+			case rt::KEY_UP_ARROW: return "up";
+			case rt::KEY_DOWN_ARROW: return "down";
+			case rt::KEY_ALT_LEFT: return "alt-left";
+			case rt::KEY_ALT_RIGHT: return "alt-right";
+			case rt::KEY_CTRL_LEFT: return "ctrl-left";
+			case rt::KEY_CTRL_RIGHT: return "ctrl-right";
+			case rt::KEY_SHIFT_LEFT: return "shift-left";
+			case rt::KEY_SHIFT_RIGHT: return "shift-right";
+			case rt::KEY_SUPER_LEFT: return "super-left";
+			case rt::KEY_SUPER_RIGHT: return "super-right";
+			case rt::KEY_BACKQUOTE: return "backquote";
+			case rt::KEY_BACKSLASH: return "backslash";
+			case rt::KEY_BRACKET_LEFT: return "bracket-left";
+			case rt::KEY_BRACKET_RIGHT: return "bracket-right";
+			case rt::KEY_COMMA: return "comma";
+			case rt::KEY_EQUAL: return "equal";
+			case rt::KEY_HASH: return "hash";
+			case rt::KEY_MINUS: return "minus";
+			case rt::KEY_PERIOD: return "period";
+			case rt::KEY_QUOTE: return "quote";
+			case rt::KEY_SEMICOLON: return "semicolon";
+			case rt::KEY_SLASH: return "slash";
 			default: return {};
 			}
 		}
@@ -312,7 +319,7 @@ namespace lf {
 				   (character == ' ' && normalized == "space");
 		}
 
-		bool keybind_matches_key(const Rml::Element& keybind, input_key key) {
+		bool keybind_matches_key(const Rml::Element& keybind, rt::input_key key) {
 			string requested = keybind.GetAttribute<Rml::String>("key", "");
 			if (requested.empty()) {
 				return false;
@@ -341,7 +348,7 @@ namespace lf {
 			return true;
 		}
 
-		bool keybind_matches_action(const Rml::Element& keybind, input_key key, string& out_action) {
+		bool keybind_matches_action(const Rml::Element& keybind, rt::input_key key, string& out_action) {
 			return keybind_matches_action_name(keybind, key_name(key), out_action);
 		}
 
@@ -492,85 +499,85 @@ namespace lf {
 			return {};
 		}
 
-		Rml::Input::KeyIdentifier rml_key(input_key key) {
-			if (key >= KEY_A && key <= KEY_Z) return static_cast<Rml::Input::KeyIdentifier>(Rml::Input::KI_A + key - KEY_A);
-			if (key >= KEY_0 && key <= KEY_9) return static_cast<Rml::Input::KeyIdentifier>(Rml::Input::KI_0 + key - KEY_0);
-			if (key >= KEY_NUMPAD_0 && key <= KEY_NUMPAD_9) return static_cast<Rml::Input::KeyIdentifier>(Rml::Input::KI_NUMPAD0 + key - KEY_NUMPAD_0);
-			if (key >= KEY_F1 && key <= KEY_F24) return static_cast<Rml::Input::KeyIdentifier>(Rml::Input::KI_F1 + key - KEY_F1);
+		Rml::Input::KeyIdentifier rml_key(rt::input_key key) {
+			if (key >= rt::KEY_A && key <= rt::KEY_Z) return static_cast<Rml::Input::KeyIdentifier>(Rml::Input::KI_A + key - rt::KEY_A);
+			if (key >= rt::KEY_0 && key <= rt::KEY_9) return static_cast<Rml::Input::KeyIdentifier>(Rml::Input::KI_0 + key - rt::KEY_0);
+			if (key >= rt::KEY_NUMPAD_0 && key <= rt::KEY_NUMPAD_9) return static_cast<Rml::Input::KeyIdentifier>(Rml::Input::KI_NUMPAD0 + key - rt::KEY_NUMPAD_0);
+			if (key >= rt::KEY_F1 && key <= rt::KEY_F24) return static_cast<Rml::Input::KeyIdentifier>(Rml::Input::KI_F1 + key - rt::KEY_F1);
 			switch (key) {
-			case KEY_ESCAPE: return Rml::Input::KI_ESCAPE;
-			case KEY_TAB: return Rml::Input::KI_TAB;
-			case KEY_ENTER: return Rml::Input::KI_RETURN;
-			case KEY_SPACE: return Rml::Input::KI_SPACE;
-			case KEY_BACKSPACE: return Rml::Input::KI_BACK;
-			case KEY_DELETE: return Rml::Input::KI_DELETE;
-			case KEY_INSERT: return Rml::Input::KI_INSERT;
-			case KEY_HOME: return Rml::Input::KI_HOME;
-			case KEY_END: return Rml::Input::KI_END;
-			case KEY_PAGE_UP: return Rml::Input::KI_PRIOR;
-			case KEY_PAGE_DOWN: return Rml::Input::KI_NEXT;
-			case KEY_LEFT_ARROW: return Rml::Input::KI_LEFT;
-			case KEY_RIGHT_ARROW: return Rml::Input::KI_RIGHT;
-			case KEY_UP_ARROW: return Rml::Input::KI_UP;
-			case KEY_DOWN_ARROW: return Rml::Input::KI_DOWN;
-			case KEY_ALT_LEFT: return Rml::Input::KI_LMENU;
-			case KEY_ALT_RIGHT: return Rml::Input::KI_RMENU;
-			case KEY_CTRL_LEFT: return Rml::Input::KI_LCONTROL;
-			case KEY_CTRL_RIGHT: return Rml::Input::KI_RCONTROL;
-			case KEY_SHIFT_LEFT: return Rml::Input::KI_LSHIFT;
-			case KEY_SHIFT_RIGHT: return Rml::Input::KI_RSHIFT;
-			case KEY_SUPER_LEFT: return Rml::Input::KI_LMETA;
-			case KEY_SUPER_RIGHT: return Rml::Input::KI_RMETA;
-			case KEY_BACKQUOTE: return Rml::Input::KI_OEM_3;
-			case KEY_BACKSLASH: return Rml::Input::KI_OEM_5;
-			case KEY_BRACKET_LEFT: return Rml::Input::KI_OEM_4;
-			case KEY_BRACKET_RIGHT: return Rml::Input::KI_OEM_6;
-			case KEY_COMMA: return Rml::Input::KI_OEM_COMMA;
-			case KEY_EQUAL: return Rml::Input::KI_OEM_PLUS;
-			case KEY_MINUS: return Rml::Input::KI_OEM_MINUS;
-			case KEY_PERIOD: return Rml::Input::KI_OEM_PERIOD;
-			case KEY_QUOTE: return Rml::Input::KI_OEM_7;
-			case KEY_SEMICOLON: return Rml::Input::KI_OEM_1;
-			case KEY_SLASH: return Rml::Input::KI_OEM_2;
+			case rt::KEY_ESCAPE: return Rml::Input::KI_ESCAPE;
+			case rt::KEY_TAB: return Rml::Input::KI_TAB;
+			case rt::KEY_ENTER: return Rml::Input::KI_RETURN;
+			case rt::KEY_SPACE: return Rml::Input::KI_SPACE;
+			case rt::KEY_BACKSPACE: return Rml::Input::KI_BACK;
+			case rt::KEY_DELETE: return Rml::Input::KI_DELETE;
+			case rt::KEY_INSERT: return Rml::Input::KI_INSERT;
+			case rt::KEY_HOME: return Rml::Input::KI_HOME;
+			case rt::KEY_END: return Rml::Input::KI_END;
+			case rt::KEY_PAGE_UP: return Rml::Input::KI_PRIOR;
+			case rt::KEY_PAGE_DOWN: return Rml::Input::KI_NEXT;
+			case rt::KEY_LEFT_ARROW: return Rml::Input::KI_LEFT;
+			case rt::KEY_RIGHT_ARROW: return Rml::Input::KI_RIGHT;
+			case rt::KEY_UP_ARROW: return Rml::Input::KI_UP;
+			case rt::KEY_DOWN_ARROW: return Rml::Input::KI_DOWN;
+			case rt::KEY_ALT_LEFT: return Rml::Input::KI_LMENU;
+			case rt::KEY_ALT_RIGHT: return Rml::Input::KI_RMENU;
+			case rt::KEY_CTRL_LEFT: return Rml::Input::KI_LCONTROL;
+			case rt::KEY_CTRL_RIGHT: return Rml::Input::KI_RCONTROL;
+			case rt::KEY_SHIFT_LEFT: return Rml::Input::KI_LSHIFT;
+			case rt::KEY_SHIFT_RIGHT: return Rml::Input::KI_RSHIFT;
+			case rt::KEY_SUPER_LEFT: return Rml::Input::KI_LMETA;
+			case rt::KEY_SUPER_RIGHT: return Rml::Input::KI_RMETA;
+			case rt::KEY_BACKQUOTE: return Rml::Input::KI_OEM_3;
+			case rt::KEY_BACKSLASH: return Rml::Input::KI_OEM_5;
+			case rt::KEY_BRACKET_LEFT: return Rml::Input::KI_OEM_4;
+			case rt::KEY_BRACKET_RIGHT: return Rml::Input::KI_OEM_6;
+			case rt::KEY_COMMA: return Rml::Input::KI_OEM_COMMA;
+			case rt::KEY_EQUAL: return Rml::Input::KI_OEM_PLUS;
+			case rt::KEY_MINUS: return Rml::Input::KI_OEM_MINUS;
+			case rt::KEY_PERIOD: return Rml::Input::KI_OEM_PERIOD;
+			case rt::KEY_QUOTE: return Rml::Input::KI_OEM_7;
+			case rt::KEY_SEMICOLON: return Rml::Input::KI_OEM_1;
+			case rt::KEY_SLASH: return Rml::Input::KI_OEM_2;
 			default: return Rml::Input::KI_UNKNOWN;
 			}
 		}
 
-		int rml_modifiers(input_modifiers modifiers) {
+		int rml_modifiers(rt::input_modifiers modifiers) {
 			int rml = 0;
-			if (modifiers.has(INPUT_MODIFIER_CTRL)) rml |= Rml::Input::KM_CTRL;
-			if (modifiers.has(INPUT_MODIFIER_SHIFT)) rml |= Rml::Input::KM_SHIFT;
-			if (modifiers.has(INPUT_MODIFIER_ALT)) rml |= Rml::Input::KM_ALT;
-			if (modifiers.has(INPUT_MODIFIER_SUPER)) rml |= Rml::Input::KM_META;
+			if (modifiers.has(rt::INPUT_MODIFIER_CTRL)) rml |= Rml::Input::KM_CTRL;
+			if (modifiers.has(rt::INPUT_MODIFIER_SHIFT)) rml |= Rml::Input::KM_SHIFT;
+			if (modifiers.has(rt::INPUT_MODIFIER_ALT)) rml |= Rml::Input::KM_ALT;
+			if (modifiers.has(rt::INPUT_MODIFIER_SUPER)) rml |= Rml::Input::KM_META;
 			return rml;
 		}
 
-		int rml_button(input_button button) {
+		int rml_button(rt::input_button button) {
 			switch (button) {
-			case BUTTON_LEFT: return 0;
-			case BUTTON_RIGHT: return 1;
-			case BUTTON_MIDDLE: return 2;
-			default: return static_cast<int>(button - BUTTON_1);
+			case rt::BUTTON_LEFT: return 0;
+			case rt::BUTTON_RIGHT: return 1;
+			case rt::BUTTON_MIDDLE: return 2;
+			default: return static_cast<int>(button - rt::BUTTON_1);
 			}
 		}
 
-		bool key_generates_text(input_key key) {
-			return (key >= KEY_A && key <= KEY_Z) ||
-				   (key >= KEY_0 && key <= KEY_9) ||
-				   (key >= KEY_NUMPAD_0 && key <= KEY_NUMPAD_9) ||
-				   key == KEY_SPACE || key == KEY_BACKQUOTE || key == KEY_BACKSLASH ||
-				   key == KEY_BRACKET_LEFT || key == KEY_BRACKET_RIGHT || key == KEY_COMMA ||
-				   key == KEY_EQUAL || key == KEY_MINUS || key == KEY_PERIOD ||
-				   key == KEY_QUOTE || key == KEY_SEMICOLON || key == KEY_SLASH;
+		bool key_generates_text(rt::input_key key) {
+			return (key >= rt::KEY_A && key <= rt::KEY_Z) ||
+				   (key >= rt::KEY_0 && key <= rt::KEY_9) ||
+				   (key >= rt::KEY_NUMPAD_0 && key <= rt::KEY_NUMPAD_9) ||
+				   key == rt::KEY_SPACE || key == rt::KEY_BACKQUOTE || key == rt::KEY_BACKSLASH ||
+				   key == rt::KEY_BRACKET_LEFT || key == rt::KEY_BRACKET_RIGHT || key == rt::KEY_COMMA ||
+				   key == rt::KEY_EQUAL || key == rt::KEY_MINUS || key == rt::KEY_PERIOD ||
+				   key == rt::KEY_QUOTE || key == rt::KEY_SEMICOLON || key == rt::KEY_SLASH;
 		}
 
-		bool text_key_should_skip_control_event(input_key key, input_modifiers modifiers) {
-			if (modifiers.has(INPUT_MODIFIER_CTRL) || modifiers.has(INPUT_MODIFIER_ALT) || modifiers.has(INPUT_MODIFIER_SUPER)) return false;
+		bool text_key_should_skip_control_event(rt::input_key key, rt::input_modifiers modifiers) {
+			if (modifiers.has(rt::INPUT_MODIFIER_CTRL) || modifiers.has(rt::INPUT_MODIFIER_ALT) || modifiers.has(rt::INPUT_MODIFIER_SUPER)) return false;
 			return key_generates_text(key);
 		}
 
-		Rml::Context& create_scene_context(string_view context_name, view<window> display) {
-			dim2<u32> size = Window::Size(display);
+		Rml::Context& create_scene_context(string_view context_name, rt::view<rt::window> display) {
+			dim2<u32> size = rt::Window::Size(display);
 			Rml::Context* context = Rml::CreateContext(Rml::String(context_name), { static_cast<int>(size.width), static_cast<int>(size.height) });
 			if (!context) {
 				throw runtime_exception(lf::format("failed to create RML context '{}'", context_name));
@@ -586,7 +593,7 @@ namespace lf {
 	} // namespace
 
 	Scene::Scene()
-		: Scene(Window::Create()) {}
+		: Scene(rt::Window::Create()) {}
 
 	void Scene::launch(
 		string_view initial,
@@ -595,7 +602,7 @@ namespace lf {
 		span<const FixedUpdater> fixed_updaters
 	) {
 		if (!display) {
-			display.reset(Window::Create());
+			display.reset(rt::Window::Create());
 		}
 		if (!context) {
 			owned_context_name = next_scene_context_name();
@@ -604,17 +611,17 @@ namespace lf {
 		this->script_installers.assign(script_installers.begin(), script_installers.end());
 		this->fixed_updaters.assign(fixed_updaters.begin(), fixed_updaters.end());
 		load(initial, args);
-		// Start the render and fixed-update threads BEFORE Window::Show so the
+		// Start the render and fixed-update threads BEFORE rt::Window::Show so the
 		// first visible frame is already a real rendered frame. Showing the
 		// window first leaves a window-of-time where the OS composites whatever
 		// the framebuffer happened to contain (typically black), which was the
 		// "startup is just black for a moment" symptom.
 		start_threads();
-		Window::Show(display);
+		rt::Window::Show(display);
 	}
 
 	Scene::Scene(
-		handle<window> display
+		rt::handle<rt::window> display
 	)
 		: display(std::move(display)),
 		  owned_context_name(next_scene_context_name()) {
@@ -629,7 +636,7 @@ namespace lf {
 	}
 
 	void Scene::launch(
-		handle<window> display,
+		rt::handle<rt::window> display,
 		string_view initial,
 		string_view args,
 		span<const ScriptInstaller> script_installers,
@@ -644,24 +651,24 @@ namespace lf {
 		this->fixed_updaters.assign(fixed_updaters.begin(), fixed_updaters.end());
 		load(initial, args);
 		// See the no-display launch overload above for why threads start before
-		// Window::Show — first visible frame must be a real rendered frame.
+		// rt::Window::Show — first visible frame must be a real rendered frame.
 		start_threads();
-		Window::Show(this->display);
+		rt::Window::Show(this->display);
 	}
 
-	unique<window> Scene::release_window() {
+	rt::unique<rt::window> Scene::release_window() {
 		// Stop the render + fixed-update threads BEFORE moving the window out.
-		// Both threads dereference display every frame (Window::ShouldClose,
-		// Window::BeginFrame, etc.) — if we let the move happen while they
+		// Both threads dereference display every frame (rt::Window::ShouldClose,
+		// rt::Window::BeginFrame, etc.) — if we let the move happen while they
 		// were still running, their next iteration would see an empty unique
 		// and crash on a null window_t pointer. This was the cause of the
-		// "Access violation reading 0x0 in Window::ShouldClose" at startup
+		// "Access violation reading 0x0 in rt::Window::ShouldClose" at startup
 		// handoff from the loading scene to run_main's gameplay scene.
 		stop();
 		return std::move(display);
 	}
 
-	view<window> Scene::window_view() const {
+	rt::view<rt::window> Scene::window_view() const {
 		return display;
 	}
 
@@ -723,7 +730,7 @@ namespace lf {
 
 	Scene::Scene(
 		Rml::Context& context,
-		handle<window> display
+		rt::handle<rt::window> display
 	)
 		: context(&context),
 		  display(std::move(display)) {}
@@ -842,13 +849,13 @@ namespace lf {
 			}
 			string_view value = button.value_or("left");
 			if (value == "left") {
-				return Window::MouseDown(this->display, BUTTON_LEFT);
+				return rt::Window::MouseDown(this->display, rt::BUTTON_LEFT);
 			}
 			if (value == "right") {
-				return Window::MouseDown(this->display, BUTTON_RIGHT);
+				return rt::Window::MouseDown(this->display, rt::BUTTON_RIGHT);
 			}
 			if (value == "middle") {
-				return Window::MouseDown(this->display, BUTTON_MIDDLE);
+				return rt::Window::MouseDown(this->display, rt::BUTTON_MIDDLE);
 			}
 			return false;
 		});
@@ -1042,7 +1049,7 @@ namespace lf {
 		};
 		game["exit"] = [this](sol::object) {
 			if (this->display) {
-				Window::SetShouldClose(this->display, true);
+				rt::Window::SetShouldClose(this->display, true);
 			}
 		};
 		// The `scene` helper table is exposed as a top-level Lua global rather
@@ -1335,12 +1342,12 @@ namespace lf {
 		});
 
 		lua.set_function("fullscreen", [this]() -> bool {
-			return this->display ? Window::Fullscreen(this->display) : false;
+			return this->display ? rt::Window::Fullscreen(this->display) : false;
 		});
 
 		lua.set_function("set_fullscreen", [this](bool fullscreen) {
 			if (this->display) {
-				Window::RequestFullscreen(this->display, fullscreen);
+				rt::Window::RequestFullscreen(this->display, fullscreen);
 			}
 		});
 
@@ -1379,10 +1386,10 @@ namespace lf {
 				return false;
 			}
 			if (this->display) {
-				Window::SetVsync(this->display, vsync);
+				rt::Window::SetVsync(this->display, vsync);
 			}
 			if (fullscreen_changed && this->display) {
-				Window::RequestFullscreen(this->display, fullscreen);
+				rt::Window::RequestFullscreen(this->display, fullscreen);
 			}
 			return true;
 		});
@@ -1395,6 +1402,16 @@ namespace lf {
 		script_events = std::make_unique<ScriptEventListener>(*this);
 		run_inline_scripts(initial);
 		bind_script_events();
+		if (const char* automation_path = std::getenv("LEAF_UI_AUTOMATION")) {
+			std::ifstream file(automation_path, std::ios::binary);
+			if (file) {
+				std::ostringstream buffer;
+				buffer << file.rdbuf();
+				run_script(buffer.str(), automation_path);
+			} else {
+				log::Error("{}", lf::format("[scene] failed to open UI automation script '{}'", automation_path));
+			}
+		}
 		document->Show();
 	}
 
@@ -1690,13 +1707,13 @@ end
 
 function ui_wait_element(id, action, timeout_seconds)
 	return ui_wait_until(function()
-		return element_exists(id)
+		return scene:element_exists(id)
 	end, action, timeout_seconds)
 end
 
 function ui_wait_not_element(id, action, timeout_seconds)
 	return ui_wait_until(function()
-		return not element_exists(id)
+		return not scene:element_exists(id)
 	end, action, timeout_seconds)
 end
 
@@ -1929,7 +1946,7 @@ end
 		std::unique_lock lock(scene_mutex);
 		process_input();
 		if (run_pending_scripts() && pending_load_request) {
-			return !Window::ShouldClose(display);
+			return !rt::Window::ShouldClose(display);
 		}
 
 		auto now = std::chrono::steady_clock::now();
@@ -1938,7 +1955,7 @@ end
 
 		sol::object update_object = lua["update"];
 		if (update_object.get_type() != sol::type::function) {
-			return !Window::ShouldClose(display);
+			return !rt::Window::ShouldClose(display);
 		}
 
 		sol::protected_function update = update_object;
@@ -1947,10 +1964,10 @@ end
 			sol::error error = result;
 			log::Error("{}", lf::format("[scene] {}", error.what()));
 		}
-		return !Window::ShouldClose(display);
+		return !rt::Window::ShouldClose(display);
 	}
 
-	void Scene::input(const input_event& event) {
+	void Scene::input(const rt::input_event& event) {
 		if (!document) {
 			return;
 		}
@@ -1972,10 +1989,10 @@ end
 				}
 
 				string event_script = lua_event_table("mousescroll", {
-					{ "mouse_x", lua_event_number(event.position.x) },
-					{ "mouse_y", lua_event_number(event.position.y) },
-					{ "scroll_x", lua_event_number(event.delta.x) },
-					{ "scroll_y", lua_event_number(event.delta.y) },
+					std::pair<lf::string_view, lf::string>{ lf::string_view("mouse_x"), lua_event_number(event.position.x) },
+					std::pair<lf::string_view, lf::string>{ lf::string_view("mouse_y"), lua_event_number(event.position.y) },
+					std::pair<lf::string_view, lf::string>{ lf::string_view("scroll_x"), lua_event_number(event.delta.x) },
+					std::pair<lf::string_view, lf::string>{ lf::string_view("scroll_y"), lua_event_number(event.delta.y) },
 				});
 				event_script += script;
 				pending_scripts.push_back({ "input-scroll", std::move(event_script) });
@@ -2003,7 +2020,7 @@ end
 			} else if (event.state == input_state::Released) {
 				attribute = "keyup";
 			}
-			event_key = key_name(static_cast<input_key>(event.control.value));
+			event_key = key_name(static_cast<rt::input_key>(event.control.value));
 		}
 
 		if (attribute.empty()) {
@@ -2042,9 +2059,9 @@ end
 					event_key = text_key_name(event.character);
 				}
 			} else {
-				matched = keybind_matches_action(*keybind, static_cast<input_key>(event.control.value), event_action);
+				matched = keybind_matches_action(*keybind, static_cast<rt::input_key>(event.control.value), event_action);
 				if (!matched) {
-					matched = keybind_matches_key(*keybind, static_cast<input_key>(event.control.value));
+					matched = keybind_matches_key(*keybind, static_cast<rt::input_key>(event.control.value));
 				}
 			}
 			if (!matched) {
@@ -2075,20 +2092,20 @@ end
 			return;
 		}
 
-		std::vector<input_event> events = Window::InputEvents(display);
-		for (const input_event& event : events) {
+		std::vector<rt::input_event> events = rt::Window::InputEvents(display);
+		for (const rt::input_event& event : events) {
 			switch (event.type) {
 			case INPUT_EVENT_CONTROL:
 				if (event.control.type == INPUT_CONTROL_BUTTON) {
-					input_button button = static_cast<input_button>(event.control.value);
+					rt::input_button button = static_cast<rt::input_button>(event.control.value);
 					if (event.state == input_state::Pressed) context->ProcessMouseButtonDown(rml_button(button), rml_modifiers(event.modifiers));
 					if (event.state == input_state::Released) context->ProcessMouseButtonUp(rml_button(button), rml_modifiers(event.modifiers));
 				} else if (event.control.type == INPUT_CONTROL_KEY) {
-					input_key input_key = static_cast<lf::input_key>(event.control.value);
-					Rml::Input::KeyIdentifier key = rml_key(input_key);
+					rt::input_key key_code = static_cast<rt::input_key>(event.control.value);
+					Rml::Input::KeyIdentifier key = rml_key(key_code);
 					if (key != Rml::Input::KI_UNKNOWN) {
 						if (event.state == input_state::Pressed) {
-							if (input_key == KEY_V && (event.modifiers.has(INPUT_MODIFIER_CTRL) || event.modifiers.has(INPUT_MODIFIER_SUPER))) {
+							if (key_code == rt::KEY_V && (event.modifiers.has(rt::INPUT_MODIFIER_CTRL) || event.modifiers.has(rt::INPUT_MODIFIER_SUPER))) {
 								string clipboard_text = platform_clipboard_text();
 								string filtered_text = filter_text_input(clipboard_text);
 								if (filtered_text != clipboard_text) {
@@ -2096,14 +2113,14 @@ end
 									break;
 								}
 							}
-							if (!(has_text_input_focus() && text_key_should_skip_control_event(input_key, event.modifiers))) {
+							if (!(has_text_input_focus() && text_key_should_skip_control_event(key_code, event.modifiers))) {
 								context->ProcessKeyDown(key, rml_modifiers(event.modifiers));
 							}
-							if ((input_key == KEY_ENTER || input_key == KEY_NUMPAD_ENTER) && accepts_text_input('\n')) {
+							if ((key_code == rt::KEY_ENTER || key_code == rt::KEY_NUMPAD_ENTER) && accepts_text_input('\n')) {
 								context->ProcessTextInput('\n');
 							}
 						} else if (event.state == input_state::Released) {
-							if (!(has_text_input_focus() && text_key_should_skip_control_event(input_key, event.modifiers))) {
+							if (!(has_text_input_focus() && text_key_should_skip_control_event(key_code, event.modifiers))) {
 								context->ProcessKeyUp(key, rml_modifiers(event.modifiers));
 							}
 						}
@@ -2111,7 +2128,12 @@ end
 				}
 				break;
 			case INPUT_EVENT_POINTER_MOVE:
-				context->ProcessMouseMove(static_cast<int>(event.position.x), static_cast<int>(event.position.y), rml_modifiers(event.modifiers));
+				{
+					int mouse_x = static_cast<int>(event.position.x);
+					int mouse_y = static_cast<int>(event.position.y);
+					int modifiers = rml_modifiers(event.modifiers);
+					context->ProcessMouseMove(mouse_x, mouse_y, modifiers);
+				}
 				break;
 			case INPUT_EVENT_POINTER_ENTER:
 				if (event.state == input_state::Up) {
@@ -2138,7 +2160,7 @@ end
 			}
 			input(event);
 		}
-		Window::UpdateInput(display);
+		rt::Window::UpdateInput(display);
 	}
 
 	void Scene::resize_context() {
@@ -2149,14 +2171,14 @@ end
 		if (!context) {
 			return;
 		}
-		dim2<u32> window_size = Window::Size(display);
+		dim2<u32> window_size = rt::Window::Size(display);
 		Rml::Vector2i context_size = context->GetDimensions();
 		if (context_size.x != static_cast<int>(window_size.width) || context_size.y != static_cast<int>(window_size.height)) {
 			context->SetDimensions({ static_cast<int>(window_size.width), static_cast<int>(window_size.height) });
 		}
 	}
 
-	void Scene::render(view<command_buffer> cmd) {
+	void Scene::render(rt::view<rt::command_buffer> cmd) {
 		if (!document) {
 			return;
 		}
@@ -2166,22 +2188,30 @@ end
 		}
 		resize_context();
 		context->Update();
-		dim2<u32> window_size = Window::Size(display);
-		rml_renderer().begin(cmd, window_size);
+		dim2<u32> render_size = rt::Window::Size(display);
+		rt::view<rt::framebuffer> framebuffer = rt::Window::CurrentFramebuffer(window_view());
+		if (framebuffer) {
+			rt::view<rt::texture_view> color = rt::Framebuffer::ColorView(framebuffer, 0);
+			rt_extent_3d extent = color ? rt::TextureView::Extent(color) : rt_extent_3d{};
+			if (extent.width && extent.height) {
+				render_size = { extent.width, extent.height };
+			}
+		}
+		rml_renderer().begin(cmd, render_size);
 		context->Render();
 		rml_renderer().end();
 	}
 
 	bool Scene::render_frame() {
-		if (!Window::Drawable(window_view())) {
+		if (!rt::Window::Drawable(window_view())) {
 			std::this_thread::yield();
-			return !Window::ShouldClose(window_view());
+			return !rt::Window::ShouldClose(window_view());
 		}
 
-		handle<queue> graphics_queue = Queue::Query(QueueCapability::Graphics);
-		view<command_buffer> cmd = Window::BeginFrame(window_view(), graphics_queue);
+		rt::handle<rt::queue> graphics_queue = rt::Queue::Query(rt::QueueCapability::Graphics);
+		rt::view<rt::command_buffer> cmd = rt::Window::BeginFrame(window_view(), graphics_queue);
 		if (!cmd) {
-			return !Window::ShouldClose(window_view());
+			return !rt::Window::ShouldClose(window_view());
 		}
 		{
 			// Only RmlUi/DOM work needs the scene lock. Swapchain acquire and
@@ -2190,8 +2220,8 @@ end
 			std::unique_lock lock(scene_mutex);
 			render(cmd);
 		}
-		Window::EndFrame(window_view());
-		return !Window::ShouldClose(window_view());
+		rt::Window::EndFrame(window_view());
+		return !rt::Window::ShouldClose(window_view());
 	}
 
 	void Scene::fixed_update() {

@@ -5,7 +5,7 @@
 
 #include <mutex>
 
-namespace lf {
+namespace rt {
 	enum class QueueCapability : u08 {
 		Transfer,
 		Compute,
@@ -18,11 +18,11 @@ namespace lf {
 		timepoint Submit(view<queue> queue, view<command_buffer> command_buffer);
 		timepoint Flush(view<queue> queue);
 	} // namespace Queue
-
+	// @GPT : again why the fuck... do you have these lock queue things. thats just stupid...
 	namespace detail {
 		std::unique_lock<std::mutex> lock_queue(view<queue> queue);
 		std::unique_lock<std::mutex> lock_queue(rt_queue queue);
 	}
-} // namespace lf
+} // namespace rt
 
 #endif /* LEAF_GRAPHICS_QUEUE_HPP */

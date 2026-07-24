@@ -24,7 +24,7 @@ namespace lf {
 	class RmlRenderInterface : public Rml::RenderInterface {
 	public:
 		struct CustomDrawContext {
-			view<command_buffer> commands;
+			rt::view<rt::command_buffer> commands;
 			dim2<u32> viewport_size{};
 			int left = 0;
 			int top = 0;
@@ -36,7 +36,7 @@ namespace lf {
 		RmlRenderInterface();
 		~RmlRenderInterface() override;
 
-		void begin(view<command_buffer> command_buffer, dim2<u32> viewport_size);
+		void begin(rt::view<rt::command_buffer> command_buffer, dim2<u32> viewport_size);
 		void end();
 		void flush_released_resources();
 		void QueueCustomDraw(CustomDraw draw);
@@ -68,15 +68,15 @@ namespace lf {
 		void draw_batch(const vector<UiVertex>& vertices, TextureData* texture, int left, int top, int right, int bottom);
 		void collect_garbage();
 
-		handle<queue> upload_queue;
-		view<command_buffer> current_command_buffer;
+		rt::handle<rt::queue> upload_queue;
+		rt::view<rt::command_buffer> current_command_buffer;
 		dim2<u32> current_framebuffer_size{};
-		unique<graphics_program> program;
-		vector<unique<buffer>> uniform_buffers;
+		rt::unique<rt::graphics_program> program;
+		vector<rt::unique<rt::buffer>> uniform_buffers;
 		usize uniform_buffer_index = 0;
 		usize batch_vertex_buffer_index = 0;
-		lf::uniform_location uniform_location{};
-		lf::uniform_location texture_location{};
+		rt::uniform_location uniform_location{};
+		rt::uniform_location texture_location{};
 		TextureData* white_texture = nullptr;
 		bool scissor_enabled = false;
 		bool program_bound = false;
@@ -84,7 +84,7 @@ namespace lf {
 		rt_texture_view bound_texture = RT_NULL_HANDLE;
 		vector<QueuedGeometry> queued_geometry;
 		vector<UiVertex> batch_vertices;
-		vector<unique<buffer>> batch_vertex_buffers;
+		vector<rt::unique<rt::buffer>> batch_vertex_buffers;
 		vector<u64> batch_vertex_buffer_sizes;
 		vector<Geometry*> retired_geometry;
 		vector<TextureData*> retired_textures;

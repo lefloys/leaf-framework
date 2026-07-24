@@ -2,12 +2,43 @@
 #define LEAF_GRAPHICS_RESOURCE_HPP
 
 #include <leaf/core/error.hpp>
+#include <leaf/core/filesystem.hpp>
+#include <leaf/core/logging.hpp>
+#include <leaf/core/span.hpp>
+#include <leaf/core/string.hpp>
+#include <leaf/core/types.hpp>
+#include <leaf/core/vector.hpp>
+#include <leaf/math/dim.hpp>
+#include <leaf/math/pos.hpp>
 
 #include <rutile.h>
 
 #include <type_traits>
 
-namespace lf {
+namespace rt {
+	namespace fs = lf::fs;
+	namespace log = lf::log;
+	// @GPT : why not using namespace lf; instead of this. its just a waste of time and space
+	using lf::byte;
+	using lf::dim2;
+	using lf::error;
+	using lf::error_code;
+	using lf::generic_errc;
+	using lf::graphics_errc;
+	using lf::pos2;
+	using lf::runtime_exception;
+	using lf::span;
+	using lf::string;
+	using lf::string_view;
+	using lf::vector;
+	// @GPT : but theyre already in the global namespace. why are you doing this. its just a waste of time and space
+	using ::f32;
+	using ::i32;
+	using ::u08;
+	using ::u16;
+	using ::u32;
+	using ::u64;
+	using ::usize;
 
 	/*!
 	** @brief Opaque Rutile buffer resource.
@@ -310,6 +341,6 @@ namespace lf {
 		using native_handle = rt_queue;
 	};
 
-} // namespace lf
+} // namespace rt
 
 #endif /* LEAF_GRAPHICS_RESOURCE_HPP */

@@ -1078,21 +1078,36 @@ end
 
 		progress.set("stage", "loading-assets", mod_stage_progress(4));
 		progress.set("process", "building-texture-atlas", PROGRESS_OF(0, 1));
+		auto atlas_progress_scope = progress.scope("loading-assets", 6);
+		atlas_progress_scope.major("loading-assets", 4);
+		bool atlas_completed = false;
 		if (progress.cancelled()) {
 			return CANCELLED_ERROR;
 		}
-		if (graphics_available()) {
-			auto atlas_progress = [&progress](size_t completed, size_t total) {
+		if (rt::graphics_available()) {
+			string atlas_process = "building-texture-atlas";
+			auto atlas_progress = [&progress, &atlas_process, &atlas_progress_scope](size_t completed, size_t total) {
 				const f32 value = total == 0 ? 1.0f : static_cast<f32>(completed) / static_cast<f32>(total);
-				progress.set("process", "building-texture-atlas", value);
+				atlas_progress_scope.minor(atlas_process, value);
 			};
-			if (error err = TexturePrototype::BuildAtlas(Queue::Query(QueueCapability::Graphics), atlas_progress)) {
+			auto atlas_phase = [&progress, &atlas_process, &atlas_progress_scope](string_view phase) {
+				atlas_process = string(phase);
+				atlas_progress_scope.minor(phase, 0.0f);
+				if (phase == "loading-texture-atlas") {
+					atlas_progress_scope.major("loading-assets", 5);
+				}
+			};
+			if (error err = TexturePrototype::BuildAtlas(rt::Queue::Query(rt::QueueCapability::Graphics), atlas_progress, atlas_phase)) {
 				return err.add_context("building texture atlas");
 			}
+			atlas_progress_scope.major("loading-assets", 6);
+			atlas_completed = true;
 		} else {
 			log::Debug("{}", "[mod-loader] graphics backend not loaded, skipping texture atlas build");
 		}
-		progress.set("stage", "loading-assets", mod_stage_progress(5));
+		if (!atlas_completed) {
+			progress.set("stage", "loading-assets", mod_stage_progress(5));
+		}
 		progress.set("process", "assets-ready", PROGRESS_OF(1, 1));
 
 		log::Info("{}", "[mod-loader] linking prototypes");
@@ -1182,5 +1197,3 @@ end
 		detail::loaded_settings.clear();
 	}
 } // namespace lf
-
-

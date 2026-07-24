@@ -2,12 +2,12 @@
 #define LEAF_GRAPHICS_TIMEPOINT_HPP
 
 #include <leaf/graphics/resource.hpp>
-
-namespace lf {
+// @GPT : ffs namespaces ive said it so many times
+namespace rt {
 	namespace Timepoint {
 		void Wait(timepoint timepoint);
 		bool Reached(timepoint timepoint);
 	} // namespace Timepoint
-} // namespace lf
+} // namespace rt
 
 #endif /* LEAF_GRAPHICS_TIMEPOINT_HPP */

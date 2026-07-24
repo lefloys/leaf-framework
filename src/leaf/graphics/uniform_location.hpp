@@ -3,10 +3,10 @@
 
 #include <leaf/graphics/resource.hpp>
 
-namespace lf {
-
+namespace rt {
+	// @GPT : ???? useless ????
 	namespace UniformLocation {}
 
-} // namespace lf
+} // namespace rt
 
 #endif /* LEAF_GRAPHICS_UNIFORM_LOCATION_HPP */

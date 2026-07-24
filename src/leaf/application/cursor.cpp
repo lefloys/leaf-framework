@@ -6,12 +6,12 @@
 #include "leaf/script/prototypes/cursor.hpp"
 
 namespace lf {
-	bool SetCursorPrototype(view<window> display, string_view name) {
+	bool SetCursorPrototype(rt::view<rt::window> display, string_view name) {
 		if (!display) {
 			return false;
 		}
 		if (name.empty() || name == "default") {
-			Window::ApplyCursor(display, {}, nullptr);
+			rt::Window::ApplyCursor(display, {}, nullptr);
 			return true;
 		}
 
@@ -25,7 +25,7 @@ namespace lf {
 			log::Warning("{}", lf::format("[cursor] cursor prototype '{}' not loaded", name));
 			return false;
 		}
-		Window::ApplyCursor(display, name, cursor.handle);
+		rt::Window::ApplyCursor(display, name, reinterpret_cast<rt::PlatformCursor*>(cursor.handle));
 		return true;
 	}
 }

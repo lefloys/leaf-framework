@@ -2,7 +2,9 @@
 
 #include <utility>
 
-namespace lf::detail {
+namespace rt::detail {
+	// @GPT : Why so many to rutile. why dont you just assign the enum values to the rutile values. like "Unknown = RT_FORMAT_UNKNOWN" etc.
+	// That way we dont need any of these ffs.
 	rt_format to_rutile(Format format) {
 		switch (format) {
 		case Format::Rg32Float: return RT_RG32_SFLOAT;
@@ -17,6 +19,7 @@ namespace lf::detail {
 		case CullMode::None: return RT_CULL_NONE;
 		case CullMode::Front: return RT_CULL_FRONT;
 		case CullMode::Back: return RT_CULL_BACK;
+			// @GPT : why not default std::unreachable. why later
 		}
 		std::unreachable();
 	}
@@ -34,11 +37,12 @@ namespace lf::detail {
 		case FillMode::Solid: return RT_FILL_SOLID;
 		case FillMode::Wireframe: return RT_FILL_WIREFRAME;
 		}
+		// @GPT : same fucking thing.
 		std::unreachable();
 	}
-} // namespace lf::detail
+} // namespace rt::detail
 
-namespace lf {
+namespace rt {
 	handle<graphics_program> GraphicsProgram::Create() {
 		rt_graphics_program program = rtGraphicsProgramCreate();
 		detail::check_rutile_error("failed to create graphics program");
@@ -97,4 +101,4 @@ namespace lf {
 		return location;
 	}
 
-} // namespace lf
+} // namespace rt

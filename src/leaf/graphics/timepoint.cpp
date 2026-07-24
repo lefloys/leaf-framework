@@ -2,7 +2,7 @@
 
 #include "queue.hpp"
 
-namespace lf {
+namespace rt {
 	void Timepoint::Wait(timepoint timepoint) {
 		rtTimepointWait(timepoint);
 		detail::check_rutile_error("failed to wait for timepoint");
@@ -13,4 +13,4 @@ namespace lf {
 		detail::check_rutile_error("failed to query timepoint");
 		return reached;
 	}
-} // namespace lf
+} // namespace rt

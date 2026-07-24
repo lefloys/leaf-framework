@@ -21,27 +21,28 @@ namespace lf {
 		err = init_system(args);
 		if (err) { goto system_exit; }
 
-		err = init_graphics(args, false);
+		err = rt::init_graphics(args, false);
 		if (err) { goto graphics_exit; }
 
 		err = init_store(args);
-		if (err) { goto store_exit;	}
+		if (err) { goto store_exit; }
 
 		err = init_platform(args);
 		if (err) { goto platform_exit; }
 
+		err = rt::init_graphics_extensions(false);
+		if (err) { goto platform_exit; }
+
 		err = init_rml(args);
-		if (err) { goto rml_exit; }
+		if (err) { goto platform_exit; }
 
 		return err;
-	rml_exit:
-		exit_rml();
-	store_exit:
-		exit_store();
-	graphics_exit:
-		exit_graphics();
 	platform_exit:
 		exit_platform();
+	store_exit:
+		exit_store();
+		rt::exit_graphics();
+	graphics_exit:
 	system_exit:
 		exit_system();
 		log::Error("{}", err.message);
@@ -55,7 +56,7 @@ namespace lf {
 		err = init_system(args);
 		if (err) { goto system_exit; }
 
-		err = init_graphics(args, true);
+		err = rt::init_graphics(args, true);
 		if (err) { goto graphics_exit; }
 
 		err = init_store(args);
@@ -65,7 +66,7 @@ namespace lf {
 	store_exit:
 		exit_store();
 	graphics_exit:
-		exit_graphics();
+		rt::exit_graphics();
 	system_exit:
 		exit_system();
 		log::Error("{}", err.message);
@@ -84,7 +85,7 @@ namespace lf {
 		exit_platform();
 
 		exit_store();
-		exit_graphics();
+		rt::exit_graphics();
 		exit_system();
 	}
 
@@ -92,7 +93,7 @@ namespace lf {
 		log::Debug("[leaf] Shutting down!");
 
 		exit_store();
-		exit_graphics();
+		rt::exit_graphics();
 		exit_system();
 	}
 } // namespace lf

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "leaf/core/optional.hpp"
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/core/types.hpp"
@@ -14,32 +13,35 @@
 
 namespace lf {
 	struct atlas_source_frame {
+		// @GPT : what do these mean. texture and frame index...
 		u32 texture_index = 0;
 		u32 frame_index = 0;
 		string path;
-		std::optional<lf::rect<u32>> rect;
+		// @GPT : why u32 here but f32 below. you should use f32 everywhere
+		rect<u32> rect{};
 	};
 
 
 	struct packed_atlas_frame {
 		u32 texture_index = 0;
 		u32 frame_index = 0;
-		lf::rect<f32> rect{};
+		rect<f32> rect{};
 	};
 
 	struct texture_atlas_options {
 		u32 padding = 2;
-		u32 minimum_extent = 64;
+		u32 max_frame_extent = 256;
+		// @GPT : why arent you using the new progress things. the one where you pass it as progress() which creates a subnode etc
 		std::function<void(size_t completed, size_t total)> progress;
+		std::function<void(string_view phase)> phase;
 	};
 
 	struct texture_atlas {
-		unique<texture> atlas_texture;
-		unique<texture_view> view;
+		rt::unique<rt::texture> atlas_texture;
+		rt::unique<rt::texture_view> view;
+		// @GPT : why are you containing packed atlas frames it should just be an id to a rect ??
 		vector<packed_atlas_frame> frames;
-		u32 width = 1;
-		u32 height = 1;
 	};
-
-	texture_atlas build_texture_atlas(view<queue> queue, span<const atlas_source_frame> source_frames, texture_atlas_options options = {});
+	// @GPT : what. this is way too much work in a single function.
+	texture_atlas build_texture_atlas(rt::view<rt::queue> queue, span<const atlas_source_frame> source_frames, const texture_atlas_options& options = {});
 } // namespace lf
