@@ -1,0 +1,55 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CMAKE_TOOLCHAIN_FILE": "$penv{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_MANIFEST_DIR": "${sourceDir}",
+        "VCPKG_MANIFEST_MODE": true,
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed/leaf-windows"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/Release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "VCPKG_TARGET_TRIPLET": "x64-windows-static" }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/Debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "VCPKG_TARGET_TRIPLET": "x64-windows-static" }
+    },
+    {
+      "name": "ci-release",
+      "displayName": "CI Release",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/CI-Release"
+    },
+    {
+      "name": "ci-debug",
+      "displayName": "CI Debug",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build/CI-Debug"
+    }
+  ],
+  "buildPresets": [
+    { "name": "release", "displayName": "Release", "configurePreset": "release" },
+    { "name": "debug", "displayName": "Debug", "configurePreset": "debug" },
+    { "name": "ci-release", "displayName": "CI Release", "configurePreset": "ci-release" },
+    { "name": "ci-debug", "displayName": "CI Debug", "configurePreset": "ci-debug" }
+  ],
+  "testPresets": [
+    { "name": "debug", "displayName": "Debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
+    { "name": "ci-debug", "displayName": "CI Debug", "configurePreset": "ci-debug", "output": { "outputOnFailure": true } }
+  ]
+}
