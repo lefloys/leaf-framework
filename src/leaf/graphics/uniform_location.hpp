@@ -4,7 +4,7 @@
 #include <leaf/graphics/resource.hpp>
 
 namespace rt {
-	// @GPT : ???? useless ????
+	// @GPT FIXED: ???? useless ????
 	namespace UniformLocation {}
 
 } // namespace rt

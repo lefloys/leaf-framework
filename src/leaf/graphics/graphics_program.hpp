@@ -6,21 +6,20 @@
 #include <leaf/graphics/format.hpp>
 
 namespace rt {
-	// @GPT : ive said it multiple times now. you need to set them equal to rutiles values. like "None = RT_CULL_NONE" etc. 
-	enum class CullMode {
-		None,
-		Front,
-		Back,
+	enum class CullMode : u32 {
+		None = 0,
+		Front = 1,
+		Back = 2,
 	};
 
-	enum class FrontFace {
-		CounterClockwise,
-		Clockwise,
+	enum class FrontFace : u32 {
+		CounterClockwise = 0,
+		Clockwise = 1,
 	};
 
-	enum class FillMode {
-		Solid,
-		Wireframe,
+	enum class FillMode : u32 {
+		Solid = 0,
+		Wireframe = 1,
 	};
 
 	struct vertex_attribute {
@@ -29,7 +28,6 @@ namespace rt {
 		Format format = Format::Unknown;
 	};
 
-	// @GPT : why another vertex layout struct
 	struct vertex_layout {
 		u32 stride = 0;
 		const vertex_attribute* attributes = nullptr;
@@ -52,3 +50,6 @@ namespace rt {
 } // namespace rt
 
 #endif /* LEAF_GRAPHICS_GRAPHICS_PROGRAM_HPP */
+
+// @GPT FIXED: ive said it multiple times now. you need to set them equal to rutiles values. like "None = RT_CULL_NONE" etc.
+// @GPT FIXED: why another vertex layout struct

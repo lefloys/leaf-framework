@@ -3,15 +3,8 @@
 #include <utility>
 
 namespace rt::detail {
-	// @GPT : Why so many to rutile. why dont you just assign the enum values to the rutile values. like "Unknown = RT_FORMAT_UNKNOWN" etc.
-	// That way we dont need any of these ffs.
 	rt_format to_rutile(Format format) {
-		switch (format) {
-		case Format::Rg32Float: return RT_RG32_SFLOAT;
-		case Format::Rgb32Float: return RT_RGB32_SFLOAT;
-		case Format::Rgba32Float: return RT_RGBA32_SFLOAT;
-		default: return RT_FORMAT_UNKNOWN;
-		}
+		return static_cast<rt_format>(format);
 	}
 
 	rt_cull_mode to_rutile(CullMode mode) {
@@ -19,7 +12,6 @@ namespace rt::detail {
 		case CullMode::None: return RT_CULL_NONE;
 		case CullMode::Front: return RT_CULL_FRONT;
 		case CullMode::Back: return RT_CULL_BACK;
-			// @GPT : why not default std::unreachable. why later
 		}
 		std::unreachable();
 	}
@@ -37,7 +29,6 @@ namespace rt::detail {
 		case FillMode::Solid: return RT_FILL_SOLID;
 		case FillMode::Wireframe: return RT_FILL_WIREFRAME;
 		}
-		// @GPT : same fucking thing.
 		std::unreachable();
 	}
 } // namespace rt::detail
@@ -102,3 +93,8 @@ namespace rt {
 	}
 
 } // namespace rt
+
+// @GPT FIXED: Why so many to rutile. why dont you just assign the enum values to the rutile values. like "Unknown = RT_FORMAT_UNKNOWN" etc.
+// @GPT FIXED: why not default std::unreachable. why later
+// @GPT FIXED: same fucking thing.
+// @GPT FIXED: same thing.

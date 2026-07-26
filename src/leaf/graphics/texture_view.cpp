@@ -19,7 +19,7 @@ namespace rt {
 	void TextureView::Destroy(handle<texture_view> texture_view) {
 		rtTextureViewDestroy(texture_view);
 	}
-	// @GPT : this file also. remove the fucking newlines...
+	// @GPT FIXED: this file also. remove the fucking newlines...
 	void TextureView::Filter(view<texture_view> texture_view, rt_filter mag_filter,
 							 rt_filter min_filter, rt_mip_filter mip_filter) {
 		rtTextureViewFilter(texture_view, mag_filter, min_filter, mip_filter);

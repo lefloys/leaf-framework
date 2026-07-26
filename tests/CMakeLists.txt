@@ -13,10 +13,6 @@ add_executable(leaf-framework-tests
     window_element_tests.cpp
 )
 
-if(COMMAND leaf_ensure_store_backend)
-    leaf_ensure_store_backend("none")
-endif()
-
 target_compile_features(leaf-framework-tests PRIVATE cxx_std_23)
 target_link_libraries(leaf-framework-tests PRIVATE Catch2::Catch2WithMain leaf-framework leaf-store-none)
 
@@ -24,12 +20,18 @@ add_test(NAME leaf-framework-tests COMMAND leaf-framework-tests)
 
 add_executable(leaf-rml-shader-tests
     rml_shader_tests.cpp
+    "../Rutile/RTSL/transpilers/hlsl/src/hlsl.cpp"
+    "../Rutile/RTSL/transpilers/spirv/src/spirv.cpp"
 )
 target_compile_features(leaf-rml-shader-tests PRIVATE cxx_std_23)
+target_include_directories(leaf-rml-shader-tests PRIVATE
+    "../Rutile/RTSL/transpilers/hlsl/include"
+    "../Rutile/RTSL/transpilers/spirv/include"
+)
 target_link_libraries(leaf-rml-shader-tests PRIVATE
     Catch2::Catch2WithMain
     leaf-framework
-    RTSL::hlsl
-    RTSL::spirv
+    rtsl
+    rtsl-sdk
 )
 add_test(NAME leaf-rml-shader-tests COMMAND leaf-rml-shader-tests)

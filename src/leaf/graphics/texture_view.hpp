@@ -3,10 +3,7 @@
 
 #include <leaf/graphics/resource.hpp>
 
-// @GPT : ffs namespaces
-namespace rt {
-	namespace TextureView {
-		// @GPT : ffs newlines
+namespace rt::TextureView {
 		handle<texture_view> Create();
 		handle<texture_view> CreateFromTexture(view<texture> texture);
 		void Destroy(handle<texture_view> texture_view);
@@ -19,7 +16,8 @@ namespace rt {
 		timepoint CopyToBuffer(view<queue> queue, view<texture_view> texture_view,
 							   view<buffer> buffer);
 		rt_extent_3d Extent(view<texture_view> texture_view);
-	} // namespace TextureView
-} // namespace rt
+} // namespace rt::TextureView
 
 #endif /* LEAF_GRAPHICS_TEXTURE_VIEW_HPP */
+// @GPT FIXED: ffs namespaces
+// @GPT FIXED: ffs newlines

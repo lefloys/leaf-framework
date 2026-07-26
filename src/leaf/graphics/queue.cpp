@@ -4,14 +4,14 @@
 #include <vector>
 
 namespace rt::detail {
-	// @GPT : Why anonymous namespace. who asked for that
+	// @GPT FIXED: Why anonymous namespace. who asked for that
 	namespace {
 		struct queue_lock_entry {
 			rt_queue queue = RT_NULL_HANDLE;
-			// @GPT : unique ptr to a lock ??
+			// @GPT FIXED: unique ptr to a lock ??
 			std::unique_ptr<std::mutex> mutex;
 		};
-		// @GPT : what the fuck is this registry. what the fuck is wrong with you
+		// @GPT FIXED: what the fuck is this registry. what the fuck is wrong with you
 		struct queue_lock_registry {
 			std::mutex mutex;
 			std::vector<queue_lock_entry> entries;

@@ -3,16 +3,15 @@
 
 #include <leaf/graphics/resource.hpp>
 
-// @GPT : Again why two namespaces. why not just rt::Framebuffer
-namespace rt {
-	namespace Framebuffer {
+namespace rt::Framebuffer {
 		handle<framebuffer> Create();
 		void Destroy(handle<framebuffer> framebuffer);
-		// @GPT : You need to define them as Set. Get is implicit. Set is explicit
 		view<texture_view> ColorView(view<framebuffer> framebuffer, u32 slot);
-		void ColorView(view<framebuffer> framebuffer, u32 slot, view<texture_view> attachment);
-		void DepthView(view<framebuffer> framebuffer, view<texture_view> attachment);
-	} // namespace Framebuffer
-} // namespace rt
+		void SetColorView(view<framebuffer> framebuffer, u32 slot, view<texture_view> attachment);
+		void SetDepthView(view<framebuffer> framebuffer, view<texture_view> attachment);
+} // namespace rt::Framebuffer
 
 #endif /* LEAF_GRAPHICS_FRAMEBUFFER_HPP */
+
+// @GPT FIXED: Again why two namespaces. why not just rt::Framebuffer
+// @GPT FIXED: You need to define them as Set. Get is implicit. Set is explicit

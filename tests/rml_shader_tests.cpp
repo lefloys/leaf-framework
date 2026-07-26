@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <rtsl/hlsl.hpp>
-#include <rtsl/sdk/program.hpp>
+#include <rtsl/program.hpp>
 #include <rtsl/spirv.hpp>
 
 #include <algorithm>

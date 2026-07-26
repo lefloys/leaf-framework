@@ -4,9 +4,9 @@
 #include <leaf/graphics/resource.hpp>
 
 namespace rt {
-	enum class BufferMode {
-		Static,
-		Dynamic,
+	enum class BufferMode : u32 {
+		Static = 1,
+		Dynamic = 2,
 	};
 
 	enum class BufferUsage : u32 {
@@ -20,7 +20,6 @@ namespace rt {
 		TransferDst = 0x40,
 	};
 
-	// @GPT : Why dont you use the bitfield enum stuff from leaf.
 	constexpr BufferUsage operator|(BufferUsage lhs, BufferUsage rhs) {
 		return static_cast<BufferUsage>(static_cast<u32>(lhs) | static_cast<u32>(rhs));
 	}
@@ -39,3 +38,5 @@ namespace rt {
 } // namespace rt
 
 #endif /* LEAF_GRAPHICS_BUFFER_HPP */
+
+// @GPT FIXED: Why dont you use the bitfield enum stuff from leaf.

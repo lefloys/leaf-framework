@@ -1,27 +1,27 @@
-include("Steamworks")
+if(NOT EXISTS "${LEAF_STEAMWORKS_SDK_DIR}/public/steam/steam_api.h")
+    message(FATAL_ERROR "LEAF_STEAMWORKS_SDK_DIR is invalid: ${LEAF_STEAMWORKS_SDK_DIR}")
+endif()
 
-add_files("leaf-framework"
-	"lifecycle.cpp"
-	"user.cpp"
+add_library(leaf-store-steam STATIC
+    lifecycle.cpp
+    network.cpp
+    user.cpp
 )
-target_link_libraries("${LEAF_TARGET_NAME}" PRIVATE "Steamworks::Steamworks")
+add_library(Leaf::StoreSteam ALIAS leaf-store-steam)
 
-function(leaf_configure_store_executable target_name)
-	file(GENERATE
-		OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${target_name}-steam_appid.txt"
-		CONTENT "${LEAF_STEAM_APP_ID}\n"
-	)
-	add_custom_command(TARGET "${target_name}" POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${CMAKE_CURRENT_BINARY_DIR}/${target_name}-steam_appid.txt"
-			"$<TARGET_FILE_DIR:${target_name}>/steam_appid.txt"
-	)
-	add_custom_target("${target_name}-steam-runtime"
-		COMMAND ${CMAKE_COMMAND} -E make_directory
-			"$<TARGET_FILE_DIR:${target_name}>"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${LEAF_STEAMWORKS_RUNTIME_LIBRARY}"
-			"$<TARGET_FILE_DIR:${target_name}>"
-	)
-	add_dependencies("${target_name}" "${target_name}-steam-runtime")
-endfunction()
+target_compile_features(leaf-store-steam PUBLIC cxx_std_23)
+target_include_directories(leaf-store-steam
+    PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>"
+    PRIVATE "${LEAF_STEAMWORKS_SDK_DIR}/public"
+)
+target_link_libraries(leaf-store-steam PUBLIC Leaf::Store)
+
+if(WIN32)
+    target_link_libraries(leaf-store-steam PRIVATE
+        "${LEAF_STEAMWORKS_SDK_DIR}/redistributable_bin/win64/steam_api64.lib"
+    )
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(leaf-store-steam PRIVATE
+        "${LEAF_STEAMWORKS_SDK_DIR}/redistributable_bin/linux64/libsteam_api.so"
+    )
+endif()

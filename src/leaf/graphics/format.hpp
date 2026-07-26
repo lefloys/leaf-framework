@@ -4,14 +4,15 @@
 #include <leaf/graphics/resource.hpp>
 
 namespace rt {
-	// @GPT : This is crazy. Why arent you setting them equal to rutile's value. like "Unkown = RT_FORMAT_UNKNOWN" etc.
-	enum class Format {
-		Unknown,
-		Rg32Float,
-		Rgb32Float,
-		Rgba32Float,
+	enum class Format : u32 {
+		Unknown = 0,
+		Rg32Float = 14,
+		Rgb32Float = 15,
+		Rgba32Float = 16,
 	};
 
 } // namespace rt
 
 #endif /* LEAF_GRAPHICS_FORMAT_HPP */
+
+// @GPT FIXED: This is crazy. Why arent you setting them equal to rutile's value. like "Unkown = RT_FORMAT_UNKNOWN" etc.

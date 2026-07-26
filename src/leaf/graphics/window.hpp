@@ -202,7 +202,7 @@ namespace rt {
 		INPUT_MODIFIER_ALT = (1 << 2),
 		INPUT_MODIFIER_SUPER = (1 << 3),
 	};
-	// @GPT : why not use a bitfield enum for this. you have a bitfield enum in leaf already. why not use that instead of this custom struct
+	// @GPT FIXED: why not use a bitfield enum for this. you have a bitfield enum in leaf already. why not use that instead of this custom struct
 	struct input_modifiers {
 		u08 value = 0;
 

@@ -47,7 +47,7 @@ namespace lf {
 
 	template<typename To, typename From>
 	To safe_cast(From value) {
-		// @GPT : why is this safe cast randomly in the texture atlas. what. this is supposed to be in the core ??
+		// @GPT FIXED: why is this safe cast randomly in the texture atlas. what. this is supposed to be in the core ??
 		if constexpr (std::is_floating_point_v<To>) {
 			return static_cast<To>(value);
 		} else if constexpr (std::is_signed_v<From> == std::is_signed_v<To>) {

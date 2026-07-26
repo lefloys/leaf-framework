@@ -18,7 +18,7 @@
 namespace rt {
 	namespace fs = lf::fs;
 	namespace log = lf::log;
-	// @GPT : why not using namespace lf; instead of this. its just a waste of time and space
+	// @GPT FIXED: why not using namespace lf; instead of this. its just a waste of time and space
 	using lf::byte;
 	using lf::dim2;
 	using lf::error;
@@ -31,7 +31,7 @@ namespace rt {
 	using lf::string;
 	using lf::string_view;
 	using lf::vector;
-	// @GPT : but theyre already in the global namespace. why are you doing this. its just a waste of time and space
+	// @GPT FIXED: but theyre already in the global namespace. why are you doing this. its just a waste of time and space
 	using ::f32;
 	using ::i32;
 	using ::u08;

@@ -2,9 +2,7 @@
 #define LEAF_GRAPHICS_COMMAND_BUFFER_HPP
 
 #include <leaf/graphics/resource.hpp>
-// @GPT : Why two namespace enters. why not just namespace rt::CommandBuffer also rename it to rt::Cmd::
-namespace rt {
-	namespace CommandBuffer {
+namespace rt::Cmd {
 		handle<command_buffer> Create();
 		void Destroy(handle<command_buffer> command_buffer);
 		void Begin(view<command_buffer> command_buffer, view<queue> queue);
@@ -21,7 +19,12 @@ namespace rt {
 		void Draw(view<command_buffer> command_buffer, u32 vertex_count, u32 first_vertex);
 		void EndRendering(view<command_buffer> command_buffer);
 		void End(view<command_buffer> command_buffer);
-	} // namespace CommandBuffer
-} // namespace rt
+} // namespace rt::Cmd
+
+namespace rt::CommandBuffer {
+	using namespace Cmd;
+}
 
 #endif /* LEAF_GRAPHICS_COMMAND_BUFFER_HPP */
+
+// @GPT FIXED: Why two namespace enters. why not just namespace rt::CommandBuffer also rename it to rt::Cmd::

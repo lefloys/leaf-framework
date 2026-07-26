@@ -19,12 +19,12 @@ namespace rt {
 		return result;
 	}
 
-	void Framebuffer::ColorView(view<framebuffer> framebuffer, u32 slot, view<texture_view> attachment) {
+	void Framebuffer::SetColorView(view<framebuffer> framebuffer, u32 slot, view<texture_view> attachment) {
 		rtFramebufferSetColorView(framebuffer, slot, attachment);
 		detail::check_rutile_error("failed to set framebuffer color view");
 	}
 
-	void Framebuffer::DepthView(view<framebuffer> framebuffer, view<texture_view> attachment) {
+	void Framebuffer::SetDepthView(view<framebuffer> framebuffer, view<texture_view> attachment) {
 		rtFramebufferDepthView(framebuffer, attachment);
 		detail::check_rutile_error("failed to set framebuffer depth view");
 	}

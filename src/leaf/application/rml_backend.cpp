@@ -10,7 +10,7 @@
 
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/SystemInterface.h>
-#include <rtsl/sdk/program.hpp>
+#include <rtsl/program.hpp>
 #include <stb_image.h>
 
 #include <algorithm>

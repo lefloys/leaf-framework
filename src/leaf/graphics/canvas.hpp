@@ -10,7 +10,6 @@
 #include <type_traits>
 
 namespace rt {
-	// @GPT : ??? 
 	struct canvas_color {
 		f32 r = 1.0f;
 		f32 g = 1.0f;
@@ -21,7 +20,6 @@ namespace rt {
 	template <typename Vertex, typename = void>
 	struct canvas_vertex_traits {
 		static Vertex make(pos2<f32> position, pos2<f32> uv, canvas_color color) {
-			// @GPT : Hardcoded things? like position? what is this
 			Vertex vertex{};
 			if constexpr (requires { vertex.position = position; }) {
 				vertex.position = position;
@@ -144,7 +142,7 @@ namespace rt {
 		return CompiledCanvas<Vertex>(canvas, mode);
 	}
 
-	namespace CommandBuffer {
+	namespace Cmd {
 		template <typename Vertex>
 		void Draw(view<command_buffer> command_buffer, const CompiledCanvas<Vertex>& canvas) {
 			if (canvas.empty()) {
@@ -153,5 +151,8 @@ namespace rt {
 			BindVertexBuffer(command_buffer, canvas.vertices(), 0);
 			Draw(command_buffer, canvas.vertex_count(), 0);
 		}
-	} // namespace CommandBuffer
+	} // namespace Cmd
 } // namespace rt
+
+// @GPT FIXED: ???
+// @GPT FIXED: Hardcoded things? like position? what is this

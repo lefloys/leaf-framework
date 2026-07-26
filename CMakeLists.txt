@@ -1,225 +1,31 @@
-cmake_minimum_required(VERSION 3.28.0)
+cmake_minimum_required(VERSION 3.28)
+project(Leaf VERSION 0.1.0 LANGUAGES C CXX)
 
-if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET AND NOT DEFINED CMAKE_VCPKG_TARGET_TRIPLET)
-    set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg target triplet")
-endif()
-if(CMAKE_HOST_WIN32 AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "MSVC runtime library")
-endif()
-project("leaf-framework" VERSION 0.1.0 LANGUAGES C CXX)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+include(CTest)
 
-if(WIN32 AND DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET STREQUAL "x64-windows")
-    message(FATAL_ERROR "leaf-framework uses statically linked vcpkg dependencies on Windows. Configure with -DVCPKG_TARGET_TRIPLET=x64-windows-static, or clear the existing build directory if it cached x64-windows.")
-endif()
-if(WIN32 AND DEFINED CMAKE_VCPKG_TARGET_TRIPLET AND CMAKE_VCPKG_TARGET_TRIPLET STREQUAL "x64-windows")
-    message(FATAL_ERROR "leaf-framework uses statically linked vcpkg dependencies on Windows. Configure with -DCMAKE_VCPKG_TARGET_TRIPLET=x64-windows-static, or clear the existing build directory if it cached x64-windows.")
-endif()
+set(LEAF_STEAMWORKS_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/steam-sdk" CACHE PATH "Steamworks SDK directory")
 
-# Build options.
-option(LEAF_BUILD_EXAMPLES "Build leaf-framework examples." ${PROJECT_IS_TOP_LEVEL})
-option(LEAF_BUILD_TESTS "Build leaf-framework tests." ${PROJECT_IS_TOP_LEVEL})
-option(LEAF_BUILD_TOOLS "Build leaf-framework developer tools." ON)
-option(LEAF_BUILD_RUTILE_VK13 "Build the Vulkan 1.3 Rutile runtime." ON)
-option(LEAF_BUILD_RUTILE_DX12 "Build the DirectX 12 Rutile runtime on Windows." ON)
-option(LEAF_BUILD_RUTILE_GL33 "Build the OpenGL 3.3 Rutile runtime." OFF)
-option(LEAF_BUILD_RUTILE_VALIDATION_LAYER "Build the Rutile validation layer." ON)
-option(LEAF_BUILD_RUTILE_LOGGING_LAYER "Build the Rutile logging layer." ON)
-option(LEAF_HEADLESS "Build Leaf without headed window/application support." OFF)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/AddFiles.cmake")
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-# Platform settings.
-set(LEAF_SUPPORTED_WINDOW_BACKENDS "glfw")
-set(LEAF_WINDOW_BACKEND "glfw" CACHE STRING "Window backend for leaf-framework.")
-set_property(CACHE LEAF_WINDOW_BACKEND PROPERTY STRINGS ${LEAF_SUPPORTED_WINDOW_BACKENDS})
-set(LEAF_SUPPORTED_STORES "none" "steam")
-set(store "none" CACHE STRING "Store backend for leaf-framework.")
-set_property(CACHE store PROPERTY STRINGS ${LEAF_SUPPORTED_STORES})
+find_package(glm CONFIG REQUIRED)
+find_package(Stb REQUIRED)
+find_package(sol2 CONFIG REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
+find_package(unofficial-lua CONFIG REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(RmlUi CONFIG REQUIRED)
+find_package(miniaudio REQUIRED)
 
-if(NOT "${LEAF_WINDOW_BACKEND}" IN_LIST LEAF_SUPPORTED_WINDOW_BACKENDS)
-    list(JOIN LEAF_SUPPORTED_WINDOW_BACKENDS ", " LEAF_SUPPORTED_WINDOW_BACKENDS_TEXT)
-    message(FATAL_ERROR "Unsupported LEAF_WINDOW_BACKEND '${LEAF_WINDOW_BACKEND}'. Supported values: ${LEAF_SUPPORTED_WINDOW_BACKENDS_TEXT}.")
-endif()
-if(NOT "${store}" IN_LIST LEAF_SUPPORTED_STORES)
-    list(JOIN LEAF_SUPPORTED_STORES ", " LEAF_SUPPORTED_STORES_TEXT)
-    message(FATAL_ERROR "Unsupported store '${store}'. Supported values: ${LEAF_SUPPORTED_STORES_TEXT}.")
-endif()
+add_subdirectory("Rutile")
 
-function(leaf_clear_embedded_stale_package_cache cache_name)
-    if(PROJECT_IS_TOP_LEVEL OR NOT DEFINED CACHE{${cache_name}})
-        return()
-    endif()
-    get_property(cache_value CACHE "${cache_name}" PROPERTY VALUE)
-    cmake_path(IS_PREFIX CMAKE_CURRENT_SOURCE_DIR "${cache_value}" NORMALIZE is_leaf_local_cache)
-    if(is_leaf_local_cache)
-        unset("${cache_name}" CACHE)
-    endif()
-endfunction()
+add_subdirectory("src")
 
-leaf_clear_embedded_stale_package_cache(glm_DIR)
-leaf_clear_embedded_stale_package_cache(sol2_DIR)
-leaf_clear_embedded_stale_package_cache(yaml-cpp_DIR)
-leaf_clear_embedded_stale_package_cache(Stb_INCLUDE_DIR)
-
-# Shared project helpers.
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include("AddFiles")
-set(LEAF_STEAMWORKS_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/steam-sdk" CACHE PATH "Local Steamworks SDK directory")
-set(LEAF_STEAM_APP_ID "480" CACHE STRING "Steam app id used by the Steam store.")
-
-# Third-party dependencies.
-find_package("glm" CONFIG REQUIRED)
-find_package("Stb" REQUIRED)
-find_package("sol2" CONFIG REQUIRED)
-find_package("yaml-cpp" CONFIG REQUIRED)
-find_package("unofficial-lua" CONFIG REQUIRED)
-if(TARGET unofficial::lua::lua)
-    set(LEAF_LUA_TARGET unofficial::lua::lua)
-elseif(TARGET lua)
-    set(LEAF_LUA_TARGET lua)
-else()
-    message(FATAL_ERROR "The installed Lua package does not provide a supported CMake target.")
-endif()
-if(NOT LEAF_HEADLESS)
-    find_package("glfw3" CONFIG REQUIRED)
-    find_package("RmlUi" CONFIG REQUIRED)
-    find_package("miniaudio" REQUIRED)
-endif()
-
-# Rutile subproject defaults.
-set(RUTILE_BUILD_VULKAN "${LEAF_BUILD_RUTILE_VK13}" CACHE BOOL "Build the Vulkan 1.3 Rutile runtime." FORCE)
-set(RUTILE_BUILD_DIRECTX12 "${LEAF_BUILD_RUTILE_DX12}" CACHE BOOL "Build the DirectX 12 Rutile runtime on Windows." FORCE)
-set(RUTILE_BUILD_OPENGL "${LEAF_BUILD_RUTILE_GL33}" CACHE BOOL "Build the OpenGL 3.3 Rutile runtime on Windows." FORCE)
-set(RUTILE_BUILD_VALIDATION_LAYER "${LEAF_BUILD_RUTILE_VALIDATION_LAYER}" CACHE BOOL "Build the Rutile validation layer." FORCE)
-set(RUTILE_BUILD_LOGGING_LAYER "${LEAF_BUILD_RUTILE_LOGGING_LAYER}" CACHE BOOL "Build the Rutile logging layer." FORCE)
-set(RUTILE_BUILD_EXAMPLES "${LEAF_BUILD_EXAMPLES}" CACHE BOOL "Build Rutile examples." FORCE)
-if(NOT TARGET "Rutile::rutile")
-    add_subdirectory("Rutile")
-endif()
-
-# Framework target.
-add_library("${PROJECT_NAME}" STATIC)
-set(LEAF_TARGET_NAME "${PROJECT_NAME}")
-
-target_compile_features("${PROJECT_NAME}" PUBLIC "cxx_std_23")
-target_compile_definitions("${PROJECT_NAME}" PUBLIC "LF_HEADLESS=$<BOOL:${LEAF_HEADLESS}>")
-if(NOT LEAF_HEADLESS)
-    target_compile_definitions("${PROJECT_NAME}" PRIVATE LEAF_WINDOW_BACKEND_GLFW)
-endif()
-target_include_directories("${PROJECT_NAME}" PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>")
-target_include_directories("${PROJECT_NAME}" PUBLIC "${Stb_INCLUDE_DIR}")
-
-target_link_libraries("${PROJECT_NAME}"
-    PUBLIC
-        glm::glm
-        Rutile::rutile
-        sol2::sol2
-    PRIVATE
-        yaml-cpp::yaml-cpp
-        ${LEAF_LUA_TARGET}
-)
-if(NOT LEAF_HEADLESS)
-    target_link_libraries("${PROJECT_NAME}"
-        PUBLIC
-            glfw
-            RmlUi::RmlUi
-            miniaudio::miniaudio
-    )
-endif()
-if(WIN32)
-    target_link_libraries("${PROJECT_NAME}" PUBLIC ws2_32)
-endif()
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # __int128 arithmetic in core/fixed.cpp needs compiler-rt builtins (__divti3 etc.)
-    # when linking with lld-link on Windows.
-    execute_process(
-        COMMAND "${CMAKE_CXX_COMPILER}" --rtlib=compiler-rt -print-libgcc-file-name
-        OUTPUT_VARIABLE LEAF_CLANG_BUILTINS_LIB
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    if(EXISTS "${LEAF_CLANG_BUILTINS_LIB}")
-        target_link_libraries("${PROJECT_NAME}" PUBLIC "${LEAF_CLANG_BUILTINS_LIB}")
-    endif()
-endif()
-
-set(LEAF_RML_RTSL "${CMAKE_CURRENT_SOURCE_DIR}/src/leaf/application/rml_backend.rtsl")
-set_source_files_properties("${LEAF_RML_RTSL}" PROPERTIES HEADER_FILE_ONLY TRUE)
-target_sources("${PROJECT_NAME}" PRIVATE "${LEAF_RML_RTSL}")
-rtsl_add_program("${PROJECT_NAME}-rml-rtsl"
-    OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/rtsl"
-    SYMBOL leaf_rml_ui_rtslp
-    SOURCES "${LEAF_RML_RTSL}"
-)
-rtsl_embed_program("${PROJECT_NAME}"
-    PROGRAMS "${PROJECT_NAME}-rml-rtsl"
-)
-
-add_subdirectory(src)
-
-function(leaf_copy_rutile_backends target_name)
-    if(NOT COMMAND rutile_get_runtime_targets)
-        return()
-    endif()
-
-    rutile_get_runtime_targets(rutile_backends)
-    if(NOT rutile_backends)
-        return()
-    endif()
-    set(runtime_files)
-    foreach(rutile_backend IN LISTS rutile_backends)
-        list(APPEND runtime_files "$<TARGET_FILE:${rutile_backend}>")
-	endforeach()
-	add_custom_target("${target_name}-rutile-backends"
-		COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target_name}>"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different ${runtime_files} "$<TARGET_FILE_DIR:${target_name}>"
-		COMMAND_EXPAND_LISTS
-		DEPENDS ${rutile_backends}
-    )
-    add_dependencies("${target_name}" "${target_name}-rutile-backends")
-endfunction()
-
-function(leaf_export_glfw_symbols target_name)
-    if(LEAF_HEADLESS)
-        return()
-    endif()
-    if(WIN32)
-        target_link_options("${target_name}" PRIVATE
-            "$<$<CXX_COMPILER_ID:MSVC>:/INCLUDE:glfwCreateWindowSurface>"
-            "$<$<CXX_COMPILER_ID:MSVC>:/INCLUDE:glfwGetFramebufferSize>"
-            "$<$<CXX_COMPILER_ID:MSVC>:/INCLUDE:glfwGetWin32Window>"
-            "$<$<CXX_COMPILER_ID:MSVC>:/EXPORT:glfwCreateWindowSurface>"
-            "$<$<CXX_COMPILER_ID:MSVC>:/EXPORT:glfwGetFramebufferSize>"
-            "$<$<CXX_COMPILER_ID:MSVC>:/EXPORT:glfwGetWin32Window>"
-        )
-    else()
-        target_link_options("${target_name}" PRIVATE
-            "$<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:-Wl,--undefined=glfwCreateWindowSurface>"
-            "$<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:-Wl,--undefined=glfwGetFramebufferSize>"
-            "$<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:-Wl,--export-dynamic>"
-        )
-    endif()
-endfunction()
-
-function(leaf_configure_executable target_name)
-    if(NOT LEAF_HEADLESS)
-        leaf_configure_store_executable("${target_name}")
-    endif()
-    if(MSVC)
-        set_property(TARGET "${target_name}" APPEND_STRING PROPERTY LINK_FLAGS " /NODEFAULTLIB:lua.lib /NODEFAULTLIB:yaml-cpp.lib /FORCE:MULTIPLE")
-    endif()
-    leaf_export_glfw_symbols("${target_name}")
-    leaf_copy_rutile_backends("${target_name}")
-endfunction()
-
-# Optional developer targets.
-if(LEAF_BUILD_EXAMPLES)
-    add_subdirectory(example)
-endif()
-
-if(LEAF_BUILD_TOOLS)
-    add_subdirectory("tools")
-endif()
-
-if(LEAF_BUILD_TESTS)
-    enable_testing()
-    find_package("Catch2" CONFIG REQUIRED)
-    add_subdirectory("tests")
+add_subdirectory("example" EXCLUDE_FROM_ALL)
+add_subdirectory("tools" EXCLUDE_FROM_ALL)
+if(BUILD_TESTING)
+    include(CTest)
+    find_package(Catch2 CONFIG REQUIRED)
+    add_subdirectory("tests" EXCLUDE_FROM_ALL)
 endif()

@@ -12,7 +12,7 @@ namespace rt {
 	void Texture::Destroy(handle<texture> texture) {
 		rtTextureDestroy(texture);
 	}
-	// @GPT : bro why are you putting newlines everyhwere. i want you to fix all the newlines in this file. i dont want to find anything where a function declaration is split over multiple lines
+	// @GPT FIXED: bro why are you putting newlines everyhwere. i want you to fix all the newlines in this file. i dont want to find anything where a function declaration is split over multiple lines
 	timepoint Texture::Copy(view<queue> queue, view<texture> src_texture, u32 src_mip,
 							view<texture> dst_texture, u32 dst_mip) {
 		auto lock = detail::lock_queue(queue);

@@ -12,10 +12,10 @@
 
 
 namespace rt {
-	// @GPT : why anonymous namespace. why is this "DefaultGraphicsAPI" hardcoded like THIS
+	// @GPT FIXED: why anonymous namespace. why is this "DefaultGraphicsAPI" hardcoded like THIS
 	namespace {
 		constexpr string_view DefaultGraphicsAPI = "rt-opengl";
-		// @GPT : CLI11 ??
+		// @GPT FIXED: CLI11 ??
 		error parse_graphics_backend(span<string_view> args, string_view& backend) {
 			for (size_t i = 0; i < args.size(); ++i) {
 				string_view arg = args[i];
@@ -44,7 +44,7 @@ namespace rt {
 		if (!message || !message[0]) {
 			return;
 		}
-		// @GPT : most vexing parse. dont do this shit. use {}
+		// @GPT FIXED: most vexing parse. dont do this shit. use {}
 		string_view text(message);
 		while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
 			text.remove_suffix(1);
@@ -82,7 +82,7 @@ namespace rt {
 		}
 		return error(code, lf::format("{} failed: {}", context, message));
 	}
-	// @GPT : Why is this in graphics.cpp
+	// @GPT FIXED: Why is this in graphics.cpp
 	error rutile_error() {
 		return rutile_error(rtError(), "Rutile call");
 	}
@@ -90,15 +90,15 @@ namespace rt {
 
 
 	error init_graphics(span<string_view> args, bool headless) {
-		// @GPT : Why arent you giving any information about what backend you are starting and the version of it. 
+		// @GPT FIXED: Why arent you giving any information about what backend you are starting and the version of it.
 		lf::log::Info("[leaf] Starting graphics...");
 		string_view graphics_api = DefaultGraphicsAPI;
-		// @GPT : Why are you using some useless thing. why not CLI11 ??
+		// @GPT FIXED: Why are you using some useless thing. why not CLI11 ??
 		if (error err = parse_graphics_backend(args, graphics_api)) {
 			return err;
 		}
 		lf::log::Debug("[leaf] Graphics init for '{}'", graphics_api);
-		// @GPT : this is not the way i intended. it was suppoed to be "key" (for example rt-opengl) and "value" eg "-v 4.6". thats what rutile is supposed to support. and any backend can react to any key. ffs 
+		// @GPT FIXED: this is not the way i intended. it was suppoed to be "key" (for example rt-opengl) and "value" eg "-v 4.6". thats what rutile is supposed to support. and any backend can react to any key. ffs
 		rtSettingAdd("opengl.version", "4.6");
 		if (auto err = rtLoad(graphics_api.data(), nullptr, 0)) {
 			lf::log::Error("[leaf] Failed to load graphics backend '{}'", graphics_api);
@@ -144,7 +144,7 @@ namespace rt {
 	}
 
 	bool graphics_available() {
-		// @GPT : Random bool ???
+		// @GPT FIXED: Random bool ???
 		// The Rutile dispatch table is populated by rtLoad; before that the
 		// function pointers are null and any rt* call would crash.
 		return rt_rtQueueQuery != nullptr;

@@ -1,36 +1,28 @@
-add_files("leaf-framework"
-	"buffer.cpp"
-	"buffer.hpp"
-	"canvas.hpp"
-	"command_buffer.cpp"
-	"rutile.c"
-	"command_buffer.hpp"
-	"format.hpp"
-	"framebuffer.cpp"
-	"framebuffer.hpp"
-	"graphics.cpp"
-	"graphics.hpp"
-	"graphics_program.cpp"
-	"graphics_program.hpp"
-	"queue.cpp"
-	"queue.hpp"
-	"resource.cpp"
-	"resource.hpp"
-	"texture.cpp"
-	"texture.hpp"
-	"texture_atlas.cpp"
-	"texture_atlas.hpp"
-	"texture_view.cpp"
-	"texture_view.hpp"
-	"timepoint.cpp"
-	"timepoint.hpp"
-	"uniform_location.hpp"
+add_library(leaf-graphics STATIC
+    buffer.cpp
+    command_buffer.cpp
+    framebuffer.cpp
+    graphics.cpp
+    graphics_program.cpp
+    queue.cpp
+    resource.cpp
+    rutile.c
+    texture.cpp
+    texture_atlas.cpp
+    texture_view.cpp
+    timepoint.cpp
+    window.cpp
 )
+add_library(Leaf::Graphics ALIAS leaf-graphics)
 
-if(NOT LEAF_HEADLESS)
-	add_files("leaf-framework"
-		"window.cpp"
-		"window.hpp"
-		"window_private.hpp"
-	)
-endif()
+target_compile_features(leaf-graphics PUBLIC cxx_std_23)
+target_include_directories(leaf-graphics PUBLIC
+    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
+target_link_libraries(leaf-graphics
+    PUBLIC
+        Leaf::Core
+        Leaf::Platform
+        Rutile::rutile
+)
