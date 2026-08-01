@@ -12,9 +12,9 @@
 namespace lf {
 	struct PrototypeTypeFunctions {
 		void (*clear)() = nullptr;
+		void (*register_name)(string_view) = nullptr;
 		void (*create)(string_view, const dict&) = nullptr;
 		string_view (*type)() = nullptr;
-		void (*resolve)() = nullptr;
 		void (*reserve)(size_t) = nullptr;
 		size_t (*count)() = nullptr;
 		string_view (*name)(size_t) = nullptr;
@@ -27,9 +27,9 @@ namespace lf {
 			using db = Database<T>;
 			functions.push_back({
 				&db::clear,
+				&db::register_name,
 				&db::create,
 				&db::type,
-				&db::resolve_connectors,
 				&db::reserve,
 				&db::count,
 				&db::name,

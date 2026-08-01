@@ -6,8 +6,9 @@
 namespace lf {
 	void InstallPrototypeInspectorScript(sol::state& lua) {
 		lua.set_function("texture_animation_fps", [](string_view texture_name) {
-			for (const TexturePrototype& texture : Database<TexturePrototype>::prototypes) {
-				if (texture.name == texture_name) {
+			for (size_t index = 0; index < Database<TexturePrototype>::prototypes.size(); ++index) {
+				const TexturePrototype& texture = Database<TexturePrototype>::prototypes[index];
+				if (Database<TexturePrototype>::name(index) == texture_name) {
 					return texture.frames_per_second > 0.0f ? texture.frames_per_second : 1.0f;
 				}
 			}
@@ -16,8 +17,9 @@ namespace lf {
 
 		lua.set_function("texture_animation_frames", [&lua](string_view texture_name) {
 			sol::table out = lua.create_table();
-			for (const TexturePrototype& texture : Database<TexturePrototype>::prototypes) {
-				if (texture.name != texture_name) {
+			for (size_t index = 0; index < Database<TexturePrototype>::prototypes.size(); ++index) {
+				const TexturePrototype& texture = Database<TexturePrototype>::prototypes[index];
+				if (Database<TexturePrototype>::name(index) != texture_name) {
 					continue;
 				}
 				for (size_t i = 0; i < texture.frames.size(); ++i) {

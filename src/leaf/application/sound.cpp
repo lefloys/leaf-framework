@@ -219,7 +219,7 @@ namespace lf {
 
 	void InstallSoundScript(sol::state& lua) {
 		lua.set_function("play_sound", [](string_view name, sol::object type, f32 volume) {
-			identifier<SoundPrototype, u16, void> id = Database<SoundPrototype>::find(name);
+			SoundPrototype::ID id = Database<SoundPrototype>::find(name);
 			if (!id) {
 				log::Warning("{}", lf::format("[sound] missing sound prototype '{}'", name));
 				return false;

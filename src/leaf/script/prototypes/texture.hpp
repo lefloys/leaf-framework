@@ -13,8 +13,14 @@ namespace lf {
 		std::optional<lf::rect<u32>> rect;
 	};
 
-	struct TexturePrototype : public Prototype<identifier<TexturePrototype, u16, void>> {
+	struct TexturePrototype final : public Prototype<identifier<TexturePrototype, u16, void>> {
+		static constexpr string_view type() noexcept { return "texture"; }
+		inline static texture_atlas atlas;
+		static error BuildAtlas(rt::view<rt::queue> queue, const std::function<void(size_t, size_t)>& progress = {}, const std::function<void(string_view)>& phase = {});
+		static void ClearAtlas();
+
 		TexturePrototype(const dict& data);
+		~TexturePrototype();
 
 		string path;
 		f32 world_size = 1.0f;
@@ -22,10 +28,5 @@ namespace lf {
 		vector<TextureSourceFrame> frames;
 		vector<rect<f32>> atlas_frames;
 
-		inline static texture_atlas atlas;
-
-		static constexpr string_view type() noexcept { return "texture"; }
-		static error BuildAtlas(rt::view<rt::queue> queue, const std::function<void(size_t, size_t)>& progress = {}, const std::function<void(string_view)>& phase = {});
-		static void ClearAtlas();
 	};
 } // namespace lf

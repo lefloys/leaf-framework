@@ -816,6 +816,26 @@ end
 				}
 				std::sort(names.begin(), names.end());
 				for (string_view name : names) {
+					try {
+						fn.register_name(name);
+					} catch (const lf::exception& e) {
+						return error(generic_errc::parse_error, e.what()).add_context(lf::format("registering prototype '{}' (type:{})", name, fn.type()));
+					}
+				}
+			}
+		}
+
+		for (auto& fn : lf::PrototypeTypeRegistry::functions) {
+			auto it = data_raw.find(fn.type());
+			if (it != data_raw.end()) {
+				dict& type_table = it->second.get<dict>();
+				vector<string_view> names;
+				names.reserve(type_table.size());
+				for (const auto& [name, data] : type_table) {
+					names.push_back(name);
+				}
+				std::sort(names.begin(), names.end());
+				for (string_view name : names) {
 					const object& data = type_table.find(name)->second;
 					if (!data.is<dict>()) {
 						return error(generic_errc::type_mismatch, lf::format("data.raw[{}][{}] must be a table/dict", fn.type(), name));
@@ -1001,37 +1021,6 @@ end
 			return locale_error.add_context("loading locale files");
 		}
 
-		{
-			log::Info("{}", "[mod-loader] loading built-in prototype defaults");
-			progress.set("stage", "loading-mod-prototypes", mod_stage_progress(2));
-			progress.set("process", "core/null.lua", PROGRESS_OF(0, 5));
-			if (progress.cancelled()) {
-				return CANCELLED_ERROR;
-			}
-			sol::state lua;
-			initialize_prototype_lua(lua);
-
-			const ModInfo* core = find_mod(span<const ModInfo>(enabled_mod_list.data(), enabled_mod_list.size()), "core");
-			if (!core) {
-				return error(generic_errc::input_error, "required core mod was not found");
-			}
-			if (error err = load_prototype_script(lua, *core, "null.lua", true)) {
-				return err;
-			}
-			progress.set("stage", "loading-mod-prototypes", mod_stage_progress(2));
-			progress.set("process", "core/null.lua", PROGRESS_OF(1, 5));
-			if (progress.cancelled()) {
-				return CANCELLED_ERROR;
-			}
-			auto err = LoadDataRaw(lua);
-			if (err) {
-				return err.add_context("loading null prototypes from core/null.lua");
-			}
-			progress.set("stage", "loading-mod-prototypes", mod_stage_progress(2));
-			progress.set("process", "registered-null-prototypes", PROGRESS_OF(2, 5));
-			log::Debug("{}", lf::format("[mod-loader] built-in prototypes: {}", prototype_counts_to_string()));
-		}
-
 		sol::state lua;
 		initialize_prototype_lua(lua);
 
@@ -1110,21 +1099,6 @@ end
 		}
 		progress.set("process", "assets-ready", PROGRESS_OF(1, 1));
 
-		log::Info("{}", "[mod-loader] linking prototypes");
-		for (size_t i = 0; i < PrototypeTypeRegistry::functions.size(); ++i) {
-			if (progress.cancelled()) {
-				return CANCELLED_ERROR;
-			}
-			const auto& fn = PrototypeTypeRegistry::functions[i];
-			try {
-				f32 process_progress = PrototypeTypeRegistry::functions.empty() ? 1.0f : static_cast<f32>(i) / static_cast<f32>(PrototypeTypeRegistry::functions.size());
-				progress.set("stage", "linking-prototypes", mod_stage_progress(3));
-				progress.set("process", string(fn.type()), process_progress);
-				fn.resolve();
-			} catch (const lf::exception& e) {
-				return error(generic_errc::parse_error, e.what()).add_context("linking prototypes");
-			}
-		}
 		progress.set("stage", "linking-prototypes", mod_stage_progress(4));
 		progress.set("process", "prototype-references-linked", PROGRESS_OF(1, 1));
 		progress.set("stage", "finalizing-startup", mod_stage_progress(5));

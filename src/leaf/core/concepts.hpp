@@ -3,6 +3,15 @@
 #include <type_traits>
 
 namespace lf {
+	template <typename T, typename Container>
+	struct contains;
+
+	template <typename T, template <typename...> class Container, typename... Ts>
+	struct contains<T, Container<Ts...>> : std::disjunction<std::is_same<T, Ts>...> {};
+
+	template <typename T, typename Container>
+	concept contains_type = contains<T, Container>::value;
+
 	template <typename, template <typename...> class>
 	struct is_instantiation_of : std::false_type {};
 	template <template <typename...> class Template, typename... Args>

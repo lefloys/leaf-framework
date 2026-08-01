@@ -1,6 +1,7 @@
 #pragma once
 #include "error.hpp"
 #include "exception.hpp"
+#include "concepts.hpp"
 #include "string.hpp"
 #include "typename.hpp"
 #include "types.hpp"
@@ -20,15 +21,6 @@ namespace YAML {
 
 namespace lf {
 
-	template <typename T, typename Variant>
-	struct is_in_variant;
-
-	template <typename T, typename... Ts>
-	struct is_in_variant<T, std::variant<Ts...>> : std::disjunction<std::is_same<T, Ts>...> {};
-
-	template <typename T, typename Variant>
-	constexpr bool is_in_variant_v = is_in_variant<T, Variant>::value;
-
 	class dict;
 	class list;
 	class object;
@@ -37,11 +29,55 @@ namespace lf {
 	using object_underlying = std::variant<std::monostate, bool, i64, u64, f64, string, dict, list>;
 
 	class dict : public dict_underlying {
+		template <typename T>
+		struct required_field_ref {
+			string_view name;
+			T& value;
+		};
+
+		template <typename T, typename Default>
+		struct defaulted_field_ref {
+			string_view name;
+			T& value;
+			const Default& default_value;
+		};
+
+		template <typename T>
+		struct defaulted_field_value {
+			string_view name;
+			T& value;
+			T default_value;
+		};
+
+		template <typename T>
+		void assign(const required_field_ref<T>& field) const;
+
+		template <typename T>
+		void assign(const defaulted_field_value<T>& field) const;
+
+		template <typename T, typename Default>
+		void assign(const defaulted_field_ref<T, Default>& field) const;
+
 	  public:
+		template <typename T>
+		static required_field_ref<T> field(string_view name, T& value);
+
+		template <typename T>
+		static defaulted_field_ref<T, T> field(string_view name, T& value, const T& default_value);
+
+		template <typename T>
+		static defaulted_field_value<T> field(string_view name, T& value, T&& default_value);
+
+		template <typename T, typename Default>
+		static defaulted_field_value<T> field(string_view name, T& value, const Default& default_value);
+
+		template <typename... Fields>
+		void assign(Fields&&... fields) const;
+
 		template <typename T>
 		T parse_field(string_view index) const;
 	};
-	class list : public vector<object> {
+	class list : public list_underlying {
 	  public:
 		template <typename T>
 		T parse_index(size_t index) const;
@@ -67,19 +103,16 @@ namespace lf {
 		object(const dict& value);
 		object(const list& value);
 
-		template <typename T>
-			requires is_in_variant_v<T, object::value_type>
+		template <contains_type<object::value_type> T>
 		bool is() const;
 
 		template <typename T>
 		bool convertible() const;
 
-		template <typename T>
-			requires is_in_variant_v<T, object::value_type>
+		template <contains_type<object::value_type> T>
 		T& get();
 
-		template <typename T>
-			requires is_in_variant_v<T, object::value_type>
+		template <contains_type<object::value_type> T>
 		const T& get() const;
 
 		string_view current_type_name() const;
@@ -113,11 +146,73 @@ namespace lf {
 	};
 
 	template <typename T>
+	dict::required_field_ref<T> dict::field(string_view name, T& value) {
+		return {name, value};
+	}
+
+	template <typename T>
+	dict::defaulted_field_ref<T, T> dict::field(string_view name, T& value, const T& default_value) { return {name, value, default_value}; }
+
+	template <typename T>
+	dict::defaulted_field_value<T> dict::field(string_view name, T& value, T&& default_value) { return {name, value, std::move(default_value)}; }
+
+	template <typename T, typename Default>
+	dict::defaulted_field_value<T> dict::field(string_view name, T& value, const Default& default_value) { return {name, value, T{default_value}}; }
+
+	template <typename T>
+	void dict::assign(const dict::required_field_ref<T>& field) const {
+		const auto iterator = find(field.name);
+		if (iterator == end()) {
+			throw runtime_exception(lf::format("missing field '{}'", field.name));
+		}
+		const object& object_value = iterator->second;
+		if (object_value.convertible<T>()) {
+			field.value = object_value.as<T>();
+			return;
+		}
+		field.value = parse_field<T>(field.name);
+	}
+
+	template <typename T>
+	void dict::assign(const dict::defaulted_field_value<T>& field) const {
+		const auto iterator = find(field.name);
+		if (iterator == end()) {
+			field.value = field.default_value;
+			return;
+		}
+		const object& object_value = iterator->second;
+		if (object_value.convertible<T>()) {
+			field.value = object_value.as<T>();
+			return;
+		}
+		field.value = parse_field<T>(field.name);
+	}
+
+	template <typename T, typename Default>
+	void dict::assign(const dict::defaulted_field_ref<T, Default>& field) const {
+		const auto iterator = find(field.name);
+		if (iterator == end()) {
+			field.value = field.default_value;
+			return;
+		}
+		const object& object_value = iterator->second;
+		if (object_value.convertible<T>()) {
+			field.value = object_value.as<T>();
+			return;
+		}
+		field.value = parse_field<T>(field.name);
+	}
+
+	template <typename... Fields>
+	void dict::assign(Fields&&... fields) const {
+		(assign(static_cast<const std::remove_reference_t<Fields>&>(fields)), ...);
+	}
+
+	template <typename T>
 	T dict::parse_field(string_view field) const {
 		auto it = this->find(field);
 		if (it == this->end()) {
-			throw lf::error(lf::generic_errc::missing_field,
-							lf::format("missing field '{}'", field));
+			throw lf::error(lf::generic_errc::missing_field, lf::format("missing field '{}'", field));
 		}
 		try {
 			return object_trait<T>::parse(it->second);
@@ -131,15 +226,13 @@ namespace lf {
 		try {
 			return object_trait<T>::parse(at(index));
 		} catch (...) {
-			rethrow_with_context(
-				lf::format("when parsing list index {} to '{}'", index, typeid(T).name()));
+			rethrow_with_context(lf::format("when parsing list index {} to '{}'", index, typeid(T).name()));
 		}
 	}
 
-	template <typename T>
-		requires is_in_variant_v<T, object::value_type>
+	template <contains_type<object::value_type> T>
 	bool object::is() const {
-		return std::holds_alternative<T>(*static_cast<const object_underlying*>(this));
+		return std::holds_alternative<T>(*this);
 	}
 
 	template <typename T>
@@ -155,14 +248,12 @@ namespace lf {
 		}
 	}
 
-	template <typename T>
-		requires is_in_variant_v<T, object::value_type>
+	template <contains_type<object::value_type> T>
 	T& object::get() {
-		return std::get<T>(*static_cast<object_underlying*>(this));
+		return std::get<T>(*this);
 	}
 
-	template <typename T>
-		requires is_in_variant_v<T, object::value_type>
+	template <contains_type<object::value_type> T>
 	const T& object::get() const {
 		return std::get<T>(*static_cast<const object_underlying*>(this));
 	}
@@ -202,9 +293,7 @@ namespace lf {
 
 	void EmitYaml(YAML::Emitter& out, const object& value);
 	object ObjectFromYaml(const YAML::Node& node);
-} // namespace lf
 
-namespace lf {
 	template <>
 	struct type_name_trait<dict> {
 		static constexpr const char* get() {

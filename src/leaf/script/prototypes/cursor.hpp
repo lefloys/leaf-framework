@@ -8,6 +8,8 @@ namespace lf {
 	struct PlatformCursor;
 
 	struct CursorPrototype final : public Prototype<identifier<CursorPrototype, u16, void>> {
+		static constexpr string_view type() noexcept { return "cursor"; }
+
 		string path;
 		u32 hotspot_x = 0;
 		u32 hotspot_y = 0;
@@ -18,6 +20,5 @@ namespace lf {
 
 		error load() override;
 
-		static constexpr string_view type() noexcept { return "cursor"; }
 	};
 }

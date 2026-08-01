@@ -2,6 +2,7 @@
 
 #include "leaf/core/dynamic_object.hpp"
 #include "leaf/core/error.hpp"
+#include "leaf/core/indexed_map.hpp"
 #include "leaf/core/identifier.hpp"
 #include "leaf/core/vector.hpp"
 
@@ -12,40 +13,56 @@ namespace lf {
 	template <typename T>
 	struct Database {
 		static vector<T> prototypes;
+		static indexed_map<string> names;
+		static void register_name(string_view name);
 		static void create(string_view name, const dict& data);
 		static void clear();
 		static void reserve(size_t count);
 		static size_t count();
 		static string_view name(size_t index);
+		static string_view name(typename T::ID id);
 		static void load_assets();
-		static identifier<T, u16, void> find(string_view name);
-		static T& get(identifier<T, u16, void> id);
-		static const T& get(identifier<const T, u16, void> id);
+		static typename T::ID find(string_view name);
+		static T& get(typename T::ID id);
 		static string_view type();
-		static void resolve_connectors();
-
-		static const T& get_null();
 	};
 	template <typename T>
 	vector<T> Database<T>::prototypes = {};
 	template <typename T>
+	indexed_map<string> Database<T>::names = {};
+
+	template <typename T>
+	void Database<T>::register_name(string_view name) {
+		const auto result = names.insert(string(name));
+		if (!result.second) {
+			throw runtime_exception(lf::format("duplicate {} prototype '{}'", type(), name));
+		}
+	}
+
+	template <typename T>
 	void Database<T>::create(string_view name, const dict& data) {
+		const auto name_it = names.find(string(name));
+		if (name_it == names.end()) {
+			throw runtime_exception(lf::format("{} prototype '{}' was not registered", type(), name));
+		}
+		const size_t index = names.index_of(name_it);
+		if (index != prototypes.size()) {
+			throw runtime_exception(lf::format("{} prototype '{}' was created out of registration order", type(), name));
+		}
 		T& it = prototypes.emplace_back(data);
-		it.name = name;
-		it.finalize_base_fields(data);
-		identifier<T, u16, void> idx(static_cast<u16>(prototypes.size() - 1));
-		it.id = idx;
-		it.finalize_localization();
+		it.id = typename T::ID{ static_cast<typename T::ID::vnum_t>(index + 1) };
 	}
 
 	template <typename T>
 	void Database<T>::clear() {
 		prototypes.clear();
+		names.clear();
 	}
 
 	template <typename T>
 	void Database<T>::reserve(size_t count) {
 		prototypes.reserve(prototypes.size() + count);
+		names.reserve(names.size() + count);
 	}
 
 	template <typename T>
@@ -55,7 +72,14 @@ namespace lf {
 
 	template <typename T>
 	string_view Database<T>::name(size_t index) {
-		return prototypes[index].name;
+		return names[index];
+	}
+	template <typename T>
+	string_view Database<T>::name(typename T::ID id) {
+		if (!id || id.get() > prototypes.size()) {
+			throw runtime_exception(lf::format("{} prototype id {} is invalid", type(), id.get()));
+		}
+		return names[static_cast<size_t>(id.get() - 1)];
 	}
 
 	template <typename T>
@@ -65,45 +89,24 @@ namespace lf {
 		}
 	}
 	template <typename T>
-	identifier<T, u16, void> Database<T>::find(string_view name) {
-		for (u16 i = 0; i < prototypes.size(); ++i) {
-			if (prototypes[i].name == name) {
-				return identifier<T, u16, void>(i);
-			}
+	typename T::ID Database<T>::find(string_view name) {
+		using id_type = typename T::ID;
+		const auto it = names.find(string(name));
+	if (it != names.end()) {
+			return id_type{ static_cast<typename id_type::vnum_t>(names.index_of(it) + 1) };
 		}
-		return identifier<T, u16, void>();
+		return id_type{};
 	}
 	template <typename T>
-	T& Database<T>::get(identifier<T, u16, void> id) {
-		if (id.get() >= prototypes.size()) {
+	T& Database<T>::get(typename T::ID id) {
+		if (!id || id.get() > prototypes.size()) {
 			throw runtime_exception(lf::format("{} prototype id {} out of range", type(), id.get()));
 		}
-		return prototypes[id.get()];
-	}
-	template <typename T>
-	const T& Database<T>::get(identifier<const T, u16, void> id) {
-		if (id.get() >= prototypes.size()) {
-			throw runtime_exception(lf::format("{} prototype id {} out of range", type(), id.get()));
-		}
-		return prototypes[id.get()];
+		return prototypes[id.get() - 1];
 	}
 	template <typename T>
 	string_view Database<T>::type() {
 		return T::type();
-	}
-	template <typename T>
-	void Database<T>::resolve_connectors() {
-		for (size_t i = 1; i < prototypes.size(); ++i) {
-			prototypes[i].resolve_connectors();
-		}
-	}
-
-	template <typename T>
-	const T& Database<T>::get_null() {
-		if (prototypes.empty()) {
-			throw runtime_exception(lf::format("{} null prototype is missing", type()));
-		}
-		return prototypes[0];
 	}
 } // namespace lf
 

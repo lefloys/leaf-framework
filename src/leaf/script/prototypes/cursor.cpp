@@ -41,11 +41,12 @@ namespace lf {
 		}
 
 		if (hotspot_x >= static_cast<u32>(width) || hotspot_y >= static_cast<u32>(height)) {
-			log::Warning("{}", lf::format("[cursor] hotspot outside cursor image '{}'", name));
+			log::Warning("{}", lf::format("[cursor] hotspot outside cursor image '{}'", Database<CursorPrototype>::name(id)));
 			return {};
 		}
 
 		handle = create_platform_cursor(pixels.get(), static_cast<u32>(width), static_cast<u32>(height), hotspot_x, hotspot_y);
+		return {};
 	}
 
 	CursorPrototype::~CursorPrototype() {

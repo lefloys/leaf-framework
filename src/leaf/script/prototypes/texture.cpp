@@ -85,6 +85,8 @@ namespace lf {
 		}
 	}
 
+	TexturePrototype::~TexturePrototype() = default;
+
 	error TexturePrototype::BuildAtlas(rt::view<rt::queue> queue, const std::function<void(size_t, size_t)>& progress, const std::function<void(string_view)>& phase) {
 		const auto atlas_start = std::chrono::steady_clock::now();
 		vector<atlas_source_frame> source_frames;
