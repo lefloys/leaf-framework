@@ -9,16 +9,17 @@
 namespace lf {
 	struct SoundAsset;
 
-	struct SoundPrototype : public Prototype<identifier<SoundPrototype, u16, void>>, public AssetPrototype {
+	struct SoundPrototype final : public Prototype<identifier<SoundPrototype, u16, void>> {
+		static constexpr string_view type() noexcept { return "sound"; }
+
+		explicit SoundPrototype(const dict& data);
+		~SoundPrototype();
+		error load() override;
+
 		string path;
 		string sound_type = "effects";
 		f32 volume = 1.0f;
 		std::shared_ptr<const SoundAsset> asset;
 
-		explicit SoundPrototype(const dict& data);
-		void load_asset() override;
-		void unload_asset() override;
-
-		static constexpr string_view type() noexcept { return "sound"; }
 	};
 }

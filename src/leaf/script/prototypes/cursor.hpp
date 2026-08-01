@@ -7,16 +7,16 @@
 namespace lf {
 	struct PlatformCursor;
 
-	struct CursorPrototype : public Prototype<identifier<CursorPrototype, u16, void>>, public AssetPrototype {
+	struct CursorPrototype final : public Prototype<identifier<CursorPrototype, u16, void>> {
 		string path;
 		u32 hotspot_x = 0;
 		u32 hotspot_y = 0;
 		PlatformCursor* handle = nullptr;
 
 		explicit CursorPrototype(const dict& data);
+		~CursorPrototype();
 
-		void load_asset() override;
-		void unload_asset() override;
+		error load() override;
 
 		static constexpr string_view type() noexcept { return "cursor"; }
 	};

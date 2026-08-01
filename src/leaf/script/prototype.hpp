@@ -103,19 +103,17 @@ namespace lf {
 	template <typename T>
 	struct Prototype : public PrototypeBase {
 		Prototype(const dict& data) : PrototypeBase(data) {}
-		using id_t = T;
-		id_t id;
+		virtual ~Prototype() = default;
+		using ID = T;
+		ID id;
+
+		virtual error load() {
+			return {};
+		};
+
+
 	};
 
-	// Mix into a prototype that owns runtime resources (textures, cursors,
-	// audio buffers, ...) that need lifetime management tied to the game's
-	// load/unload cycle rather than to the prototype struct itself. The
-	// registry calls load_asset() / unload_asset() across every entry of
-	// every prototype type that derives from this.
-	struct AssetPrototype {
-		virtual ~AssetPrototype() = default;
-		virtual void load_asset() = 0;
-		virtual void unload_asset() = 0;
-	};
+	
 } // namespace lf
 

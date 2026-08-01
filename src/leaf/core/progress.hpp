@@ -1,6 +1,8 @@
 #pragma once
 
 #include "string.hpp"
+#include "normalized.hpp"
+#include "vector.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -37,11 +39,10 @@ namespace lf {
 		~Progress() = default;
 
 		// Defines phase slots. Adding slots changes the denominator immediately.
-		template<typename... Labels>
-		void add(string_view label, Labels&&... labels) {
+		void add(string_view label, u64 weight = 1) {
+			(void)weight;
 			std::scoped_lock lock(shared->mutex);
 			node->phases.emplace_back(string(label));
-			(node->phases.emplace_back(string(std::forward<Labels>(labels))), ...);
 		}
 
 		// Creates the next live child. Its Progress handle owns the child node.
@@ -55,6 +56,42 @@ namespace lf {
 			node->active.push_back(child_ptr);
 			return Progress(shared, std::move(child), child_ptr, true);
 		}
+
+		vector<Progress> split(string_view label, size_t count, u64 weight = 1) {
+			(void)weight;
+			vector<Progress> result;
+			result.reserve(count);
+			for (size_t index = 0; index < count; ++index) {
+				add(label);
+			}
+			for (size_t index = 0; index < count; ++index) {
+				result.emplace_back((*this)());
+			}
+			return result;
+		}
+
+		void set(normalized<u32> value) {
+			std::scoped_lock lock(shared->mutex);
+			node->explicit_value = static_cast<f32>(value);
+		}
+
+		vector<string> path() const {
+			std::scoped_lock lock(shared->mutex);
+			vector<string> result;
+			const Node* current = node;
+			while (current) {
+				if (!current->label.empty()) {
+					result.emplace_back(current->label);
+				}
+				if (current->active.empty()) {
+					break;
+				}
+				current = current->active.back();
+			}
+			return result;
+		}
+
+		void dump_tree() const {}
 
 		// This is only a view. It never owns or completes the active node.
 		Progress active() const {
@@ -101,6 +138,7 @@ namespace lf {
 			std::vector<Node*> active;
 			size_t next_phase = 0;
 			size_t completed = 0;
+			f32 explicit_value = 0.0f;
 
 			~Node() {
 				if (parent) parent->child_finished(this);
@@ -123,7 +161,7 @@ namespace lf {
 			: shared(std::move(shared)), owned(std::move(owned)), node(node), notify(notify) {}
 
 		static f32 value_locked(const Node& value_node) {
-			if (value_node.phases.empty()) return 0.0f;
+			if (value_node.phases.empty()) return value_node.explicit_value;
 			f32 result = static_cast<f32>(value_node.completed);
 			for (const Node* child : value_node.active) result += value_locked(*child);
 			return result / static_cast<f32>(value_node.phases.size());

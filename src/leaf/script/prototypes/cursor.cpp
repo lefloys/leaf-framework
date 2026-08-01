@@ -20,45 +20,35 @@ namespace lf {
 		}
 	}
 
-	void CursorPrototype::load_asset() {
+	error CursorPrototype::load() {
 		if (handle || path.empty()) {
-			return;
+			return {};
 		}
 
 		auto resolved = ResolveVirtualPathReport(path);
 		if (!resolved) {
 			log::Warning("{}", lf::format("[cursor] {}", resolved.error().message));
-			return;
+			return {};
 		}
 
 		int width = 0;
 		int height = 0;
 		int components = 0;
-		std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> pixels(
-			stbi_load(resolved->string().c_str(), &width, &height, &components, 4),
-			stbi_image_free);
+		std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> pixels{ stbi_load(resolved->string().c_str(), &width, &height, &components, 4), stbi_image_free };
 		if (!pixels || width <= 0 || height <= 0) {
 			log::Warning("{}", lf::format("[cursor] failed to load cursor image '{}'", resolved->string()));
-			return;
+			return {};
 		}
 
 		if (hotspot_x >= static_cast<u32>(width) || hotspot_y >= static_cast<u32>(height)) {
 			log::Warning("{}", lf::format("[cursor] hotspot outside cursor image '{}'", name));
-			return;
+			return {};
 		}
 
-		handle = create_platform_cursor(
-			pixels.get(),
-			static_cast<u32>(width),
-			static_cast<u32>(height),
-			hotspot_x,
-			hotspot_y);
+		handle = create_platform_cursor(pixels.get(), static_cast<u32>(width), static_cast<u32>(height), hotspot_x, hotspot_y);
 	}
 
-	void CursorPrototype::unload_asset() {
-		if (handle) {
-			destroy_platform_cursor(handle);
-			handle = nullptr;
-		}
+	CursorPrototype::~CursorPrototype() {
+		destroy_platform_cursor(handle);
 	}
 }

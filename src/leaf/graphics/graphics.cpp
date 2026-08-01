@@ -14,7 +14,7 @@
 namespace rt {
 	// @GPT FIXED: why anonymous namespace. why is this "DefaultGraphicsAPI" hardcoded like THIS
 	namespace {
-		constexpr string_view DefaultGraphicsAPI = "rt-opengl";
+		constexpr string_view DefaultGraphicsAPI = "rt-vulkan";
 		// @GPT FIXED: CLI11 ??
 		error parse_graphics_backend(span<string_view> args, string_view& backend) {
 			for (size_t i = 0; i < args.size(); ++i) {
