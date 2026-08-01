@@ -12,7 +12,12 @@ namespace lf {
 	template <typename T>
 	struct Database {
 		static vector<T> prototypes;
-		static identifier<T, u16, void> create(string_view name, const dict& data);
+		static void create(string_view name, const dict& data);
+		static void clear();
+		static void reserve(size_t count);
+		static size_t count();
+		static string_view name(size_t index);
+		static void load_assets();
 		static identifier<T, u16, void> find(string_view name);
 		static T& get(identifier<T, u16, void> id);
 		static const T& get(identifier<const T, u16, void> id);
@@ -24,14 +29,40 @@ namespace lf {
 	template <typename T>
 	vector<T> Database<T>::prototypes = {};
 	template <typename T>
-	identifier<T, u16, void> Database<T>::create(string_view name, const dict& data) {
+	void Database<T>::create(string_view name, const dict& data) {
 		T& it = prototypes.emplace_back(data);
 		it.name = name;
 		it.finalize_base_fields(data);
 		identifier<T, u16, void> idx(static_cast<u16>(prototypes.size() - 1));
 		it.id = idx;
 		it.finalize_localization();
-		return idx;
+	}
+
+	template <typename T>
+	void Database<T>::clear() {
+		prototypes.clear();
+	}
+
+	template <typename T>
+	void Database<T>::reserve(size_t count) {
+		prototypes.reserve(prototypes.size() + count);
+	}
+
+	template <typename T>
+	size_t Database<T>::count() {
+		return prototypes.size();
+	}
+
+	template <typename T>
+	string_view Database<T>::name(size_t index) {
+		return prototypes[index].name;
+	}
+
+	template <typename T>
+	void Database<T>::load_assets() {
+		for (T& prototype : prototypes) {
+			prototype.load();
+		}
 	}
 	template <typename T>
 	identifier<T, u16, void> Database<T>::find(string_view name) {
