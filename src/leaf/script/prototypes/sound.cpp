@@ -16,24 +16,23 @@ namespace lf {
 		}
 	}
 
-	void SoundPrototype::load_asset() {
+	SoundPrototype::~SoundPrototype() = default;
+
+	error SoundPrototype::load() {
 		if (asset || path.empty()) {
-			return;
+			return {};
 		}
 		auto resolved = ResolveVirtualPathReport(path);
 		if (!resolved) {
 			log::Warning("{}", lf::format("[sound] {}", resolved.error().message));
-			return;
+			return {};
 		}
 		auto loaded = LoadSoundAsset(*resolved);
 		if (!loaded) {
 			log::Warning("{}", lf::format("[sound] {}", loaded.error().message));
-			return;
+			return {};
 		}
 		asset = std::move(*loaded);
-	}
-
-	void SoundPrototype::unload_asset() {
-		asset.reset();
+		return {};
 	}
 }
