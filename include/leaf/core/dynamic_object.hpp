@@ -11,6 +11,7 @@
 #include <limits>
 
 #include <cstddef>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -22,6 +23,122 @@ namespace YAML {
 
 namespace lf {
 
+	enum class field_presence {
+		absent,
+		present
+	};
+
+	template<typename T, typename Default = void>
+	struct field_node;
+
+	template<typename... Fields>
+	struct group_node;
+
+	template<typename Controller, typename Condition, typename... Children>
+	struct conditional_node;
+
+	template<typename T>
+	struct is_schema_node : std::false_type {};
+
+	template<typename T, typename Default>
+	struct is_schema_node<field_node<T, Default>> : std::true_type {};
+
+	template<typename... Fields>
+	struct is_schema_node<group_node<Fields...>> : std::true_type {};
+
+	template<typename Controller, typename Condition, typename... Children>
+	struct is_schema_node<conditional_node<Controller, Condition, Children...>> : std::true_type {};
+
+	template<typename T>
+	concept schema_node = is_schema_node<std::remove_cvref_t<T>>::value;
+
+	struct present_condition {
+		bool operator()(field_presence value) const { return value == field_presence::present; }
+	};
+
+	struct absent_condition {
+		bool operator()(field_presence value) const { return value == field_presence::absent; }
+	};
+
+	template<typename T>
+	struct field_node<T, void> {
+		string_view name;
+		T& value;
+
+		template<typename... Children>
+		auto present(Children&&... children) const {
+			return conditional_node{*this, present_condition{}, std::forward<Children>(children)...};
+		}
+
+		template<typename... Children>
+		auto absent(Children&&... children) const {
+			return conditional_node{*this, absent_condition{}, std::forward<Children>(children)...};
+		}
+
+		template<typename Predicate, typename... Children>
+		auto when(Predicate&& predicate, Children&&... children) const {
+			return conditional_node{*this, std::forward<Predicate>(predicate), std::forward<Children>(children)...};
+		}
+	};
+
+	template<typename T, typename Default>
+	struct field_node {
+		string_view name;
+		T& value;
+		Default default_value;
+
+		template<typename... Children>
+		auto present(Children&&... children) const {
+			return conditional_node{*this, present_condition{}, std::forward<Children>(children)...};
+		}
+
+		template<typename... Children>
+		auto absent(Children&&... children) const {
+			return conditional_node{*this, absent_condition{}, std::forward<Children>(children)...};
+		}
+
+		template<typename Predicate, typename... Children>
+		auto when(Predicate&& predicate, Children&&... children) const {
+			return conditional_node{*this, std::forward<Predicate>(predicate), std::forward<Children>(children)...};
+		}
+	};
+
+	template<typename... Fields>
+	struct group_node {
+		std::tuple<Fields...> fields;
+
+		template<typename... Children>
+		auto present(Children&&... children) const {
+			return conditional_node{*this, present_condition{}, std::forward<Children>(children)...};
+		}
+
+		template<typename... Children>
+		auto absent(Children&&... children) const {
+			return conditional_node{*this, absent_condition{}, std::forward<Children>(children)...};
+		}
+
+		template<typename Predicate, typename... Children>
+		auto when(Predicate&& predicate, Children&&... children) const {
+			return conditional_node{*this, std::forward<Predicate>(predicate), std::forward<Children>(children)...};
+		}
+	};
+
+	template<typename Controller, typename Condition, typename... Children>
+	struct conditional_node {
+		Controller controller;
+		Condition condition;
+		std::tuple<Children...> children;
+	};
+
+	template<typename T>
+	field_node<T> field(string_view name, T& value) { return {name, value}; }
+
+	template<typename T, typename Default>
+	field_node<T, T> field(string_view name, T& value, Default&& default_value) { return {name, value, T{std::forward<Default>(default_value)}}; }
+
+	template<typename... Fields>
+	group_node<std::remove_cvref_t<Fields>...> group(Fields&&... fields) { return {{std::forward<Fields>(fields)...}}; }
+
 	class dict;
 	class list;
 	class object;
@@ -30,6 +147,15 @@ namespace lf {
 	using object_underlying = std::variant<std::monostate, bool, i64, u64, f64, string, dict, list>;
 
 	class dict : public dict_underlying {
+		template<typename T, typename Default>
+		field_presence assign_schema(const field_node<T, Default>& field) const;
+
+		template<typename... Fields>
+		field_presence assign_schema(const group_node<Fields...>& group) const;
+
+		template<typename Controller, typename Condition, typename... Children>
+		field_presence assign_schema(const conditional_node<Controller, Condition, Children...>& conditional) const;
+
 		template <typename T>
 		struct required_field_ref {
 			string_view name;
@@ -71,6 +197,9 @@ namespace lf {
 
 		template <typename T, typename Default>
 		static defaulted_field_value<T> field(string_view name, T& value, const Default& default_value);
+
+		template <schema_node... Fields>
+		void assign(Fields&&... fields) const;
 
 		template <typename... Fields>
 		void assign(Fields&&... fields) const;
@@ -160,6 +289,63 @@ namespace lf {
 	template <typename T, typename Default>
 	dict::defaulted_field_value<T> dict::field(string_view name, T& value, const Default& default_value) { return {name, value, T{default_value}}; }
 
+	template<typename T, typename Default>
+	field_presence dict::assign_schema(const field_node<T, Default>& field) const {
+		const auto iterator = find(field.name);
+		if (iterator == end()) {
+			if constexpr (!std::is_void_v<Default>) {
+				field.value = field.default_value;
+			}
+			else {
+				throw runtime_exception(lf::format("missing field '{}'", field.name));
+			}
+			return field_presence::absent;
+		}
+		const object& object_value = iterator->second;
+		if (object_value.convertible<T>()) {
+			field.value = object_value.as<T>();
+		}
+		else {
+			field.value = parse_field<T>(field.name);
+		}
+		return field_presence::present;
+	}
+
+	template<typename... Fields>
+	field_presence dict::assign_schema(const group_node<Fields...>& group) const {
+		field_presence result = field_presence::absent;
+		std::apply(
+			[this, &result](const auto&... field) {
+				((result = assign_schema(field) == field_presence::present ? field_presence::present : result), ...);
+			},
+			group.fields
+		);
+		return result;
+	}
+
+	template<typename Controller, typename Condition, typename... Children>
+	field_presence dict::assign_schema(const conditional_node<Controller, Condition, Children...>& conditional) const {
+		const field_presence controller_presence = assign_schema(conditional.controller);
+		bool should_process = false;
+		if constexpr (requires { conditional.condition(controller_presence); }) {
+			should_process = conditional.condition(controller_presence);
+		}
+		else if (controller_presence == field_presence::present) {
+			should_process = conditional.condition(conditional.controller.value);
+		}
+		if (!should_process) {
+			return controller_presence;
+		}
+		field_presence result = field_presence::absent;
+		std::apply(
+			[this, &result](const auto&... field) {
+				((result = assign_schema(field) == field_presence::present ? field_presence::present : result), ...);
+			},
+			conditional.children
+		);
+		return result;
+	}
+
 	template <typename T>
 	void dict::assign(const dict::required_field_ref<T>& field) const {
 		const auto iterator = find(field.name);
@@ -202,6 +388,11 @@ namespace lf {
 			return;
 		}
 		field.value = parse_field<T>(field.name);
+	}
+
+	template <typename... Fields>
+	void dict::assign(Fields&&... fields) const {
+		(assign_schema(fields), ...);
 	}
 
 	template <typename... Fields>
