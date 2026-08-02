@@ -14,4 +14,3 @@ namespace rt {
 } // namespace rt
 
 #endif /* LEAF_GRAPHICS_FORMAT_HPP */
-

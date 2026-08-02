@@ -30,4 +30,4 @@ namespace lf {
 			return out;
 		});
 	}
-}
+} // namespace lf

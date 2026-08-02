@@ -294,7 +294,7 @@ namespace lf::lockstep {
 		instant next_snapshot_request = now();
 		Tick next_pending_resend_tick = 0;
 	};
-}
+} // namespace lf::lockstep
 
 template<>
 struct lf::bin::enum_validator<lf::lockstep::packet_kind> {
@@ -345,7 +345,7 @@ namespace lf::lockstep {
 		}
 
 		if (track_pending) {
-			pending_payloads.emplace_back(pending_payload {
+			pending_payloads.emplace_back(pending_payload{
 				.id = payload.id,
 				.hash = payload.hash,
 				.bytes = payload.bytes,
@@ -359,7 +359,7 @@ namespace lf::lockstep {
 		pending_views.clear();
 		pending_views.reserve(pending_payloads.size());
 		for (const pending_payload& pending : pending_payloads) {
-			pending_views.emplace_back(PendingPayload {
+			pending_views.emplace_back(PendingPayload{
 				.id = pending.id,
 				.hash = pending.hash,
 				.bytes = span<const byte>(pending.bytes.data(), pending.bytes.size()),
@@ -372,7 +372,7 @@ namespace lf::lockstep {
 		ready.tick = tick;
 		ready.commands.reserve(commands.size());
 		for (stored_payload& command : commands) {
-			ready.commands.emplace_back(Command {
+			ready.commands.emplace_back(Command{
 				.id = command.id,
 				.source = command.source,
 				.hash = command.hash,
@@ -595,7 +595,7 @@ namespace lf::lockstep {
 			record.local_heartbeat = local_heartbeat;
 			return true;
 		}
-		requested.emplace_back(heartbeat_request_record {
+		requested.emplace_back(heartbeat_request_record{
 			.sequence = sequence,
 			.local_heartbeat = local_heartbeat,
 		});
@@ -610,7 +610,8 @@ namespace lf::lockstep {
 		vector<heartbeat_request_record>& requested,
 		PacketSequence sequence,
 		PacketSequence local_heartbeat,
-		const Options& options) {
+		const Options& options
+	) {
 		packet_record record;
 		received.request_delay = clamp_request_delay(received.request_delay, options);
 		auto append_missing = [&] {
@@ -658,7 +659,7 @@ namespace lf::lockstep {
 	}
 
 	void remember_sent_packet(vector<sent_packet>& sent_packets, PacketSequence sequence, const vector<byte>& bytes) {
-		sent_packets.emplace_back(sent_packet {
+		sent_packets.emplace_back(sent_packet{
 			.sequence = sequence,
 			.bytes = bytes,
 		});
@@ -775,7 +776,7 @@ namespace lf::lockstep {
 		if (requests.ranges.size() >= max_ranges) {
 			return;
 		}
-		requests.ranges.emplace_back(transfer_block_requests::range {
+		requests.ranges.emplace_back(transfer_block_requests::range{
 			.first = chunk_index,
 			.count = 1,
 		});
@@ -860,7 +861,8 @@ namespace lf::lockstep {
 				connection->requested_heartbeats,
 				packet_sequence,
 				connection->next_heartbeat_sequence,
-				session.options);
+				session.options
+			);
 			session.request_heartbeats(*connection, std::move(record.missing));
 			if (!record.fresh) {
 				return {};
@@ -1052,7 +1054,8 @@ namespace lf::lockstep {
 				session.requested_heartbeats,
 				packet_sequence,
 				session.next_heartbeat_sequence,
-				session.options);
+				session.options
+			);
 			session.request_heartbeats(std::move(record.missing));
 			if (!record.fresh) {
 				return {};
@@ -1473,7 +1476,7 @@ namespace lf::lockstep {
 		}
 		const Tick target_tick = current_tick + std::max<u32>(1, options.command_latency_ticks);
 		for (stored_payload& command : commands) {
-			scheduled_commands.emplace_back(scheduled_payload {
+			scheduled_commands.emplace_back(scheduled_payload{
 				.tick = target_tick,
 				.payload = std::move(command),
 			});
@@ -1500,7 +1503,7 @@ namespace lf::lockstep {
 	template<typename Writer>
 	void host_session::send_connected(host_connection& connection, packet_kind kind, PacketSequence sequence, Writer writer) {
 		vector<byte> bytes = write_connected_packet(kind, connection.session_id, sequence, writer);
-		send_queue.emplace_back(queued_send {
+		send_queue.emplace_back(queued_send{
 			.peer = connection.peer,
 			.bytes = bytes,
 		});
@@ -1736,7 +1739,7 @@ namespace lf::lockstep {
 				}
 				const bool was_requested = snapshot.requested_chunks[chunk_index] != 0;
 				const bool retry_ready = !was_requested ||
-					snapshot.request_round >= snapshot.requested_chunks[chunk_index] + retry_delay;
+										 snapshot.request_round >= snapshot.requested_chunks[chunk_index] + retry_delay;
 				const bool window_ready = was_requested || in_flight < window;
 				if (snapshot.received_chunks[chunk_index] == 0 && retry_ready && window_ready) {
 					append_snapshot_range(requests, chunk_index, options.max_missing_per_nack);
@@ -1792,7 +1795,7 @@ namespace lf::lockstep {
 			return;
 		}
 		for (const pending_payload& pending : pending_payloads) {
-			outgoing_commands.emplace_back(stored_payload {
+			outgoing_commands.emplace_back(stored_payload{
 				.id = pending.id,
 				.source = session_id,
 				.hash = pending.hash,
@@ -1821,7 +1824,8 @@ namespace lf::lockstep {
 		}
 		const i64 warning_quantums = std::min(
 			options.connect_timeout.quantum_count(),
-			std::max<i64>(1'000'000'000, options.handshake_interval.quantum_count() * 2));
+			std::max<i64>(1'000'000'000, options.handshake_interval.quantum_count() * 2)
+		);
 		const instant current_time = now();
 		const duration time_since_activity = duration::from_quantum(current_time.quantum_count() - last_connect_activity.quantum_count());
 		return time_since_activity >= duration::from_quantum(warning_quantums);
@@ -1936,11 +1940,11 @@ namespace lf::lockstep {
 			return nullopt;
 		}
 		SnapshotProgress p;
-		p.session_id   = client.session_id;
-		p.chunks_done  = client.snapshot.received_count;
+		p.session_id = client.session_id;
+		p.chunks_done = client.snapshot.received_count;
 		p.chunks_total = client.snapshot.chunk_count;
-		p.bytes_done   = client.snapshot.received_bytes;
-		p.bytes_total  = static_cast<u64>(client.snapshot.bytes.size());
+		p.bytes_done = client.snapshot.received_bytes;
+		p.bytes_total = static_cast<u64>(client.snapshot.bytes.size());
 		// Clamp because the final chunk is short and the multiplication above
 		// can overrun the true byte total by chunk_size-1.
 		if (p.bytes_done > p.bytes_total) {
@@ -1974,11 +1978,11 @@ namespace lf::lockstep {
 				continue;
 			}
 			SnapshotProgress p;
-			p.session_id   = c.session_id;
-			p.chunks_done  = c.next_snapshot_chunk;
+			p.session_id = c.session_id;
+			p.chunks_done = c.next_snapshot_chunk;
 			p.chunks_total = c.snapshot_chunk_count;
-			p.bytes_done   = static_cast<u64>(c.next_snapshot_chunk) * static_cast<u64>(c.snapshot_chunk_size);
-			p.bytes_total  = static_cast<u64>(c.snapshot_bytes.size());
+			p.bytes_done = static_cast<u64>(c.next_snapshot_chunk) * static_cast<u64>(c.snapshot_chunk_size);
+			p.bytes_total = static_cast<u64>(c.snapshot_bytes.size());
 			if (p.bytes_done > p.bytes_total) {
 				p.bytes_done = p.bytes_total;
 			}
@@ -2045,4 +2049,4 @@ namespace lf::lockstep {
 		}
 		return span<const PendingPayload>(impl->pending_views.data(), impl->pending_views.size());
 	}
-}
+} // namespace lf::lockstep

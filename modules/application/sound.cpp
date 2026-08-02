@@ -38,7 +38,7 @@ namespace lf {
 		ma_uint32 sample_rate = 0;
 		std::vector<float> samples;
 	};
-}
+} // namespace lf
 
 struct ActiveSound {
 	lf::SoundAssetHandle asset;
@@ -96,7 +96,8 @@ struct SoundEngineState {
 		const ma_uint64 frame_count = static_cast<ma_uint64>(asset->samples.size() / asset->channels);
 		ma_audio_buffer_config buffer_config = ma_audio_buffer_config_init(
 			ma_format_f32, asset->channels, frame_count,
-			const_cast<float*>(asset->samples.data()), nullptr);
+			const_cast<float*>(asset->samples.data()), nullptr
+		);
 		ma_result result = ma_audio_buffer_init(&buffer_config, &active->buffer);
 		if (result != MA_SUCCESS) {
 			return lf::error(lf::generic_errc::input_error, "failed to create sound buffer");
@@ -189,7 +190,8 @@ namespace lf {
 		asset->samples.resize(static_cast<size_t>(frame_count) * asset->channels);
 		ma_uint64 frames_read = 0;
 		const ma_result read_result = ma_decoder_read_pcm_frames(
-			&decoder, asset->samples.data(), frame_count, &frames_read);
+			&decoder, asset->samples.data(), frame_count, &frames_read
+		);
 		ma_decoder_uninit(&decoder);
 		if (read_result != MA_SUCCESS || frames_read == 0) {
 			return unexpected(error(generic_errc::input_error, lf::format("failed to read sound '{}'", path.string())));
@@ -239,5 +241,4 @@ namespace lf {
 			return true;
 		});
 	}
-}
-
+} // namespace lf

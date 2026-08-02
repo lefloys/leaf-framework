@@ -23,7 +23,7 @@ namespace lf {
 		return duration::from_quantum(lhs.quantum_count() - rhs.quantum_count());
 	}
 
-	template <>
+	template<>
 	struct unit_trait<timespan> {
 		static constexpr array<std::pair<i64, string_view>, 4> units = {
 			{ { 86'400'000'000'000LL, "d" },
@@ -33,7 +33,7 @@ namespace lf {
 		};
 	};
 
-	template <>
+	template<>
 	struct pretty_string_trait<timespan> {
 		static string to_string(const timespan& value);
 		static timespan from_string(string_view str);

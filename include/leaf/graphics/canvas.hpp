@@ -17,7 +17,7 @@ namespace rt {
 		f32 a = 1.0f;
 	};
 
-	template <typename Vertex, typename = void>
+	template<typename Vertex, typename = void>
 	struct canvas_vertex_traits {
 		static Vertex make(pos2<f32> position, pos2<f32> uv, canvas_color color) {
 			Vertex vertex{};
@@ -38,7 +38,7 @@ namespace rt {
 		}
 	};
 
-	template <typename Vertex>
+	template<typename Vertex>
 	class Canvas {
 	  public:
 		void clear() {
@@ -96,7 +96,7 @@ namespace rt {
 		vector<Vertex> vertices;
 	};
 
-	template <typename Vertex>
+	template<typename Vertex>
 	class CompiledCanvas {
 	  public:
 		CompiledCanvas() = default;
@@ -137,13 +137,13 @@ namespace rt {
 		u32 vertex_count_value = 0;
 	};
 
-	template <typename Vertex>
+	template<typename Vertex>
 	CompiledCanvas<Vertex> compile_canvas(const Canvas<Vertex>& canvas, BufferMode mode = BufferMode::Static) {
 		return CompiledCanvas<Vertex>(canvas, mode);
 	}
 
 	namespace Cmd {
-		template <typename Vertex>
+		template<typename Vertex>
 		void Draw(view<command_buffer> command_buffer, const CompiledCanvas<Vertex>& canvas) {
 			if (canvas.empty()) {
 				return;
@@ -153,4 +153,3 @@ namespace rt {
 		}
 	} // namespace Cmd
 } // namespace rt
-

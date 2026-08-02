@@ -74,4 +74,4 @@ namespace lf::store {
 	App User::current_app() const {
 		return {};
 	}
-}
+} // namespace lf::store

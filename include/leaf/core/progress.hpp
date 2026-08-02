@@ -1,7 +1,7 @@
 #pragma once
 
-#include "leaf/core/string.hpp"
 #include "leaf/core/normalized.hpp"
+#include "leaf/core/string.hpp"
 #include "leaf/core/vector.hpp"
 
 #include <algorithm>
@@ -14,7 +14,10 @@
 #include <vector>
 
 namespace lf {
-	struct ProgressEntry { string text; f32 value = 0.0f; };
+	struct ProgressEntry {
+		string text;
+		f32 value = 0.0f;
+	};
 
 	struct Progress {
 		std::stop_token stop;
@@ -31,8 +34,13 @@ namespace lf {
 		}
 		Progress& operator=(Progress&& other) noexcept {
 			if (this != &other) {
-				shared = std::move(other.shared); owned = std::move(other.owned); node = other.node; notify = other.notify; entries = std::move(other.entries);
-				other.node = nullptr; other.notify = false;
+				shared = std::move(other.shared);
+				owned = std::move(other.owned);
+				node = other.node;
+				notify = other.notify;
+				entries = std::move(other.entries);
+				other.node = nullptr;
+				other.notify = false;
 			}
 			return *this;
 		}
@@ -110,11 +118,16 @@ namespace lf {
 
 		void set(string_view name, string_view text, f32 value) {
 			std::scoped_lock lock(shared->mutex);
-			ProgressEntry& entry = entries[string(name)]; entry.text = text; entry.value = std::clamp(value, 0.0f, 1.0f);
+			ProgressEntry& entry = entries[string(name)];
+			entry.text = text;
+			entry.value = std::clamp(value, 0.0f, 1.0f);
 		}
 		bool try_get(string_view name, ProgressEntry& entry) const {
-			std::scoped_lock lock(shared->mutex); auto it = entries.find(string(name));
-			if (it == entries.end()) return false; entry = it->second; return true;
+			std::scoped_lock lock(shared->mutex);
+			auto it = entries.find(string(name));
+			if (it == entries.end()) return false;
+			entry = it->second;
+			return true;
 		}
 
 		class Scope {
@@ -125,12 +138,16 @@ namespace lf {
 				owner.set(name, text, static_cast<f32>(current) / static_cast<f32>(count));
 			}
 			void minor(string_view text, f32 value) { owner.set("process", text, value); }
+
 		  private:
-			Progress& owner; string name; u32 count; u32 current = 0;
+			Progress& owner;
+			string name;
+			u32 count;
+			u32 current = 0;
 		};
 		Scope scope(string_view name, u32 count) { return Scope(*this, name, count); }
 
-	private:
+	  private:
 		struct Node {
 			string label;
 			Node* parent = nullptr;
@@ -146,10 +163,15 @@ namespace lf {
 
 			void child_finished(Node* child) {
 				auto it = std::find(active.begin(), active.end(), child);
-				if (it != active.end()) { active.erase(it); ++completed; }
+				if (it != active.end()) {
+					active.erase(it);
+					++completed;
+				}
 			}
 		};
-		struct Shared { std::mutex mutex; };
+		struct Shared {
+			std::mutex mutex;
+		};
 
 		std::shared_ptr<Shared> shared;
 		std::unique_ptr<Node> owned;
@@ -163,7 +185,8 @@ namespace lf {
 		static f32 value_locked(const Node& value_node) {
 			if (value_node.phases.empty()) return value_node.explicit_value;
 			f32 result = static_cast<f32>(value_node.completed);
-			for (const Node* child : value_node.active) result += value_locked(*child);
+			for (const Node* child : value_node.active)
+				result += value_locked(*child);
 			return result / static_cast<f32>(value_node.phases.size());
 		}
 	};

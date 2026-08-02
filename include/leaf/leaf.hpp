@@ -31,7 +31,6 @@ namespace lf {
 	*/
 	error Init(span<string_view> args);
 
-
 	/*!
 	** @brief Initializes Leaf without headed window/RML application support.
 	** @param args Command line arguments passed to the process.

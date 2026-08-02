@@ -1,8 +1,9 @@
 #pragma once
+#include "leaf/core/cast.hpp"
+#include "leaf/core/concepts.hpp"
 #include "leaf/core/error.hpp"
 #include "leaf/core/exception.hpp"
-#include "leaf/core/concepts.hpp"
-#include "leaf/core/cast.hpp"
+#include "leaf/core/schema.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/core/typename.hpp"
 #include "leaf/core/types.hpp"
@@ -11,134 +12,11 @@
 #include <limits>
 
 #include <cstddef>
-#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
 
-namespace YAML {
-	class Emitter;
-	class Node;
-}
-
 namespace lf {
-
-	enum class field_presence {
-		absent,
-		present
-	};
-
-	template<typename T, typename Default = void>
-	struct field_node;
-
-	template<typename... Fields>
-	struct group_node;
-
-	template<typename Controller, typename Condition, typename... Children>
-	struct conditional_node;
-
-	template<typename T>
-	struct is_schema_node : std::false_type {};
-
-	template<typename T, typename Default>
-	struct is_schema_node<field_node<T, Default>> : std::true_type {};
-
-	template<typename... Fields>
-	struct is_schema_node<group_node<Fields...>> : std::true_type {};
-
-	template<typename Controller, typename Condition, typename... Children>
-	struct is_schema_node<conditional_node<Controller, Condition, Children...>> : std::true_type {};
-
-	template<typename T>
-	concept schema_node = is_schema_node<std::remove_cvref_t<T>>::value;
-
-	struct present_condition {
-		bool operator()(field_presence value) const { return value == field_presence::present; }
-	};
-
-	struct absent_condition {
-		bool operator()(field_presence value) const { return value == field_presence::absent; }
-	};
-
-	template<typename T>
-	struct field_node<T, void> {
-		string_view name;
-		T& value;
-
-		template<typename... Children>
-		auto present(Children&&... children) const {
-			return conditional_node{*this, present_condition{}, std::forward<Children>(children)...};
-		}
-
-		template<typename... Children>
-		auto absent(Children&&... children) const {
-			return conditional_node{*this, absent_condition{}, std::forward<Children>(children)...};
-		}
-
-		template<typename Predicate, typename... Children>
-		auto when(Predicate&& predicate, Children&&... children) const {
-			return conditional_node{*this, std::forward<Predicate>(predicate), std::forward<Children>(children)...};
-		}
-	};
-
-	template<typename T, typename Default>
-	struct field_node {
-		string_view name;
-		T& value;
-		Default default_value;
-
-		template<typename... Children>
-		auto present(Children&&... children) const {
-			return conditional_node{*this, present_condition{}, std::forward<Children>(children)...};
-		}
-
-		template<typename... Children>
-		auto absent(Children&&... children) const {
-			return conditional_node{*this, absent_condition{}, std::forward<Children>(children)...};
-		}
-
-		template<typename Predicate, typename... Children>
-		auto when(Predicate&& predicate, Children&&... children) const {
-			return conditional_node{*this, std::forward<Predicate>(predicate), std::forward<Children>(children)...};
-		}
-	};
-
-	template<typename... Fields>
-	struct group_node {
-		std::tuple<Fields...> fields;
-
-		template<typename... Children>
-		auto present(Children&&... children) const {
-			return conditional_node{*this, present_condition{}, std::forward<Children>(children)...};
-		}
-
-		template<typename... Children>
-		auto absent(Children&&... children) const {
-			return conditional_node{*this, absent_condition{}, std::forward<Children>(children)...};
-		}
-
-		template<typename Predicate, typename... Children>
-		auto when(Predicate&& predicate, Children&&... children) const {
-			return conditional_node{*this, std::forward<Predicate>(predicate), std::forward<Children>(children)...};
-		}
-	};
-
-	template<typename Controller, typename Condition, typename... Children>
-	struct conditional_node {
-		Controller controller;
-		Condition condition;
-		std::tuple<Children...> children;
-	};
-
-	template<typename T>
-	field_node<T> field(string_view name, T& value) { return {name, value}; }
-
-	template<typename T, typename Default>
-	field_node<T, T> field(string_view name, T& value, Default&& default_value) { return {name, value, T{std::forward<Default>(default_value)}}; }
-
-	template<typename... Fields>
-	group_node<std::remove_cvref_t<Fields>...> group(Fields&&... fields) { return {{std::forward<Fields>(fields)...}}; }
-
 	class dict;
 	class list;
 	class object;
@@ -156,60 +34,16 @@ namespace lf {
 		template<typename Controller, typename Condition, typename... Children>
 		field_presence assign_schema(const conditional_node<Controller, Condition, Children...>& conditional) const;
 
-		template <typename T>
-		struct required_field_ref {
-			string_view name;
-			T& value;
-		};
-
-		template <typename T, typename Default>
-		struct defaulted_field_ref {
-			string_view name;
-			T& value;
-			const Default& default_value;
-		};
-
-		template <typename T>
-		struct defaulted_field_value {
-			string_view name;
-			T& value;
-			T default_value;
-		};
-
-		template <typename T>
-		void assign(const required_field_ref<T>& field) const;
-
-		template <typename T>
-		void assign(const defaulted_field_value<T>& field) const;
-
-		template <typename T, typename Default>
-		void assign(const defaulted_field_ref<T, Default>& field) const;
-
 	  public:
-		template <typename T>
-		static required_field_ref<T> field(string_view name, T& value);
-
-		template <typename T>
-		static defaulted_field_ref<T, T> field(string_view name, T& value, const T& default_value);
-
-		template <typename T>
-		static defaulted_field_value<T> field(string_view name, T& value, T&& default_value);
-
-		template <typename T, typename Default>
-		static defaulted_field_value<T> field(string_view name, T& value, const Default& default_value);
-
-		template <schema_node... Fields>
+		template<schema_node... Fields>
 		void assign(Fields&&... fields) const;
 
-		template <typename... Fields>
-		void assign(Fields&&... fields) const;
-
-		template <typename T>
+		template<typename T>
 		T parse_field(string_view index) const;
 	};
 	class list : public list_underlying {
 	  public:
-		template <typename T>
+		template<typename T>
 		T parse_index(size_t index) const;
 	};
 
@@ -233,16 +67,16 @@ namespace lf {
 		object(const dict& value);
 		object(const list& value);
 
-		template <contains_type<object::value_type> T>
+		template<contains_type<object::value_type> T>
 		bool is() const;
 
-		template <typename T>
+		template<typename T>
 		bool convertible() const;
 
-		template <contains_type<object::value_type> T>
+		template<contains_type<object::value_type> T>
 		T& get();
 
-		template <contains_type<object::value_type> T>
+		template<contains_type<object::value_type> T>
 		const T& get() const;
 
 		string_view current_type_name() const;
@@ -259,35 +93,21 @@ namespace lf {
 		object& operator[](size_t index);
 		const object& operator[](size_t index) const;
 
-		template <typename T>
+		template<typename T>
 		T as() const;
 
-		template <typename T>
+		template<typename T>
 		T parse() const;
 
-		template <typename Visitor>
+		template<typename Visitor>
 		decltype(auto) visit(Visitor&& visitor) const;
 	};
 
-	template <typename T>
+	template<typename T>
 	struct object_trait {
 		static T parse(const object& obj) = delete;
 		static dict to_dict(const T& value) = delete;
 	};
-
-	template <typename T>
-	dict::required_field_ref<T> dict::field(string_view name, T& value) {
-		return {name, value};
-	}
-
-	template <typename T>
-	dict::defaulted_field_ref<T, T> dict::field(string_view name, T& value, const T& default_value) { return {name, value, default_value}; }
-
-	template <typename T>
-	dict::defaulted_field_value<T> dict::field(string_view name, T& value, T&& default_value) { return {name, value, std::move(default_value)}; }
-
-	template <typename T, typename Default>
-	dict::defaulted_field_value<T> dict::field(string_view name, T& value, const Default& default_value) { return {name, value, T{default_value}}; }
 
 	template<typename T, typename Default>
 	field_presence dict::assign_schema(const field_node<T, Default>& field) const {
@@ -295,19 +115,13 @@ namespace lf {
 		if (iterator == end()) {
 			if constexpr (!std::is_void_v<Default>) {
 				field.value = field.default_value;
-			}
-			else {
+			} else {
 				throw runtime_exception(lf::format("missing field '{}'", field.name));
 			}
 			return field_presence::absent;
 		}
 		const object& object_value = iterator->second;
-		if (object_value.convertible<T>()) {
-			field.value = object_value.as<T>();
-		}
-		else {
-			field.value = parse_field<T>(field.name);
-		}
+		field.value = parse_field<T>(field.name);
 		return field_presence::present;
 	}
 
@@ -329,8 +143,7 @@ namespace lf {
 		bool should_process = false;
 		if constexpr (requires { conditional.condition(controller_presence); }) {
 			should_process = conditional.condition(controller_presence);
-		}
-		else if (controller_presence == field_presence::present) {
+		} else if (controller_presence == field_presence::present) {
 			should_process = conditional.condition(conditional.controller.value);
 		}
 		if (!should_process) {
@@ -346,61 +159,12 @@ namespace lf {
 		return result;
 	}
 
-	template <typename T>
-	void dict::assign(const dict::required_field_ref<T>& field) const {
-		const auto iterator = find(field.name);
-		if (iterator == end()) {
-			throw runtime_exception(lf::format("missing field '{}'", field.name));
-		}
-		const object& object_value = iterator->second;
-		if (object_value.convertible<T>()) {
-			field.value = object_value.as<T>();
-			return;
-		}
-		field.value = parse_field<T>(field.name);
-	}
-
-	template <typename T>
-	void dict::assign(const dict::defaulted_field_value<T>& field) const {
-		const auto iterator = find(field.name);
-		if (iterator == end()) {
-			field.value = field.default_value;
-			return;
-		}
-		const object& object_value = iterator->second;
-		if (object_value.convertible<T>()) {
-			field.value = object_value.as<T>();
-			return;
-		}
-		field.value = parse_field<T>(field.name);
-	}
-
-	template <typename T, typename Default>
-	void dict::assign(const dict::defaulted_field_ref<T, Default>& field) const {
-		const auto iterator = find(field.name);
-		if (iterator == end()) {
-			field.value = field.default_value;
-			return;
-		}
-		const object& object_value = iterator->second;
-		if (object_value.convertible<T>()) {
-			field.value = object_value.as<T>();
-			return;
-		}
-		field.value = parse_field<T>(field.name);
-	}
-
-	template <typename... Fields>
+	template<schema_node... Fields>
 	void dict::assign(Fields&&... fields) const {
 		(assign_schema(fields), ...);
 	}
 
-	template <typename... Fields>
-	void dict::assign(Fields&&... fields) const {
-		(assign(static_cast<const std::remove_reference_t<Fields>&>(fields)), ...);
-	}
-
-	template <typename T>
+	template<typename T>
 	T dict::parse_field(string_view field) const {
 		auto it = this->find(field);
 		if (it == this->end()) {
@@ -413,7 +177,7 @@ namespace lf {
 		}
 	}
 
-	template <typename T>
+	template<typename T>
 	T list::parse_index(size_t index) const {
 		try {
 			return object_trait<T>::parse(at(index));
@@ -422,12 +186,12 @@ namespace lf {
 		}
 	}
 
-	template <contains_type<object::value_type> T>
+	template<contains_type<object::value_type> T>
 	bool object::is() const {
 		return std::holds_alternative<T>(*this);
 	}
 
-	template <typename T>
+	template<typename T>
 	bool object::convertible() const {
 		if constexpr (std::is_same_v<T, bool>) {
 			return is<bool>();
@@ -440,17 +204,17 @@ namespace lf {
 		}
 	}
 
-	template <contains_type<object::value_type> T>
+	template<contains_type<object::value_type> T>
 	T& object::get() {
 		return std::get<T>(*this);
 	}
 
-	template <contains_type<object::value_type> T>
+	template<contains_type<object::value_type> T>
 	const T& object::get() const {
 		return std::get<T>(*static_cast<const object_underlying*>(this));
 	}
 
-	template <typename T>
+	template<typename T>
 	inline T object::as() const {
 		if (!convertible<T>()) {
 			throw std::bad_variant_access();
@@ -459,13 +223,13 @@ namespace lf {
 			return get<bool>();
 		} else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
 			if (is<i64>()) {
-				return safe_cast<T>(get<i64>());
+				return static_cast<T>(get<i64>());
 			}
 			if (is<u64>()) {
-				return safe_cast<T>(get<u64>());
+				return static_cast<T>(get<u64>());
 			}
 			if (is<f64>()) {
-				return safe_cast<T>(get<f64>());
+				return static_cast<T>(get<f64>());
 			}
 		} else if constexpr (std::is_same_v<T, string>) {
 			return get<string>();
@@ -473,39 +237,36 @@ namespace lf {
 		throw std::bad_variant_access();
 	}
 
-	template <typename T>
+	template<typename T>
 	T object::parse() const {
 		return object_trait<T>::parse(*this);
 	}
 
-	template <typename Visitor>
+	template<typename Visitor>
 	decltype(auto) object::visit(Visitor&& visitor) const {
 		return std::visit(std::forward<Visitor>(visitor), *static_cast<const object_underlying*>(this));
 	}
 
-	void EmitYaml(YAML::Emitter& out, const object& value);
-	object ObjectFromYaml(const YAML::Node& node);
-
-	template <>
+	template<>
 	struct type_name_trait<dict> {
 		static constexpr const char* get() {
 			return "dict";
 		}
 	};
-	template <>
+	template<>
 	struct type_name_trait<list> {
 		static constexpr const char* get() {
 			return "list";
 		}
 	};
-	template <>
+	template<>
 	struct type_name_trait<object> {
 		static constexpr const char* get() {
 			return "object";
 		}
 	};
 
-	template <>
+	template<>
 	struct object_trait<f32> {
 		static f32 parse(const object& obj) {
 			if (obj.is<f64>()) {
@@ -529,12 +290,11 @@ namespace lf {
 				}
 				return static_cast<f32>(u);
 			} else {
-				throw lf::runtime_exception(
-					lf::format("cannot convert type '{}' to f32", obj.current_type_name()));
+				throw lf::runtime_exception(lf::format("cannot convert type '{}' to f32", obj.current_type_name()));
 			}
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<f64> {
 		static f64 parse(const object& obj) {
 			if (obj.is<f64>()) {
@@ -546,23 +306,21 @@ namespace lf {
 				u64 u = obj.get<u64>();
 				return static_cast<f64>(u);
 			} else {
-				throw lf::runtime_exception(
-					lf::format("cannot convert type '{}' to f64", obj.current_type_name()));
+				throw lf::runtime_exception(lf::format("cannot convert type '{}' to f64", obj.current_type_name()));
 			}
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<bool> {
 		static bool parse(const object& obj) {
 			if (obj.is<bool>()) {
 				return obj.get<bool>();
 			}
-			throw lf::runtime_exception(
-				lf::format("cannot convert type '{}' to bool", obj.current_type_name()));
+			throw lf::runtime_exception(lf::format("cannot convert type '{}' to bool", obj.current_type_name()));
 		}
 	};
 
-	template <>
+	template<>
 	struct object_trait<i64> {
 		static i64 parse(const object& obj) {
 			if (obj.is<i64>()) {
@@ -578,11 +336,10 @@ namespace lf {
 			if (obj.is<f64>()) {
 				return static_cast<i64>(obj.get<f64>());
 			}
-			throw lf::runtime_exception(
-				lf::format("cannot convert type '{}' to i64", obj.current_type_name()));
+			throw lf::runtime_exception(lf::format("cannot convert type '{}' to i64", obj.current_type_name()));
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<u64> {
 		static u64 parse(const object& obj) {
 			if (obj.is<u64>()) {
@@ -602,12 +359,11 @@ namespace lf {
 				}
 				return static_cast<u64>(v);
 			}
-			throw lf::runtime_exception(
-				lf::format("cannot convert type '{}' to u64", obj.current_type_name()));
+			throw lf::runtime_exception(lf::format("cannot convert type '{}' to u64", obj.current_type_name()));
 		}
 	};
 
-	template <>
+	template<>
 	struct object_trait<i32> {
 		static i32 parse(const object& obj) {
 			i64 v = object_trait<i64>::parse(obj);
@@ -618,7 +374,7 @@ namespace lf {
 			return static_cast<i32>(v);
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<u32> {
 		static u32 parse(const object& obj) {
 			u64 v = object_trait<u64>::parse(obj);
@@ -628,7 +384,7 @@ namespace lf {
 			return static_cast<u32>(v);
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<i16> {
 		static i16 parse(const object& obj) {
 			i64 v = object_trait<i64>::parse(obj);
@@ -639,7 +395,7 @@ namespace lf {
 			return static_cast<i16>(v);
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<u16> {
 		static u16 parse(const object& obj) {
 			u64 v = object_trait<u64>::parse(obj);
@@ -649,7 +405,7 @@ namespace lf {
 			return static_cast<u16>(v);
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<i08> {
 		static i08 parse(const object& obj) {
 			i64 v = object_trait<i64>::parse(obj);
@@ -660,7 +416,7 @@ namespace lf {
 			return static_cast<i08>(v);
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<u08> {
 		static u08 parse(const object& obj) {
 			u64 v = object_trait<u64>::parse(obj);
@@ -671,35 +427,31 @@ namespace lf {
 		}
 	};
 
-	template <>
+	template<>
 	struct object_trait<string> {
 		static string parse(const object& obj) {
 			if (obj.is<string>()) {
 				return obj.get<string>();
 			}
-			throw lf::runtime_exception(
-				lf::format("cannot convert type '{}' to string", obj.current_type_name()));
+			throw runtime_exception(lf::format("cannot convert type '{}' to string", obj.current_type_name()));
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<dict> {
 		static dict parse(const object& obj) {
 			if (obj.is<dict>()) {
 				return obj.get<dict>();
 			}
-			throw lf::runtime_exception(
-				lf::format("cannot convert type '{}' to dict", obj.current_type_name()));
+			throw runtime_exception(lf::format("cannot convert type '{}' to dict", obj.current_type_name()));
 		}
 	};
-	template <>
+	template<>
 	struct object_trait<list> {
 		static list parse(const object& obj) {
 			if (obj.is<list>()) {
 				return obj.get<list>();
 			}
-			throw lf::runtime_exception(
-				lf::format("cannot convert type '{}' to list", obj.current_type_name()));
+			throw runtime_exception(lf::format("cannot convert type '{}' to list", obj.current_type_name()));
 		}
 	};
 } // namespace lf
-

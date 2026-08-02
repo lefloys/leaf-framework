@@ -38,4 +38,3 @@ namespace rt {
 } // namespace rt
 
 #endif /* LEAF_GRAPHICS_BUFFER_HPP */
-

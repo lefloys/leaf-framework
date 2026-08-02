@@ -1,8 +1,8 @@
 #include "leaf/script/localization.hpp"
 
 #include "leaf/core/logging.hpp"
-#include "leaf/script/settings.hpp"
 #include "leaf/core/unordered_map.hpp"
+#include "leaf/script/settings.hpp"
 
 #include <cctype>
 #include <shared_mutex>
@@ -322,4 +322,3 @@ namespace lf {
 		return Localize(section, text.key, parameters);
 	}
 } // namespace lf
-

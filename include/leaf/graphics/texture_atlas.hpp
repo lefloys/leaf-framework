@@ -19,7 +19,6 @@ namespace lf {
 		lf::rect<u32> rect{};
 	};
 
-
 	struct packed_atlas_frame {
 		u32 texture_index = 0;
 		u32 frame_index = 0;

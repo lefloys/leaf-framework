@@ -4,7 +4,7 @@
 #include <type_traits>
 
 namespace lf {
-	template <typename Tag, typename Rep = i64>
+	template<typename Tag, typename Rep = i64>
 	struct unit {
 		using tag_type = Tag;
 		using rep_type = Rep;
@@ -99,12 +99,12 @@ namespace lf {
 		rep_type value = 0;
 	};
 
-	template <typename Tag, typename Rep, typename Scalar, typename = std::enable_if_t<std::is_integral_v<Scalar>>>
+	template<typename Tag, typename Rep, typename Scalar, typename = std::enable_if_t<std::is_integral_v<Scalar>>>
 	constexpr unit<Tag, Rep> operator*(Scalar scalar, unit<Tag, Rep> rhs) {
 		rhs *= static_cast<Rep>(scalar);
 		return rhs;
 	}
 
-	template <typename T>
+	template<typename T>
 	struct unit_trait;
 } // namespace lf

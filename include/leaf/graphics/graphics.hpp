@@ -15,4 +15,4 @@ namespace rt {
 	bool graphics_available();
 	void exit_graphics();
 	error rutile_error();
-}
+} // namespace rt

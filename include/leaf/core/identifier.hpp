@@ -3,7 +3,7 @@
 #include "leaf/core/concepts.hpp"
 
 namespace lf {
-	template <typename T, typename vnum, typename gnum>
+	template<typename T, typename vnum, typename gnum>
 	class identifier {
 	  public:
 		using value_type = T;
@@ -34,7 +34,7 @@ namespace lf {
 		gnum gen_value = 0;
 	};
 
-	template <typename T, typename vnum>
+	template<typename T, typename vnum>
 	class identifier<T, vnum, void> {
 	  public:
 		using value_type = T;

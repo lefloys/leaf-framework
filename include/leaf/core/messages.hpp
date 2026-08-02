@@ -24,10 +24,9 @@ namespace lf {
 		vector<TextSegment> ParseAnnotatedText(string_view text);
 		string PlainText(string_view text);
 
-		template <typename T>
+		template<typename T>
 		string Field(string_view field, const T& value) {
 			return Field(field, lf::format("{}", value));
 		}
 	} // namespace log
 } // namespace lf
-

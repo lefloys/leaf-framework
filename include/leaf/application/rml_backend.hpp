@@ -1,8 +1,8 @@
 #pragma once
 
+#include "leaf/core/error.hpp"
 #include "leaf/core/filesystem.hpp"
 #include "leaf/core/span.hpp"
-#include "leaf/core/error.hpp"
 #include "leaf/core/vector.hpp"
 #include "leaf/graphics/buffer.hpp"
 #include "leaf/graphics/command_buffer.hpp"
@@ -22,7 +22,7 @@
 
 namespace lf {
 	class RmlRenderInterface : public Rml::RenderInterface {
-	public:
+	  public:
 		struct CustomDrawContext {
 			rt::view<rt::command_buffer> commands;
 			dim2<u32> viewport_size{};

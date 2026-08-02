@@ -47,7 +47,7 @@ namespace lf::sys {
 			throw;
 		}
 
-		return socket_udp { static_cast<u64>(socket) };
+		return socket_udp{ static_cast<u64>(socket) };
 	}
 
 	void close_socket_udp(socket_udp& socket) {
@@ -116,10 +116,10 @@ namespace lf::sys {
 			std::strncpy(host, "0.0.0.0", sizeof(host) - 1);
 		}
 
-		return message_udp {
+		return message_udp{
 			.address = host,
 			.port = ntohs(sender.sin_port),
 			.data = buffer.subspan(0, static_cast<std::size_t>(received)),
 		};
 	}
-}
+} // namespace lf::sys

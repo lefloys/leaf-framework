@@ -16,4 +16,4 @@ namespace lf::net::store_provider {
 	optional<Message> recv(u16, span<byte>) {
 		throw runtime_exception("store networking is not available");
 	}
-}
+} // namespace lf::net::store_provider

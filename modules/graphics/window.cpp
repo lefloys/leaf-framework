@@ -2,9 +2,9 @@
 #include "leaf/graphics/window_private.hpp"
 
 #include "leaf/core/exception.hpp"
+#include "leaf/core/logging.hpp"
 #include "leaf/core/profiler.hpp"
 #include "leaf/graphics/queue.hpp"
-#include "leaf/core/logging.hpp"
 
 #include <memory>
 #include <utility>
@@ -144,8 +144,8 @@ namespace rt {
 				events.push_back({
 					.type = INPUT_EVENT_CONTROL,
 					.control = index < KEY_ENUM_MAX
-						? input_control{ INPUT_CONTROL_KEY, static_cast<u16>(index) }
-						: input_control{ INPUT_CONTROL_BUTTON, static_cast<u16>(index - KEY_ENUM_MAX) },
+								   ? input_control{ INPUT_CONTROL_KEY, static_cast<u16>(index) }
+								   : input_control{ INPUT_CONTROL_BUTTON, static_cast<u16>(index - KEY_ENUM_MAX) },
 					.state = state,
 					.modifiers = modifiers,
 					.position = pointer_position,
@@ -217,29 +217,20 @@ namespace rt {
 		window->windowed_size = detail::default_window_size;
 		platform_window_owner(window->platform, window.get());
 
-		
 		bind_platform_window_swapchain(window->platform, window->swapchain);
-		log::Debug("Window created platform={} swapchain={} position={}x{} size={}x{}",
-				  static_cast<const void*>(window->platform),
-				  static_cast<const void*>(window->swapchain),
-				  window->windowed_position.x,
-				  window->windowed_position.y,
-				  window->windowed_size.width,
-				  window->windowed_size.height);
+		log::Debug("Window created platform={} swapchain={} position={}x{} size={}x{}", static_cast<const void*>(window->platform), static_cast<const void*>(window->swapchain), window->windowed_position.x, window->windowed_position.y, window->windowed_size.width, window->windowed_size.height);
 		return { window.release() };
 	}
 
 	void Window::Destroy(handle<window> window) {
-		log::Debug("Destroying window platform={} swapchain={}",
-				  static_cast<const void*>(window.value->platform),
-				  static_cast<const void*>(window.value->swapchain));
+		log::Debug("Destroying window platform={} swapchain={}", static_cast<const void*>(window.value->platform), static_cast<const void*>(window.value->swapchain));
 		window.value->current_framebuffer = {};
 		window.value->current_queue = {};
 		delete window.value;
 	}
 
 	void Window::SetTitle(view<window> window, string_view title) {
-		
+
 		log::Debug("Window title set to '{}'", title);
 		platform_window_title(window.value->platform, title);
 	}
@@ -283,11 +274,7 @@ namespace rt {
 			return;
 		}
 		dim2<u32> before = platform_window_size(window.value->platform);
-		log::Debug("Changing fullscreen {} -> {} from size={}x{}",
-				  window.value->fullscreen ? "true" : "false",
-				  fullscreen ? "true" : "false",
-				  before.width,
-				  before.height);
+		log::Debug("Changing fullscreen {} -> {} from size={}x{}", window.value->fullscreen ? "true" : "false", fullscreen ? "true" : "false", before.width, before.height);
 		if (fullscreen) {
 			window.value->windowed_position = platform_window_position(window.value->platform);
 			window.value->windowed_size = platform_window_size(window.value->platform);
@@ -296,10 +283,12 @@ namespace rt {
 			window.value->platform,
 			fullscreen,
 			window.value->windowed_position,
-			window.value->windowed_size);
+			window.value->windowed_size
+		);
 		window.value->resize(
 			platform_window_size(window.value->platform),
-			platform_framebuffer_size(window.value->platform));
+			platform_framebuffer_size(window.value->platform)
+		);
 		window.value->fullscreen = fullscreen;
 		dim2<u32> after = Window::Size(window);
 		log::Debug("Fullscreen change applied; size={}x{}", after.width, after.height);
@@ -395,8 +384,8 @@ namespace rt {
 					window.value->events.push_back({
 						.type = INPUT_EVENT_CONTROL,
 						.control = index < KEY_ENUM_MAX
-							? input_control{ INPUT_CONTROL_KEY, static_cast<u16>(index) }
-							: input_control{ INPUT_CONTROL_BUTTON, static_cast<u16>(index - KEY_ENUM_MAX) },
+									   ? input_control{ INPUT_CONTROL_KEY, static_cast<u16>(index) }
+									   : input_control{ INPUT_CONTROL_BUTTON, static_cast<u16>(index - KEY_ENUM_MAX) },
 						.state = state,
 						.modifiers = window.value->modifiers,
 						.position = window.value->pointer_position,
@@ -482,8 +471,7 @@ namespace rt {
 		{
 			LF_PROFILE_SCOPE("Window::BeginCommandBuffer");
 			Cmd::Begin(window.value->frame_command_buffer, queue);
-			Cmd::BeginRendering(window.value->frame_command_buffer,
-										  window.value->current_framebuffer);
+			Cmd::BeginRendering(window.value->frame_command_buffer, window.value->current_framebuffer);
 			Cmd::ClearColor(window.value->frame_command_buffer, 0, 0.0f, 0.0f, 0.0f, 1.0f);
 			Cmd::ClearDepth(window.value->frame_command_buffer, 1.0f);
 		}

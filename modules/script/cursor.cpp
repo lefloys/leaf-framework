@@ -52,4 +52,4 @@ namespace lf {
 	CursorPrototype::~CursorPrototype() {
 		destroy_platform_cursor(handle);
 	}
-}
+} // namespace lf

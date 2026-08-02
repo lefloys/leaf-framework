@@ -3,14 +3,13 @@
 #include <atomic>
 #include <condition_variable>
 #include <deque>
-#include <iomanip>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <sstream>
 
 namespace lf::log {
-
 
 	string_view console_color(Level level) {
 		switch (level) {
@@ -51,7 +50,8 @@ namespace lf::log {
 
 		const auto ms =
 			std::chrono::duration_cast<std::chrono::milliseconds>(
-				tp.time_since_epoch())
+				tp.time_since_epoch()
+			)
 				.count() %
 			1000;
 

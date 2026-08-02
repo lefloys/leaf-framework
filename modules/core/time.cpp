@@ -59,4 +59,3 @@ namespace lf {
 		return timespan(total_ns);
 	}
 } // namespace lf
-

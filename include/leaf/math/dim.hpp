@@ -3,7 +3,7 @@
 #include <leaf/core/types.hpp>
 
 namespace lf {
-	template <typename T>
+	template<typename T>
 	struct dim2 {
 		T width{};
 		T height{};

@@ -115,7 +115,7 @@ namespace lf {
 				append_unescaped(segment.text, text);
 				segments.push_back(std::move(segment));
 			}
-		}
+		} // namespace
 
 		vector<TextSegment> ParseAnnotatedText(string_view text) {
 			vector<TextSegment> segments;
@@ -184,4 +184,3 @@ namespace lf {
 		}
 	} // namespace log
 } // namespace lf
-

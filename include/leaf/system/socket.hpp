@@ -28,4 +28,4 @@ namespace lf::sys {
 	void close_socket_udp(socket_udp& socket);
 	void send_socket_udp(socket_udp socket, string_view address, u16 port, span<const byte> data);
 	optional<message_udp> recv_socket_udp(socket_udp socket, span<byte> buffer);
-}
+} // namespace lf::sys

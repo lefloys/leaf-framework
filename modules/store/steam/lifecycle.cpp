@@ -35,4 +35,3 @@ namespace lf {
 		SteamAPI_Shutdown();
 	}
 } // namespace lf
-

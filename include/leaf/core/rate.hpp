@@ -20,7 +20,8 @@ namespace lf {
 		void limit(double target_hz) {
 			if (target_hz > 0.0) {
 				target_interval = std::chrono::duration_cast<clock::duration>(
-					std::chrono::duration<double>(1.0 / target_hz));
+					std::chrono::duration<double>(1.0 / target_hz)
+				);
 			} else {
 				target_interval.reset();
 			}

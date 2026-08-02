@@ -4,8 +4,8 @@
 #include "leaf/core/format.hpp"
 
 #include <algorithm>
-#include <charconv>
 #include <cctype>
+#include <charconv>
 #include <limits>
 #include <system_error>
 
@@ -119,7 +119,7 @@ namespace lf {
 		bool ascii_digit(char value) {
 			return value >= '0' && value <= '9';
 		}
-	}
+	} // namespace
 
 	report<fixed> fixed::from_integer(i64 value) {
 		report<i64> raw = checked_scaled_integer(value);
@@ -320,4 +320,3 @@ namespace lf {
 		return *result;
 	}
 } // namespace lf
-

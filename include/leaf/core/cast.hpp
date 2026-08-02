@@ -18,7 +18,8 @@ namespace lf {
 				"safe_cast from '{}' value {} to '{}' would lose data",
 				lf::type_name<From>(),
 				value,
-				lf::type_name<To>()));
+				lf::type_name<To>()
+			));
 		}
 
 		template<typename To, typename From>
@@ -37,12 +38,10 @@ namespace lf {
 				return numeric_value >= 0.0L && numeric_value < upper;
 			}
 		}
-	}
+	} // namespace detail
 
 	template<typename To, typename From>
-		requires (std::is_arithmetic_v<To> && std::is_arithmetic_v<From> &&
-				  !std::is_same_v<std::remove_cv_t<To>, bool> &&
-				  !std::is_same_v<std::remove_cv_t<From>, bool>)
+		requires(std::is_arithmetic_v<To> && std::is_arithmetic_v<From> && !std::is_same_v<std::remove_cv_t<To>, bool> && !std::is_same_v<std::remove_cv_t<From>, bool>)
 	To safe_cast(From value) {
 		using to_t = std::remove_cv_t<To>;
 		using from_t = std::remove_cv_t<From>;

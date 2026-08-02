@@ -50,4 +50,3 @@ namespace rt {
 } // namespace rt
 
 #endif /* LEAF_GRAPHICS_GRAPHICS_PROGRAM_HPP */
-

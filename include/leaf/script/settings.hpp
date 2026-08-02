@@ -1,8 +1,8 @@
 #pragma once
 
+#include <leaf/core/dynamic_object.hpp>
 #include <leaf/core/error.hpp>
 #include <leaf/core/filesystem.hpp>
-#include <leaf/core/dynamic_object.hpp>
 #include <leaf/core/string.hpp>
 #include <leaf/core/types.hpp>
 
@@ -12,4 +12,4 @@ namespace lf {
 	error EnsureSetting(string_view mod_name, string_view name, object value);
 	report<string> LoadInputSetting(string_view mod_name, string_view action);
 	error EnsureInputSetting(string_view mod_name, string_view action, string_view key);
-}
+} // namespace lf

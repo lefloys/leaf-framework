@@ -37,4 +37,4 @@ namespace lf {
 	  private:
 		T value = 0;
 	};
-}
+} // namespace lf

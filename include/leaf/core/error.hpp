@@ -20,9 +20,9 @@ namespace lf {
 	enum class generic_errc : i32;
 	enum class graphics_errc : i32;
 } // namespace lf
-template <>
+template<>
 struct std::is_error_code_enum<lf::generic_errc> : std::true_type {};
-template <>
+template<>
 struct std::is_error_code_enum<lf::graphics_errc> : std::true_type {};
 
 namespace lf {
@@ -41,7 +41,7 @@ namespace lf {
 		parse_error,
 		type_mismatch,
 	};
-	
+
 	enum class graphics_errc : i32 {
 		unknown = 1,
 		already_exists,
@@ -113,7 +113,7 @@ namespace lf {
 		/*!
 		** @brief Creates an error from an error-code enum.
 		*/
-		template <typename error_enum>
+		template<typename error_enum>
 			requires std::is_error_code_enum_v<error_enum>
 		error(error_enum e, string_view msg = "");
 
@@ -149,20 +149,20 @@ namespace lf {
 		error_code code;
 	};
 
-	template <typename error_enum>
+	template<typename error_enum>
 		requires std::is_error_code_enum_v<error_enum>
 	error::error(error_enum e, string_view msg) : code(make_error_code(e)), message(string(msg)) {}
 
 	/*!
 	** @brief Expected result that reports only an error_code on failure.
 	*/
-	template <typename T>
+	template<typename T>
 	using result = std::expected<T, error_code>;
 
 	/*!
 	** @brief Expected result that reports a rich Leaf error on failure.
 	*/
-	template <typename T>
+	template<typename T>
 	using report = std::expected<T, error>;
 	using std::unexpected;
 } // namespace lf

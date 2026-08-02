@@ -17,8 +17,7 @@ namespace lf {
 		static generic_error_category instance;
 		return instance;
 	}
-	
-	
+
 	const char* graphics_error_category::name() const noexcept {
 		return "graphics";
 	}
@@ -49,4 +48,3 @@ namespace lf {
 	}
 
 } // namespace lf
-

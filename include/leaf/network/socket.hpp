@@ -36,4 +36,4 @@ namespace lf::net {
 
 		unique_ptr<Impl> impl;
 	};
-}
+} // namespace lf::net

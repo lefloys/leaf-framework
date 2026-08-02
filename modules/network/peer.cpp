@@ -18,4 +18,4 @@ namespace lf::net {
 	u16 Peer::channel() const {
 		return m_channel;
 	}
-}
+} // namespace lf::net

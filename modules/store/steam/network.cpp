@@ -11,7 +11,7 @@
 #include <system_error>
 
 namespace lf::net::steam_network_detail {
-	constexpr std::array<byte, 4> header_magic {
+	constexpr std::array<byte, 4> header_magic{
 		static_cast<byte>('L'),
 		static_cast<byte>('F'),
 		static_cast<byte>('N'),
@@ -57,10 +57,10 @@ namespace lf::net::steam_network_detail {
 		}
 
 		source_channel = static_cast<u16>(message[4]) |
-			(static_cast<u16>(message[5]) << 8);
+						 (static_cast<u16>(message[5]) << 8);
 		return true;
 	}
-}
+} // namespace lf::net::steam_network_detail
 
 namespace lf::net::store_provider {
 	void open_channel(u16) {
@@ -110,7 +110,7 @@ namespace lf::net::store_provider {
 			return std::nullopt;
 		}
 
-		const span<const byte> raw {
+		const span<const byte> raw{
 			reinterpret_cast<const byte*>(message->m_pData),
 			static_cast<std::size_t>(message->m_cbSize),
 		};
@@ -134,9 +134,9 @@ namespace lf::net::store_provider {
 		const u64 sender_id = message->m_identityPeer.GetSteamID64();
 		message->Release();
 
-		return Message {
+		return Message{
 			Peer::User(store::User::Get(std::to_string(sender_id)), source_channel),
 			buffer.subspan(0, payload.size()),
 		};
 	}
-}
+} // namespace lf::net::store_provider

@@ -11,7 +11,7 @@
 #include <utility>
 
 namespace lf {
-	template<instantiation_of<identifier> Handle, typename...Component>
+	template<instantiation_of<identifier> Handle, typename... Component>
 	class component_container {
 	  public:
 		using handle = Handle;
@@ -57,7 +57,8 @@ namespace lf {
 				if (component) {
 					add(handle, std::move(*component));
 				}
-			}(), ...);
+			}(),
+			 ...);
 			return handle;
 		}
 

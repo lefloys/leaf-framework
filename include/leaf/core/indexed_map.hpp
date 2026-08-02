@@ -8,7 +8,7 @@
 #include <utility>
 
 namespace lf {
-	template <typename T>
+	template<typename T>
 	class indexed_map {
 	  public:
 		using value_type = T;

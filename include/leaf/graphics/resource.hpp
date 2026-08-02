@@ -18,6 +18,13 @@
 namespace rt {
 	namespace fs = lf::fs;
 	namespace log = lf::log;
+	using ::f32;
+	using ::i32;
+	using ::u08;
+	using ::u16;
+	using ::u32;
+	using ::u64;
+	using ::usize;
 	using lf::byte;
 	using lf::dim2;
 	using lf::error;
@@ -30,13 +37,6 @@ namespace rt {
 	using lf::string;
 	using lf::string_view;
 	using lf::vector;
-	using ::f32;
-	using ::i32;
-	using ::u08;
-	using ::u16;
-	using ::u32;
-	using ::u64;
-	using ::usize;
 
 	/*!
 	** @brief Opaque Rutile buffer resource.
@@ -91,12 +91,12 @@ namespace rt {
 	/*!
 	** @brief Maps a Leaf resource tag to its native handle and destroy routine.
 	*/
-	template <typename Resource>
+	template<typename Resource>
 	struct resource_traits;
 
 	namespace detail {
 
-		template <typename NativeHandle>
+		template<typename NativeHandle>
 		constexpr NativeHandle null_handle() {
 			if constexpr (std::is_pointer_v<NativeHandle>) {
 				return nullptr;
@@ -105,17 +105,17 @@ namespace rt {
 			}
 		}
 
-		template <typename NativeHandle>
+		template<typename NativeHandle>
 		struct const_handle {
 			using type = NativeHandle;
 		};
 
-		template <typename Value>
+		template<typename Value>
 		struct const_handle<Value*> {
 			using type = const Value*;
 		};
 
-		template <typename NativeHandle>
+		template<typename NativeHandle>
 		using const_handle_t = typename const_handle<NativeHandle>::type;
 
 	} // namespace detail
@@ -126,7 +126,7 @@ namespace rt {
 	** A handle is a nullable native object value. It does not destroy the
 	** resource by itself; use unique when RAII ownership is needed.
 	*/
-	template <typename Resource>
+	template<typename Resource>
 	struct handle {
 		static_assert(!std::is_const_v<Resource>);
 		/*!
@@ -157,7 +157,7 @@ namespace rt {
 	/*!
 	** @brief Non-owning view of a Rutile-backed resource.
 	*/
-	template <typename Resource>
+	template<typename Resource>
 	struct view {
 		/*!
 		** @brief Resource type without const qualification.
@@ -196,8 +196,10 @@ namespace rt {
 		/*!
 		** @brief Creates a const view from a mutable view.
 		*/
-		template <typename OtherResource>
-		view(view<OtherResource> view) requires(std::is_const_v<Resource> && std::is_same_v<OtherResource, base_resource>) : value(view.value) {}
+		template<typename OtherResource>
+		view(view<OtherResource> view)
+			requires(std::is_const_v<Resource> && std::is_same_v<OtherResource, base_resource>)
+			: value(view.value) {}
 
 		/*!
 		** @brief Checks whether the view is non-null.
@@ -216,7 +218,7 @@ namespace rt {
 	** The owned handle is destroyed through resource_traits when reset or when
 	** the unique object is destroyed.
 	*/
-	template <typename Resource>
+	template<typename Resource>
 	class unique {
 	  public:
 		/*!
@@ -310,7 +312,7 @@ namespace rt {
 	}
 
 #define LEAF_RESOURCE_TRAITS(resource_name, native_name, destroy_func) \
-	template <>                                                        \
+	template<>                                                         \
 	struct resource_traits<resource_name> {                            \
 		using native_handle = native_name;                             \
 		static void destroy(native_handle handle) {                    \
@@ -326,7 +328,7 @@ namespace rt {
 
 #undef LEAF_RESOURCE_TRAITS
 
-	template <>
+	template<>
 	struct resource_traits<framebuffer> {
 		using native_handle = rt_framebuffer;
 		static void destroy(native_handle handle) {
@@ -334,7 +336,7 @@ namespace rt {
 		}
 	};
 
-	template <>
+	template<>
 	struct resource_traits<queue> {
 		using native_handle = rt_queue;
 	};

@@ -89,7 +89,9 @@ namespace lf {
 		if (record->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && record->NumberParameters >= 2) {
 			const ULONG_PTR operation = record->ExceptionInformation[0];
 			const ULONG_PTR address = record->ExceptionInformation[1];
-			const char* operation_name = operation == 0 ? "read" : operation == 1 ? "write" : operation == 8 ? "execute" : "access";
+			const char* operation_name = operation == 0 ? "read" : operation == 1 ? "write"
+															   : operation == 8	  ? "execute"
+																				  : "access";
 			std::cerr << "[crash] access violation while trying to " << operation_name
 					  << " address 0x" << std::hex << address << std::dec << "\n";
 		}
@@ -110,4 +112,4 @@ namespace lf {
 		std::signal(SIGSEGV, crash_signal_handler);
 		std::signal(SIGTERM, crash_signal_handler);
 	}
-}
+} // namespace lf

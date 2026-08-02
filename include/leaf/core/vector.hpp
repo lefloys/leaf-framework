@@ -9,7 +9,7 @@
 	static_cast<std::size_t>((object_ptr) - (array_start_ptr))
 
 namespace lf {
-	template <typename T, typename Alloc = std::allocator<T>>
+	template<typename T, typename Alloc = std::allocator<T>>
 	class vector : public std::vector<T, Alloc> {
 	  public:
 		using std::vector<T, Alloc>::vector;
@@ -18,17 +18,15 @@ namespace lf {
 
 		T& at(size_type index) {
 			if (index >= this->size()) {
-				throw out_of_range_exception(
-					lf::format("index {} out of range (size is {})", index, this->size()));
+				throw lf::out_of_range_exception(lf::format("index {} out of range (size is {})", index, this->size()));
 			}
-			return (*this)[index];
+			return std::vector<T, Alloc>::operator[](index);
 		}
 		const T& at(size_type index) const {
 			if (index >= this->size()) {
-				throw out_of_range_exception(
-					lf::format("index {} out of range (size is {})", index, this->size()));
+				throw lf::out_of_range_exception(lf::format("index {} out of range (size is {})", index, this->size()));
 			}
-			return (*this)[index];
+			return std::vector<T, Alloc>::operator[](index);
 		}
 	};
 } // namespace lf

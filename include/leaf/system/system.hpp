@@ -4,7 +4,6 @@
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
 
-
 namespace lf {
 	using ShutdownHandler = void (*)(void*);
 	using ShutdownHandlerId = u64;

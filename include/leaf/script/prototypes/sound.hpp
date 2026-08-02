@@ -20,6 +20,5 @@ namespace lf {
 		string sound_type = "effects";
 		f32 volume = 1.0f;
 		std::shared_ptr<const SoundAsset> asset;
-
 	};
-}
+} // namespace lf

@@ -68,11 +68,11 @@ namespace lf::lockstep {
 	// for <name>" host overlay and the "Downloading map" client loading bar
 	// to display real, measured progress rather than a hardcoded fraction.
 	struct SnapshotProgress {
-		SessionId session_id   = 0;
-		u32       chunks_done  = 0;
-		u32       chunks_total = 0;
-		u64       bytes_done   = 0;
-		u64       bytes_total  = 0;
+		SessionId session_id = 0;
+		u32 chunks_done = 0;
+		u32 chunks_total = 0;
+		u64 bytes_done = 0;
+		u64 bytes_total = 0;
 	};
 
 	struct Options {
@@ -141,11 +141,11 @@ namespace lf::lockstep {
 		// peer that's currently in downloading_snapshot — drives the
 		// "Saving the world for <name>" overlay during a join handshake.
 		optional<SnapshotProgress> incoming_snapshot() const;
-		vector<SnapshotProgress>   outgoing_snapshots() const;
+		vector<SnapshotProgress> outgoing_snapshots() const;
 
 	  private:
 		explicit Session(unique_ptr<Impl> impl);
 
 		std::unique_ptr<Impl, ImplDeleter> impl;
 	};
-}
+} // namespace lf::lockstep

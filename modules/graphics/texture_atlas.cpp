@@ -12,10 +12,10 @@
 #include <cstring>
 #include <future>
 #include <limits>
-	#include <memory>
-	#include <thread>
-	#include <unordered_map>
-	#include <vector>
+#include <memory>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include <stb_image.h>
@@ -97,9 +97,7 @@ namespace lf {
 				const u32 height = safe_cast<u32>(image_height);
 				const u32 extent = std::max<u32>(options.max_frame_extent, 256u);
 				const f32 scale = std::min(1.0f, static_cast<f32>(extent) / static_cast<f32>(std::max(width, height)));
-				frame.source = { .pos = {}, .dim = {
-					.width = std::max<u32>(1u, safe_cast<u32>(std::lround(width * scale))),
-					.height = std::max<u32>(1u, safe_cast<u32>(std::lround(height * scale))) } };
+				frame.source = { .pos = {}, .dim = { .width = std::max<u32>(1u, safe_cast<u32>(std::lround(width * scale))), .height = std::max<u32>(1u, safe_cast<u32>(std::lround(height * scale))) } };
 				frames.emplace_back(std::move(frame));
 			} else if (source.rect.pos.x >= safe_cast<u32>(image_width) || source.rect.pos.y >= safe_cast<u32>(image_height) ||
 					   source.rect.dim.width > safe_cast<u32>(image_width) - source.rect.pos.x ||
@@ -203,13 +201,7 @@ namespace lf {
 	}
 
 	packed_atlas_frame packed_frame_from(const atlas_frame& frame, u32 atlas_width, u32 atlas_height, u32 padding) {
-		return { .texture_index = frame.texture_index, .frame_index = frame.frame_index, .rect = {
-			.pos = {
-				.x = safe_cast<f32>(frame.destination.x + safe_cast<i32>(padding)) / safe_cast<f32>(atlas_width),
-				.y = safe_cast<f32>(frame.destination.y + safe_cast<i32>(padding)) / safe_cast<f32>(atlas_height) },
-			.dim = {
-				.width = safe_cast<f32>(frame.source.dim.width) / safe_cast<f32>(atlas_width),
-				.height = safe_cast<f32>(frame.source.dim.height) / safe_cast<f32>(atlas_height) } } };
+		return { .texture_index = frame.texture_index, .frame_index = frame.frame_index, .rect = { .pos = { .x = safe_cast<f32>(frame.destination.x + safe_cast<i32>(padding)) / safe_cast<f32>(atlas_width), .y = safe_cast<f32>(frame.destination.y + safe_cast<i32>(padding)) / safe_cast<f32>(atlas_height) }, .dim = { .width = safe_cast<f32>(frame.source.dim.width) / safe_cast<f32>(atlas_width), .height = safe_cast<f32>(frame.source.dim.height) / safe_cast<f32>(atlas_height) } } };
 	}
 
 	texture_atlas build_texture_atlas(rt::view<rt::queue> queue, span<const atlas_source_frame> source_frames, const texture_atlas_options& options) {
@@ -272,27 +264,26 @@ namespace lf {
 		};
 		const unsigned worker_count = std::max(1u, std::thread::hardware_concurrency());
 		auto decode = [](const string& path, u32 target_width, u32 target_height) {
-				decoded_group result;
-				int components = 0;
-				int source_width = 0;
-				int source_height = 0;
-				stbi_image image{ stbi_load(path.c_str(), &source_width, &source_height, &components, 4), stbi_image_free };
-				if (image && source_width > 0 && source_height > 0) {
-					const u32 source_width_u32 = safe_cast<u32>(source_width);
-					const u32 source_height_u32 = safe_cast<u32>(source_height);
-					result.width = target_width;
-					result.height = target_height;
-					result.pixels.resize(safe_cast<size_t>(result.width) * result.height * 4u);
-					for (u32 y = 0; y < result.height; ++y) {
-						const u32 source_y = y * source_height_u32 / result.height;
-						for (u32 x = 0; x < result.width; ++x) {
-							const u32 source_x = x * source_width_u32 / result.width;
-							std::memcpy(result.pixels.data() + (safe_cast<size_t>(y) * result.width + x) * 4u,
-								image.get() + (safe_cast<size_t>(source_y) * source_width_u32 + source_x) * 4u, 4u);
-						}
+			decoded_group result;
+			int components = 0;
+			int source_width = 0;
+			int source_height = 0;
+			stbi_image image{ stbi_load(path.c_str(), &source_width, &source_height, &components, 4), stbi_image_free };
+			if (image && source_width > 0 && source_height > 0) {
+				const u32 source_width_u32 = safe_cast<u32>(source_width);
+				const u32 source_height_u32 = safe_cast<u32>(source_height);
+				result.width = target_width;
+				result.height = target_height;
+				result.pixels.resize(safe_cast<size_t>(result.width) * result.height * 4u);
+				for (u32 y = 0; y < result.height; ++y) {
+					const u32 source_y = y * source_height_u32 / result.height;
+					for (u32 x = 0; x < result.width; ++x) {
+						const u32 source_x = x * source_width_u32 / result.width;
+						std::memcpy(result.pixels.data() + (safe_cast<size_t>(y) * result.width + x) * 4u, image.get() + (safe_cast<size_t>(source_y) * source_width_u32 + source_x) * 4u, 4u);
 					}
 				}
-				return result;
+			}
+			return result;
 		};
 
 		size_t uploaded_frames = 0;
@@ -308,28 +299,28 @@ namespace lf {
 				const atlas_upload_group& group = upload_groups[group_index];
 				const atlas_frame& group_frame = frames[upload_order[group.first]];
 				decoded_group decoded_image = decoded[group_index - batch_start].get();
-			const u32 image_width = decoded_image.width;
-			const u32 image_height = decoded_image.height;
-			if (decoded_image.pixels.empty() || image_width <= 0 || image_height <= 0) {
-				log::Warning("[textures] failed to load packed texture '{}'", group_frame.path);
-				if (options.progress) {
-					uploaded_frames += group.count;
-					const size_t completed = std::min(uploaded_frames, source_frames.size());
-					options.progress(completed, progress_total);
+				const u32 image_width = decoded_image.width;
+				const u32 image_height = decoded_image.height;
+				if (decoded_image.pixels.empty() || image_width <= 0 || image_height <= 0) {
+					log::Warning("[textures] failed to load packed texture '{}'", group_frame.path);
+					if (options.progress) {
+						uploaded_frames += group.count;
+						const size_t completed = std::min(uploaded_frames, source_frames.size());
+						options.progress(completed, progress_total);
+					}
+					continue;
 				}
-				continue;
-			}
 
-			for (size_t group_offset = 0; group_offset < group.count; ++group_offset) {
-				const atlas_frame& frame = frames[upload_order[group.first + group_offset]];
-				copy_frame_to_atlas(atlas_pixels, layout.width, frame, decoded_image.pixels.data(), image_width, options.padding);
-				if (options.progress) {
-					++uploaded_frames;
-					const size_t completed = std::min(uploaded_frames, source_frames.size());
-					options.progress(completed, progress_total);
+				for (size_t group_offset = 0; group_offset < group.count; ++group_offset) {
+					const atlas_frame& frame = frames[upload_order[group.first + group_offset]];
+					copy_frame_to_atlas(atlas_pixels, layout.width, frame, decoded_image.pixels.data(), image_width, options.padding);
+					if (options.progress) {
+						++uploaded_frames;
+						const size_t completed = std::min(uploaded_frames, source_frames.size());
+						options.progress(completed, progress_total);
+					}
 				}
 			}
-		}
 		}
 		const auto decode_done = std::chrono::steady_clock::now();
 		log::Info("[textures] atlas decode/copy: {} groups in {:.3f}s", upload_groups.size(), std::chrono::duration<f64>(decode_done - pack_done).count());

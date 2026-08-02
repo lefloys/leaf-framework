@@ -32,7 +32,7 @@ namespace rt::detail {
 			static queue_lock_registry registry;
 			return registry;
 		}
-	}
+	} // namespace
 
 	rt_queue_capability to_rutile(QueueCapability capability) {
 		switch (capability) {

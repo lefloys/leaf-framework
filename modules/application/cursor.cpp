@@ -28,4 +28,4 @@ namespace lf {
 		rt::Window::ApplyCursor(display, name, reinterpret_cast<rt::PlatformCursor*>(cursor.handle));
 		return true;
 	}
-}
+} // namespace lf

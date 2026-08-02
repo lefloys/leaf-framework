@@ -26,4 +26,4 @@ namespace lf {
 		const f32 blend = fraction * fraction * (3.0f - 2.0f * fraction);
 		return left + (right - left) * blend;
 	}
-}
+} // namespace lf

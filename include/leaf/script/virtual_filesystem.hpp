@@ -11,4 +11,4 @@ namespace lf {
 	fs::path ResolveVirtualPath(string_view path, fs::path relative_root = {});
 	report<fs::path> ResolveVirtualPathReport(string_view path, fs::path relative_root = {});
 	report<string> ReadVirtualTextFile(string_view path, fs::path relative_root = {});
-}
+} // namespace lf

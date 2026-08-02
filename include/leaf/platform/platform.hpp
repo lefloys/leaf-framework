@@ -10,9 +10,6 @@
 
 #include <rt_ext_swapchain.h>
 
-
-
-
 namespace rt {
 	struct PlatformWindow;
 	struct PlatformCursor;
@@ -58,8 +55,6 @@ namespace rt {
 namespace lf {
 	struct PlatformCursor;
 
-	using rt::PlatformWindow;
-	using rt::PlatformWindowCreateInfo;
 	using rt::bind_platform_window_swapchain;
 	using rt::create_platform_window;
 	using rt::destroy_platform_window;
@@ -78,6 +73,8 @@ namespace lf {
 	using rt::platform_window_show;
 	using rt::platform_window_size;
 	using rt::platform_window_title;
+	using rt::PlatformWindow;
+	using rt::PlatformWindowCreateInfo;
 	using rt::update_platform;
 
 	inline PlatformCursor* create_platform_cursor(const u08* rgba, u32 width, u32 height, u32 hotspot_x, u32 hotspot_y) {

@@ -19,14 +19,12 @@ namespace rt {
 	void TextureView::Destroy(handle<texture_view> texture_view) {
 		rtTextureViewDestroy(texture_view);
 	}
-	void TextureView::Filter(view<texture_view> texture_view, rt_filter mag_filter,
-							 rt_filter min_filter, rt_mip_filter mip_filter) {
+	void TextureView::Filter(view<texture_view> texture_view, rt_filter mag_filter, rt_filter min_filter, rt_mip_filter mip_filter) {
 		rtTextureViewFilter(texture_view, mag_filter, min_filter, mip_filter);
 		detail::check_rutile_error("failed to set texture view filter");
 	}
 
-	void TextureView::Address(view<texture_view> texture_view, rt_address_mode address_u,
-							  rt_address_mode address_v, rt_address_mode address_w) {
+	void TextureView::Address(view<texture_view> texture_view, rt_address_mode address_u, rt_address_mode address_v, rt_address_mode address_w) {
 		rtTextureViewAddress(texture_view, address_u, address_v, address_w);
 		detail::check_rutile_error("failed to set texture view address mode");
 	}
@@ -41,8 +39,7 @@ namespace rt {
 		detail::check_rutile_error("failed to set texture view LOD");
 	}
 
-	timepoint TextureView::CopyToBuffer(view<queue> queue, view<texture_view> texture_view,
-										view<buffer> buffer) {
+	timepoint TextureView::CopyToBuffer(view<queue> queue, view<texture_view> texture_view, view<buffer> buffer) {
 		auto lock = detail::lock_queue(queue);
 		rt_timepoint timepoint = rtTextureViewCopyToBuffer(texture_view, buffer);
 		detail::check_rutile_error("failed to copy texture view to buffer");

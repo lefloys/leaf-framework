@@ -1,8 +1,8 @@
 #include "leaf/network/socket.hpp"
 
+#include "leaf/core/exception.hpp"
 #include "leaf/store/network.hpp"
 #include "leaf/system/socket.hpp"
-#include "leaf/core/exception.hpp"
 
 namespace lf::net {
 	struct Socket::Impl {
@@ -29,7 +29,7 @@ namespace lf::net {
 				return std::nullopt;
 			}
 
-			return Message { Peer::Address(message->address, message->port), message->data };
+			return Message{ Peer::Address(message->address, message->port), message->data };
 		}
 
 		lf::sys::socket_udp socket;
@@ -90,4 +90,4 @@ namespace lf::net {
 		}
 		return impl->recv(buffer);
 	}
-}
+} // namespace lf::net

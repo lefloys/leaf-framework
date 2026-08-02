@@ -9,14 +9,14 @@ namespace lf {
 		string key;
 	};
 
-	template <>
+	template<>
 	struct type_name_trait<local_string> {
 		static constexpr const char* get() {
 			return "local_string";
 		}
 	};
 
-	template <>
+	template<>
 	struct object_trait<local_string> {
 		static local_string parse(const object& obj) {
 			if (obj.is<string>()) {
@@ -26,4 +26,3 @@ namespace lf {
 		}
 	};
 } // namespace lf
-

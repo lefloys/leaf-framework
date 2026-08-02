@@ -35,4 +35,4 @@ namespace lf {
 		asset = std::move(*loaded);
 		return {};
 	}
-}
+} // namespace lf

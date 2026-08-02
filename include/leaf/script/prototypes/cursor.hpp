@@ -19,6 +19,5 @@ namespace lf {
 		~CursorPrototype();
 
 		error load() override;
-
 	};
-}
+} // namespace lf

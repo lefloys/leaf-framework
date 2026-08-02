@@ -13,4 +13,4 @@ namespace lf::store {
 			return !id.empty();
 		}
 	};
-}
+} // namespace lf::store

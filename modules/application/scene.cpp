@@ -6,15 +6,15 @@
 #include <leaf/application/sound.hpp>
 #include <leaf/core/exception.hpp>
 #include <leaf/core/format.hpp>
+#include <leaf/core/logging.hpp>
 #include <leaf/core/memory.hpp>
 #include <leaf/core/messages.hpp>
 #include <leaf/core/profiler.hpp>
-#include <leaf/graphics/graphics.hpp>
 #include <leaf/graphics/command_buffer.hpp>
 #include <leaf/graphics/framebuffer.hpp>
+#include <leaf/graphics/graphics.hpp>
 #include <leaf/graphics/texture_view.hpp>
 #include <leaf/graphics/window.hpp>
-#include <leaf/core/logging.hpp>
 #include <leaf/platform/platform.hpp>
 #include <leaf/script/localization.hpp>
 #include <leaf/script/mod_loader.hpp>
@@ -41,8 +41,8 @@
 #include <functional>
 #include <sstream>
 #include <thread>
-#include <utility>
 #include <unordered_map>
+#include <utility>
 
 namespace lf {
 	namespace {
@@ -393,8 +393,8 @@ namespace lf {
 				return false;
 			}
 			return element.GetTagName() == "window" ||
-				element.GetTagName() == "body" ||
-				element.HasAttribute("tabindex");
+				   element.GetTagName() == "body" ||
+				   element.HasAttribute("tabindex");
 		}
 
 		Rml::Element* containing_input_scope(Rml::ElementDocument& document, Rml::Element& focused) {
@@ -718,10 +718,10 @@ namespace lf {
 			}
 
 			string event_script = lua_event_table(attribute, {
-				{ "mouse_x", lua_event_number(event.GetParameter<f32>("mouse_x", 0.0f)) },
-				{ "mouse_y", lua_event_number(event.GetParameter<f32>("mouse_y", 0.0f)) },
-				{ "button", lua_event_number(event.GetParameter<int>("button", -1)) },
-			});
+																 { "mouse_x", lua_event_number(event.GetParameter<f32>("mouse_x", 0.0f)) },
+																 { "mouse_y", lua_event_number(event.GetParameter<f32>("mouse_y", 0.0f)) },
+																 { "button", lua_event_number(event.GetParameter<int>("button", -1)) },
+															 });
 			event_script += script;
 			scene.pending_scripts.push_back({ "event", std::move(event_script) });
 			return;
@@ -1018,15 +1018,7 @@ namespace lf {
 				string class_names = string(element->GetClassNames());
 				string id_text = element_id.empty() ? "" : lf::format("#{}", element_id);
 				string class_text = class_names.empty() ? "" : lf::format(".{}", class_names);
-				log::Info("{}", lf::format("[ui] {}{}{}{} {}x{} at {},{}",
-								indent,
-								string(element->GetTagName()),
-								id_text,
-								class_text,
-								element->GetOffsetWidth(),
-								element->GetOffsetHeight(),
-								element->GetAbsoluteLeft(),
-								element->GetAbsoluteTop()));
+				log::Info("{}", lf::format("[ui] {}{}{}{} {}x{} at {},{}", indent, string(element->GetTagName()), id_text, class_text, element->GetOffsetWidth(), element->GetOffsetHeight(), element->GetAbsoluteLeft(), element->GetAbsoluteTop()));
 				for (int i = 0; i < element->GetNumChildren(); ++i) {
 					dump(element->GetChild(i), level + 1);
 				}
@@ -1326,7 +1318,9 @@ namespace lf {
 		// from here instead of os.time().
 		lua.set_function("now_unix", []() -> double {
 			return static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(
-				std::chrono::system_clock::now().time_since_epoch()).count());
+										   std::chrono::system_clock::now().time_since_epoch()
+			)
+										   .count());
 		});
 
 		lua.set_function("profile", [](bool enabled) {
@@ -1521,7 +1515,8 @@ namespace lf {
 			}
 			if (desired_hz != applied_hz) {
 				interval = std::chrono::duration_cast<clock::duration>(
-					std::chrono::duration<double>(1.0 / desired_hz));
+					std::chrono::duration<double>(1.0 / desired_hz)
+				);
 				applied_hz = desired_hz;
 				next_tick = clock::now();
 			}
@@ -1906,10 +1901,10 @@ end
 			auto mouse_y = parameters.find("mouse_y");
 			auto button = parameters.find("button");
 			string event_script = lua_event_table(attribute, {
-				{ "mouse_x", lua_event_number(mouse_x != parameters.end() ? mouse_x->second.Get<f32>(0.0f) : 0.0f) },
-				{ "mouse_y", lua_event_number(mouse_y != parameters.end() ? mouse_y->second.Get<f32>(0.0f) : 0.0f) },
-				{ "button", lua_event_number(button != parameters.end() ? button->second.Get<i32>(-1) : -1) },
-			});
+																 { "mouse_x", lua_event_number(mouse_x != parameters.end() ? mouse_x->second.Get<f32>(0.0f) : 0.0f) },
+																 { "mouse_y", lua_event_number(mouse_y != parameters.end() ? mouse_y->second.Get<f32>(0.0f) : 0.0f) },
+																 { "button", lua_event_number(button != parameters.end() ? button->second.Get<i32>(-1) : -1) },
+															 });
 			event_script += script;
 			pending_scripts.push_back({ string(source_name), std::move(event_script) });
 			return true;
@@ -1989,11 +1984,11 @@ end
 				}
 
 				string event_script = lua_event_table("mousescroll", {
-					std::pair<lf::string_view, lf::string>{ lf::string_view("mouse_x"), lua_event_number(event.position.x) },
-					std::pair<lf::string_view, lf::string>{ lf::string_view("mouse_y"), lua_event_number(event.position.y) },
-					std::pair<lf::string_view, lf::string>{ lf::string_view("scroll_x"), lua_event_number(event.delta.x) },
-					std::pair<lf::string_view, lf::string>{ lf::string_view("scroll_y"), lua_event_number(event.delta.y) },
-				});
+																		 std::pair<lf::string_view, lf::string>{ lf::string_view("mouse_x"), lua_event_number(event.position.x) },
+																		 std::pair<lf::string_view, lf::string>{ lf::string_view("mouse_y"), lua_event_number(event.position.y) },
+																		 std::pair<lf::string_view, lf::string>{ lf::string_view("scroll_x"), lua_event_number(event.delta.x) },
+																		 std::pair<lf::string_view, lf::string>{ lf::string_view("scroll_y"), lua_event_number(event.delta.y) },
+																	 });
 				event_script += script;
 				pending_scripts.push_back({ "input-scroll", std::move(event_script) });
 				return;
@@ -2033,10 +2028,10 @@ end
 			string focused_script = focused->GetAttribute<Rml::String>(Rml::String(lf::format("{}-{}", attribute, event_key)), "");
 			if (!focused_script.empty()) {
 				string event_script = lua_event_table(attribute, {
-					{ "key", lua_event_string(event_key) },
-					{ "character", lua_event_number(static_cast<i32>(event_character)) },
-					{ "modifiers", lua_event_number(static_cast<i32>(event.modifiers.value)) },
-				});
+																	 { "key", lua_event_string(event_key) },
+																	 { "character", lua_event_number(static_cast<i32>(event_character)) },
+																	 { "modifiers", lua_event_number(static_cast<i32>(event.modifiers.value)) },
+																 });
 				event_script += focused_script;
 				pending_scripts.push_back({ "input", std::move(event_script) });
 			}
@@ -2074,10 +2069,10 @@ end
 			}
 
 			string event_script = lua_event_table(attribute, {
-				{ "key", lua_event_string(event_key) },
-				{ "character", lua_event_number(static_cast<i32>(event_character)) },
-				{ "modifiers", lua_event_number(static_cast<i32>(event.modifiers.value)) },
-			});
+																 { "key", lua_event_string(event_key) },
+																 { "character", lua_event_number(static_cast<i32>(event_character)) },
+																 { "modifiers", lua_event_number(static_cast<i32>(event.modifiers.value)) },
+															 });
 			event_script += script;
 			pending_scripts.push_back({ "input", std::move(event_script) });
 		}
@@ -2109,7 +2104,8 @@ end
 								string clipboard_text = platform_clipboard_text();
 								string filtered_text = filter_text_input(clipboard_text);
 								if (filtered_text != clipboard_text) {
-									for (char character : filtered_text) context->ProcessTextInput(static_cast<Rml::Character>(character));
+									for (char character : filtered_text)
+										context->ProcessTextInput(static_cast<Rml::Character>(character));
 									break;
 								}
 							}
@@ -2127,14 +2123,12 @@ end
 					}
 				}
 				break;
-			case INPUT_EVENT_POINTER_MOVE:
-				{
-					int mouse_x = static_cast<int>(event.position.x);
-					int mouse_y = static_cast<int>(event.position.y);
-					int modifiers = rml_modifiers(event.modifiers);
-					context->ProcessMouseMove(mouse_x, mouse_y, modifiers);
-				}
-				break;
+			case INPUT_EVENT_POINTER_MOVE: {
+				int mouse_x = static_cast<int>(event.position.x);
+				int mouse_y = static_cast<int>(event.position.y);
+				int modifiers = rml_modifiers(event.modifiers);
+				context->ProcessMouseMove(mouse_x, mouse_y, modifiers);
+			} break;
 			case INPUT_EVENT_POINTER_ENTER:
 				if (event.state == input_state::Up) {
 					context->ProcessMouseLeave();
@@ -2349,4 +2343,3 @@ end
 		return title_text;
 	}
 } // namespace lf
-

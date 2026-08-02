@@ -1,7 +1,7 @@
- #pragma once
+#pragma once
 
-#include "leaf/core/vector.hpp"
 #include "leaf/core/error.hpp"
+#include "leaf/core/vector.hpp"
 #include "leaf/graphics/texture_atlas.hpp"
 #include "leaf/script/prototype.hpp"
 
@@ -27,6 +27,5 @@ namespace lf {
 		f32 frames_per_second = 0.0f;
 		vector<TextureSourceFrame> frames;
 		vector<rect<f32>> atlas_frames;
-
 	};
 } // namespace lf

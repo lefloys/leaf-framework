@@ -16,4 +16,4 @@ namespace lf {
 	error PlaySoundAsset(const SoundAssetHandle& asset, f32 volume);
 	error PlaySoundFile(const fs::path& path, f32 volume);
 	void InstallSoundScript(sol::state& lua);
-}
+} // namespace lf

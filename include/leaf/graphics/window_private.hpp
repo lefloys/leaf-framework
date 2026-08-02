@@ -30,7 +30,7 @@ namespace rt {
 		std::vector<input_event> events;
 		pos2<f32> pointer_position;
 		bool pointer_inside = false;
-		
+
 		bool fullscreen = false;
 		bool fullscreen_change_requested = false;
 		bool requested_fullscreen = false;

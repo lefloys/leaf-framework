@@ -1,8 +1,8 @@
 #pragma once
 
 #include "leaf/core/error.hpp"
-#include "leaf/core/dynamic_object.hpp"
 #include "leaf/core/progress.hpp"
+#include "leaf/core/yaml.hpp"
 #include "leaf/script/localization.hpp"
 #include "leaf/script/mod_info.hpp"
 

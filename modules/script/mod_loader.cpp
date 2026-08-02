@@ -1,12 +1,12 @@
 #include "leaf/script/mod_loader.hpp"
 
-#include "leaf/script/mod_enabled.hpp"
+#include "leaf/core/logging.hpp"
 #include "leaf/script/localization.hpp"
+#include "leaf/script/mod_enabled.hpp"
 #include "leaf/script/prototypes/texture.hpp"
 #include "leaf/script/registry.hpp"
 #include "leaf/script/settings.hpp"
 #include "leaf/script/virtual_filesystem.hpp"
-#include "leaf/core/logging.hpp"
 
 #include <leaf/graphics/graphics.hpp>
 #include <leaf/graphics/queue.hpp>
@@ -14,8 +14,8 @@
 #include <sol/sol.hpp>
 #include <yaml-cpp/yaml.h>
 
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <functional>
 #include <limits>
@@ -102,7 +102,7 @@ namespace lf {
 			loaded_settings[string(mod_name)] = std::move(*settings);
 			return error::no_error;
 		}
-	}
+	} // namespace detail
 
 	class DataScriptRunner {
 	  public:
@@ -384,10 +384,7 @@ namespace lf {
 		}
 	}
 	string dependency_to_string(const ModDependency& dependency) {
-		return lf::format("{} {} {} {}", dependency_type_name(dependency.type),
-					  dependency.name,
-					  operator_to_string(dependency.op),
-					  version_to_string(dependency.required_version));
+		return lf::format("{} {} {} {}", dependency_type_name(dependency.type), dependency.name, operator_to_string(dependency.op), version_to_string(dependency.required_version));
 	}
 	string dependencies_to_string(const vector<ModDependency>& dependencies) {
 		if (dependencies.empty()) {
@@ -522,7 +519,8 @@ settings["startup"] = {}
 	void initialize_settings_lua(
 		sol::state& lua,
 		vector<std::pair<string, object>>& setting_defaults,
-		vector<std::pair<string, string>>& input_defaults) {
+		vector<std::pair<string, string>>& input_defaults
+	) {
 		lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
 		lua.set_function("__leaf_set_local_input_binding", [&input_defaults](string_view action, string_view key) {
 			input_defaults.emplace_back(string(action), string(key));
@@ -675,10 +673,7 @@ end
 		std::unordered_map<string, size_t> mod_index;
 		for (size_t i = 0; i < mods.size(); ++i) {
 			mod_index[mods[i].name] = i;
-			log::Debug("{}", lf::format("[mod-loader] dependency input: {} v{} deps=[{}]",
-									mods[i].name,
-									version_to_string(mods[i].mod_version),
-									dependencies_to_string(mods[i].dependencies)));
+			log::Debug("{}", lf::format("[mod-loader] dependency input: {} v{} deps=[{}]", mods[i].name, version_to_string(mods[i].mod_version), dependencies_to_string(mods[i].dependencies)));
 		}
 
 		std::vector<std::vector<size_t>> graph(mods.size());
@@ -689,8 +684,7 @@ end
 				if (dep.type == ModDependency::Type::Forbidden) {
 					if (it != mod_index.end()) {
 						// Check forbidden version constraint
-						if (version_compare(mods[it->second].mod_version, dep.required_version,
-											dep.op)) {
+						if (version_compare(mods[it->second].mod_version, dep.required_version, dep.op)) {
 							string msg =
 								"Mod '" + mods[i].name + "' forbids mod '" + dep.name +
 								"' (version " + version_to_string(mods[it->second].mod_version) +
@@ -705,8 +699,7 @@ end
 					dep.type == ModDependency::Type::Optional) {
 					if (it != mod_index.end()) {
 						// Check required/optional version constraint
-						if (!version_compare(mods[it->second].mod_version, dep.required_version,
-											 dep.op)) {
+						if (!version_compare(mods[it->second].mod_version, dep.required_version, dep.op)) {
 							string msg = "Mod '" + mods[i].name + "' requires mod '" + dep.name +
 										 " " + operator_to_string(dep.op) + " version " +
 										 version_to_string(dep.required_version) + "' but '" +
@@ -891,7 +884,9 @@ end
 
 		progress.set("stage", "collecting-sorting-mods", mod_stage_progress(0));
 		progress.set("process", "scanning-mod-directories", PROGRESS_OF(0, 3));
-		if (progress.cancelled()) { return CANCELLED_ERROR; }
+		if (progress.cancelled()) {
+			return CANCELLED_ERROR;
+		}
 
 		vector<ModInfo> mods;
 		auto add_mods_from_dir = [&](const fs::path& dir, bool privileged) {

@@ -3,42 +3,52 @@
 #include <type_traits>
 
 namespace lf {
-	template <typename T, typename Container>
+	template<typename T, typename Container>
 	struct contains;
 
-	template <typename T, template <typename...> class Container, typename... Ts>
+	template<typename T, template<typename...> class Container, typename... Ts>
 	struct contains<T, Container<Ts...>> : std::disjunction<std::is_same<T, Ts>...> {};
 
-	template <typename T, typename Container>
+	template<typename T, typename Container>
 	concept contains_type = contains<T, Container>::value;
 
-	template <typename, template <typename...> class>
+	template<typename, template<typename...> class>
 	struct is_instantiation_of : std::false_type {};
-	template <template <typename...> class Template, typename... Args>
+	template<template<typename...> class Template, typename... Args>
 	struct is_instantiation_of<Template<Args...>, Template> : std::true_type {};
-	template <typename T, template <typename...> class Template>
+	template<typename T, template<typename...> class Template>
 	concept instantiation_of = is_instantiation_of<T, Template>::value;
 
+	template<typename T>
+	concept mutable_type = !std::is_const_v<T>;
 
-	template <typename T> struct is_bitfield_enum : std::false_type {};
-	template <typename T> constexpr bool is_bitfield_enum_v = is_bitfield_enum<T>::value;
-	template <typename T> concept bitfield_enum = std::is_enum_v<T> && is_bitfield_enum_v<T>;
+	template<typename T>
+	struct is_bitfield_enum : std::false_type {};
+	template<typename T>
+	constexpr bool is_bitfield_enum_v = is_bitfield_enum<T>::value;
+	template<typename T>
+	concept bitfield_enum = std::is_enum_v<T> && is_bitfield_enum_v<T>;
 } // namespace lf
 
-template<lf::bitfield_enum E> constexpr E operator|(E, E);
-template<lf::bitfield_enum E> constexpr E operator&(E, E);
-template<lf::bitfield_enum E> constexpr E operator^(E, E);
-template<lf::bitfield_enum E> constexpr E operator~(E);
+template<lf::bitfield_enum E>
+constexpr E operator|(E, E);
+template<lf::bitfield_enum E>
+constexpr E operator&(E, E);
+template<lf::bitfield_enum E>
+constexpr E operator^(E, E);
+template<lf::bitfield_enum E>
+constexpr E operator~(E);
 
-template<lf::bitfield_enum E> constexpr E& operator|=(E&, E);
-template<lf::bitfield_enum E> constexpr E& operator&=(E&, E);
-template<lf::bitfield_enum E> constexpr E& operator^=(E&, E);
-
+template<lf::bitfield_enum E>
+constexpr E& operator|=(E&, E);
+template<lf::bitfield_enum E>
+constexpr E& operator&=(E&, E);
+template<lf::bitfield_enum E>
+constexpr E& operator^=(E&, E);
 
 /*************************************************************************************************/
 /*===============================================================================================*/
 /*************************************************************************************************/
-
 
 template<lf::bitfield_enum E>
 constexpr E operator|(E a, E b) {

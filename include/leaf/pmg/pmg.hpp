@@ -12,7 +12,7 @@
 #include <leaf/core/vector.hpp>
 
 namespace lf::pmg {
-	template <typename Vertex>
+	template<typename Vertex>
 	struct scratch_triangle;
 
 	struct options {
@@ -29,7 +29,7 @@ namespace lf::pmg {
 		u32 height = 0;
 	};
 
-	template <typename Vertex>
+	template<typename Vertex>
 	struct triangle_builder {
 		Vertex& v0() {
 			slot_modes[0] = slot_mode::new_vertex;
@@ -71,9 +71,9 @@ namespace lf::pmg {
 		};
 
 		friend struct scratch_triangle<Vertex>;
-		template <typename>
+		template<typename>
 		friend class writer;
-		template <typename, typename>
+		template<typename, typename>
 		friend class indexed_writer;
 
 		void repush(u32 slot, u32 reverse_vertex_index) {
@@ -87,7 +87,7 @@ namespace lf::pmg {
 		std::array<u32, 3> repush_indices{};
 	};
 
-	template <typename Vertex>
+	template<typename Vertex>
 	struct scratch_triangle {
 		scratch_triangle() {
 			construct();
@@ -135,7 +135,7 @@ namespace lf::pmg {
 	};
 
 	namespace detail {
-		template <typename Source>
+		template<typename Source>
 		u32 triangle_count(const Source& source) {
 			if constexpr (requires { source.triangle_count(); }) {
 				return source.triangle_count();
@@ -144,12 +144,11 @@ namespace lf::pmg {
 			} else if constexpr (requires { source.width; source.height; }) {
 				return source.width * source.height * 2;
 			} else {
-				static_assert(sizeof(Source) == 0,
-							  "pmg triangle source must expose triangle_count(), count, or width/height");
+				static_assert(sizeof(Source) == 0, "pmg triangle source must expose triangle_count(), count, or width/height");
 			}
 		}
 
-		template <typename Source, typename Vertex>
+		template<typename Source, typename Vertex>
 		void prepare_triangle(const Source& source, u32 index, triangle_builder<Vertex>& builder) {
 			if constexpr (requires { source.prepare_triangle(index, builder); }) {
 				source.prepare_triangle(index, builder);
@@ -160,26 +159,25 @@ namespace lf::pmg {
 			}
 		}
 
-	template <typename Vertex, typename Index>
-	struct staging_storage {
-		vector<u08> vertex_bytes;
-		vector<u08> index_bytes;
-	};
+		template<typename Vertex, typename Index>
+		struct staging_storage {
+			vector<u08> vertex_bytes;
+			vector<u08> index_bytes;
+		};
 
-		template <typename Vertex, typename Index>
+		template<typename Vertex, typename Index>
 		staging_storage<Vertex, Index>& tls_storage() {
 			thread_local staging_storage<Vertex, Index> storage;
 			return storage;
 		}
 	} // namespace detail
 
-	template <typename Vertex>
+	template<typename Vertex>
 	class writer {
 	  public:
 		explicit writer(vector<u08>& vertex_bytes, options opts = {})
 			: vertex_bytes(&vertex_bytes), opts(opts) {
-			static_assert(std::is_trivially_copyable_v<Vertex>,
-						  "pmg writers serialize Vertex with memcpy, so Vertex must be trivially copyable");
+			static_assert(std::is_trivially_copyable_v<Vertex>, "pmg writers serialize Vertex with memcpy, so Vertex must be trivially copyable");
 		}
 
 		void submit(const triangle_builder<Vertex>& triangle) {
@@ -190,8 +188,7 @@ namespace lf::pmg {
 					const u08* bytes = history_vertex(base_history_count, triangle.repush_indices[slot]);
 					std::memcpy(submitted_vertices[slot].data(), bytes, sizeof(Vertex));
 				} else {
-					std::memcpy(submitted_vertices[slot].data(), &triangle.vertices[slot],
-								sizeof(Vertex));
+					std::memcpy(submitted_vertices[slot].data(), &triangle.vertices[slot], sizeof(Vertex));
 				}
 			}
 			ensure_vertex_capacity(3 * sizeof(Vertex));
@@ -211,16 +208,14 @@ namespace lf::pmg {
 		void flush() {
 			auto& storage = detail::tls_storage<Vertex, u32>();
 			if (!storage.vertex_bytes.empty()) {
-				vertex_bytes->insert(vertex_bytes->end(), storage.vertex_bytes.begin(),
-									 storage.vertex_bytes.end());
+				vertex_bytes->insert(vertex_bytes->end(), storage.vertex_bytes.begin(), storage.vertex_bytes.end());
 				storage.vertex_bytes.clear();
 			}
 		}
 
 		u32 vertex_count() const {
 			auto& storage = detail::tls_storage<Vertex, u32>();
-			return static_cast<u32>(vertex_bytes->size() / sizeof(Vertex) +
-									storage.vertex_bytes.size() / sizeof(Vertex));
+			return static_cast<u32>(vertex_bytes->size() / sizeof(Vertex) + storage.vertex_bytes.size() / sizeof(Vertex));
 		}
 
 	  private:
@@ -253,8 +248,7 @@ namespace lf::pmg {
 		const u08* history_vertex(u32 history_count, u32 reverse_vertex_index) const {
 			const u32 vertex_size = sizeof(Vertex);
 			if (reverse_vertex_index >= history_count) {
-				throw out_of_range_exception(lf::format("pmg vertex repush index {} out of range ({} vertices in history)",
-													reverse_vertex_index, history_count));
+				throw out_of_range_exception(lf::format("pmg vertex repush index {} out of range ({} vertices in history)", reverse_vertex_index, history_count));
 			}
 			const u32 vertex_index = history_count - reverse_vertex_index - 1;
 			return vertex_history.data() + vertex_index * vertex_size;
@@ -283,13 +277,12 @@ namespace lf::pmg {
 		options opts{};
 	};
 
-	template <typename Vertex, typename Index = u32>
+	template<typename Vertex, typename Index = u32>
 	class indexed_writer {
 	  public:
 		indexed_writer(vector<u08>& vertex_bytes, vector<u08>& index_bytes, options opts = {})
 			: vertex_bytes(&vertex_bytes), index_bytes(&index_bytes), opts(opts) {
-			static_assert(std::is_trivially_copyable_v<Vertex>,
-						  "pmg writers serialize Vertex with memcpy, so Vertex must be trivially copyable");
+			static_assert(std::is_trivially_copyable_v<Vertex>, "pmg writers serialize Vertex with memcpy, so Vertex must be trivially copyable");
 			static_assert(std::is_integral_v<Index>, "pmg index type must be integral");
 		}
 
@@ -324,27 +317,23 @@ namespace lf::pmg {
 		void flush() {
 			auto& storage = detail::tls_storage<Vertex, Index>();
 			if (!storage.vertex_bytes.empty()) {
-				vertex_bytes->insert(vertex_bytes->end(), storage.vertex_bytes.begin(),
-									 storage.vertex_bytes.end());
+				vertex_bytes->insert(vertex_bytes->end(), storage.vertex_bytes.begin(), storage.vertex_bytes.end());
 				storage.vertex_bytes.clear();
 			}
 			if (!storage.index_bytes.empty()) {
-				index_bytes->insert(index_bytes->end(), storage.index_bytes.begin(),
-									storage.index_bytes.end());
+				index_bytes->insert(index_bytes->end(), storage.index_bytes.begin(), storage.index_bytes.end());
 				storage.index_bytes.clear();
 			}
 		}
 
 		u32 vertex_count() const {
 			auto& storage = detail::tls_storage<Vertex, Index>();
-			return static_cast<u32>(vertex_bytes->size() / sizeof(Vertex) +
-									storage.vertex_bytes.size() / sizeof(Vertex));
+			return static_cast<u32>(vertex_bytes->size() / sizeof(Vertex) + storage.vertex_bytes.size() / sizeof(Vertex));
 		}
 
 		u32 index_count() const {
 			auto& storage = detail::tls_storage<Vertex, Index>();
-			return static_cast<u32>(index_bytes->size() / sizeof(Index) +
-									storage.index_bytes.size() / sizeof(Index));
+			return static_cast<u32>(index_bytes->size() / sizeof(Index) + storage.index_bytes.size() / sizeof(Index));
 		}
 
 	  private:
@@ -375,8 +364,7 @@ namespace lf::pmg {
 
 		Index history_index(u32 history_count, u32 reverse_vertex_index) const {
 			if (reverse_vertex_index >= history_count) {
-				throw out_of_range_exception(lf::format("pmg vertex repush index {} out of range ({} vertices in history)",
-													reverse_vertex_index, history_count));
+				throw out_of_range_exception(lf::format("pmg vertex repush index {} out of range ({} vertices in history)", reverse_vertex_index, history_count));
 			}
 			return index_history[history_count - reverse_vertex_index - 1];
 		}
@@ -414,7 +402,7 @@ namespace lf::pmg {
 		options opts{};
 	};
 
-	template <typename Vertex, typename Writer, typename Source>
+	template<typename Vertex, typename Writer, typename Source>
 	class triangle_range {
 	  public:
 		triangle_range(Writer& writer, const Source& source, options opts)
@@ -488,10 +476,8 @@ namespace lf::pmg {
 		scratch_triangle<Vertex> scratch{};
 	};
 
-	template <typename Vertex, typename Writer, typename Source>
-	triangle_range<Vertex, Writer, Source> triangles(Writer& writer, const Source& source,
-													 options opts = {}) {
+	template<typename Vertex, typename Writer, typename Source>
+	triangle_range<Vertex, Writer, Source> triangles(Writer& writer, const Source& source, options opts = {}) {
 		return triangle_range<Vertex, Writer, Source>(writer, source, opts);
 	}
 } // namespace lf::pmg
-

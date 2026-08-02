@@ -34,9 +34,8 @@ namespace lf::log {
 		string_view value;
 		std::source_location location;
 
-		template <std::size_t N>
-		consteval Text(const char (&v)[N],
-					   std::source_location loc = std::source_location::current())
+		template<std::size_t N>
+		consteval Text(const char (&v)[N], std::source_location loc = std::source_location::current())
 			: value(v, N - 1), location(loc) {}
 	};
 
@@ -114,8 +113,7 @@ namespace lf::log {
 	// FREE FUNCTION API
 	// =========================
 
-
-	template <typename... Args>
+	template<typename... Args>
 	void log(Level level, Text text, Args&&... args) {
 		string message;
 
@@ -126,40 +124,39 @@ namespace lf::log {
 		}
 
 		Logger::instance().write({ level,
-				std::move(message),
-				text.location,
-				0,
-				std::chrono::system_clock::now() });
+								   std::move(message),
+								   text.location,
+								   0,
+								   std::chrono::system_clock::now() });
 	}
 
-	template <typename... Args>
+	template<typename... Args>
 	void Trace(Text t, Args&&... a) {
 		log(Level::Trace, t, std::forward<Args>(a)...);
 	}
-	template <typename... Args>
+	template<typename... Args>
 	void Debug(Text t, Args&&... a) {
 		log(Level::Debug, t, std::forward<Args>(a)...);
 	}
-	template <typename... Args>
+	template<typename... Args>
 	void Info(Text t, Args&&... a) {
 		log(Level::Info, t, std::forward<Args>(a)...);
 	}
-	template <typename... Args>
+	template<typename... Args>
 	void Warning(Text t, Args&&... a) {
 		log(Level::Warning, t, std::forward<Args>(a)...);
 	}
-	template <typename... Args>
+	template<typename... Args>
 	void Error(Text t, Args&&... a) {
 		log(Level::Error, t, std::forward<Args>(a)...);
 	}
-	template <typename... Args>
+	template<typename... Args>
 	void FATAL(Text t, Args&&... a) {
 		log(Level::FATAL, t, std::forward<Args>(a)...);
 	}
-	template <typename... Args>
+	template<typename... Args>
 	void Assert(Text t, Args&&... a) {
 		log(Level::Assert, t, std::forward<Args>(a)...);
 	}
 
 } // namespace lf::log
-

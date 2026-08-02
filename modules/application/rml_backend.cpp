@@ -1,12 +1,12 @@
 #include "leaf/application/rml_backend.hpp"
 
+#include "embed/font.h"
 #include "leaf/core/format.hpp"
 #include "leaf/core/logging.hpp"
 #include "leaf/core/profiler.hpp"
-#include "leaf/platform/platform.hpp"
 #include "leaf/graphics/timepoint.hpp"
+#include "leaf/platform/platform.hpp"
 #include "leaf/script/virtual_filesystem.hpp"
-#include "embed/font.h"
 
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/SystemInterface.h>
@@ -62,7 +62,6 @@ namespace lf {
 		int bottom = 0;
 	};
 
-
 	error init_rml(span<string_view> args) {
 		log::Debug("[leaf] Starting interface...");
 		g_rml_system = std::make_unique<RmlSystemInterface>();
@@ -79,9 +78,9 @@ namespace lf {
 
 		Rml::Span<const Rml::byte> default_font(
 			reinterpret_cast<const Rml::byte*>(Comic_Sans_MS_ttf),
-			sizeof(Comic_Sans_MS_ttf));
-		if (!Rml::LoadFontFace(default_font, "Comic Sans MS", Rml::Style::FontStyle::Normal,
-							   Rml::Style::FontWeight::Auto, true)) {
+			sizeof(Comic_Sans_MS_ttf)
+		);
+		if (!Rml::LoadFontFace(default_font, "Comic Sans MS", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Auto, true)) {
 			Rml::Shutdown();
 			g_rml_initialized = false;
 			g_rml_renderer.reset();
@@ -122,9 +121,7 @@ namespace lf {
 		rt::vertex_layout layout{ sizeof(UiVertex), attributes, 3 };
 		rt::GraphicsProgram::VertexLayout(program, layout);
 		rt::GraphicsProgram::RasterState(program, rt::CullMode::None, rt::FrontFace::CounterClockwise, rt::FillMode::Solid);
-		rt::GraphicsProgram::BlendState(program, true, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA,
-									RT_BLEND_OP_ADD, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA,
-									RT_BLEND_OP_ADD);
+		rt::GraphicsProgram::BlendState(program, true, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA, RT_BLEND_OP_ADD, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA, RT_BLEND_OP_ADD);
 		rt::GraphicsProgram::Finalize(program);
 		uniform_location = rt::GraphicsProgram::UniformLocation(program, "UiDraw");
 		texture_location = rt::GraphicsProgram::UniformLocation(program, "UiTexture");
@@ -238,7 +235,8 @@ namespace lf {
 		int height = 0;
 		int components = 0;
 		std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> pixels(
-			stbi_load(path.string().c_str(), &width, &height, &components, 4), stbi_image_free);
+			stbi_load(path.string().c_str(), &width, &height, &components, 4), stbi_image_free
+		);
 		if (!pixels || width <= 0 || height <= 0) {
 			return 0;
 		}
@@ -266,8 +264,7 @@ namespace lf {
 		auto* texture_data = new TextureData;
 		texture_data->size = { width, height };
 		texture_data->image = rt::unique<rt::texture>(rt::Texture::Create());
-		rt::Texture::Data(upload_queue, texture_data->image, RT_TEXTURE_2D, 0,
-					  width, height, 1, RT_RGBA8_UNORM, pixels);
+		rt::Texture::Data(upload_queue, texture_data->image, RT_TEXTURE_2D, 0, width, height, 1, RT_RGBA8_UNORM, pixels);
 		texture_data->view = rt::unique<rt::texture_view>(rt::TextureView::CreateFromTexture(texture_data->image));
 		rt::TextureView::Filter(texture_data->view, RT_FILTER_LINEAR, RT_FILTER_LINEAR, RT_MIP_FILTER_NONE);
 		rt::TextureView::Address(texture_data->view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
@@ -394,8 +391,7 @@ namespace lf {
 				rtCmdUseGraphicsProgram(current_command_buffer, draw_program);
 				program_bound = true;
 			}
-			rtCmdSetScissor(current_command_buffer, static_cast<u32>(left), static_cast<u32>(top),
-							static_cast<u32>(right - left), static_cast<u32>(bottom - top));
+			rtCmdSetScissor(current_command_buffer, static_cast<u32>(left), static_cast<u32>(top), static_cast<u32>(right - left), static_cast<u32>(bottom - top));
 			rtCmdUniformBuffer(current_command_buffer, uniform_location, draw_uniform_buffer, 0, sizeof(uniform));
 			if (bound_texture != draw_texture.value) {
 				rtCmdUniformTexture(current_command_buffer, texture_location, draw_texture);
@@ -419,4 +415,3 @@ namespace lf {
 	}
 
 } // namespace lf
-

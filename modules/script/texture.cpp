@@ -48,7 +48,7 @@ namespace lf {
 	}
 
 	TexturePrototype::TexturePrototype(const dict& data)
-			: Prototype<identifier<TexturePrototype, u16, void>>(data) {
+		: Prototype<identifier<TexturePrototype, u16, void>>(data) {
 		if (has_field(data, "path")) {
 			load_field(data, "path", path);
 		}
@@ -137,4 +137,3 @@ namespace lf {
 		}
 	}
 } // namespace lf
-

@@ -1,9 +1,9 @@
 #include "leaf/platform/platform.hpp"
 
 #include "leaf/core/exception.hpp"
+#include "leaf/core/logging.hpp"
 #include "leaf/graphics/resource.hpp"
 #include "leaf/graphics/window_private.hpp"
-#include "leaf/core/logging.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -20,10 +20,18 @@ static GLFWwindow* to_glfw(rt::PlatformWindow* wnd) { return reinterpret_cast<GL
 static rt::window_t* owner(GLFWwindow* wnd) { return static_cast<rt::window_t*>(glfwGetWindowUserPointer(wnd)); }
 
 static rt::input_key input_key_from_glfw(int key) {
-	if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) { return static_cast<rt::input_key>(rt::KEY_A + key - GLFW_KEY_A); }
-	if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) { return static_cast<rt::input_key>(rt::KEY_0 + key - GLFW_KEY_0); }
-	if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9) { return static_cast<rt::input_key>(rt::KEY_NUMPAD_0 + key - GLFW_KEY_KP_0); }
-	if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F24) { return static_cast<rt::input_key>(rt::KEY_F1 + key - GLFW_KEY_F1); }
+	if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
+		return static_cast<rt::input_key>(rt::KEY_A + key - GLFW_KEY_A);
+	}
+	if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
+		return static_cast<rt::input_key>(rt::KEY_0 + key - GLFW_KEY_0);
+	}
+	if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9) {
+		return static_cast<rt::input_key>(rt::KEY_NUMPAD_0 + key - GLFW_KEY_KP_0);
+	}
+	if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F24) {
+		return static_cast<rt::input_key>(rt::KEY_F1 + key - GLFW_KEY_F1);
+	}
 
 	switch (key) {
 	case GLFW_KEY_BACKSPACE: /******/ return rt::KEY_BACKSPACE;
@@ -78,10 +86,18 @@ static rt::input_key input_key_from_glfw(int key) {
 
 static rt::input_modifiers input_modifiers_from_glfw(int mods) {
 	rt::input_modifiers modifiers;
-	if (mods & GLFW_MOD_CONTROL) { modifiers.add(rt::INPUT_MODIFIER_CTRL); }
-	if (mods & GLFW_MOD_SHIFT) { modifiers.add(rt::INPUT_MODIFIER_SHIFT); }
-	if (mods & GLFW_MOD_ALT) { modifiers.add(rt::INPUT_MODIFIER_ALT); }
-	if (mods & GLFW_MOD_SUPER) { modifiers.add(rt::INPUT_MODIFIER_SUPER); }
+	if (mods & GLFW_MOD_CONTROL) {
+		modifiers.add(rt::INPUT_MODIFIER_CTRL);
+	}
+	if (mods & GLFW_MOD_SHIFT) {
+		modifiers.add(rt::INPUT_MODIFIER_SHIFT);
+	}
+	if (mods & GLFW_MOD_ALT) {
+		modifiers.add(rt::INPUT_MODIFIER_ALT);
+	}
+	if (mods & GLFW_MOD_SUPER) {
+		modifiers.add(rt::INPUT_MODIFIER_SUPER);
+	}
 	return modifiers;
 }
 
@@ -100,7 +116,8 @@ static void mouse_button_callback(GLFWwindow* wnd, int button, int action, int m
 		window->control(
 			{ rt::INPUT_CONTROL_BUTTON, static_cast<u16>(input_button) },
 			down,
-			input_modifiers_from_glfw(mods));
+			input_modifiers_from_glfw(mods)
+		);
 	}
 }
 
@@ -191,7 +208,8 @@ static void framebuffer_size_callback(GLFWwindow* wnd, int width, int height) {
 		{
 			static_cast<u32>(width),
 			static_cast<u32>(height),
-		});
+		}
+	);
 }
 
 namespace rt {
@@ -346,7 +364,8 @@ namespace rt {
 			windowed_position.y,
 			static_cast<int>(windowed_size.width),
 			static_cast<int>(windowed_size.height),
-			GLFW_DONT_CARE);
+			GLFW_DONT_CARE
+		);
 		glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_TRUE);
 		glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_TRUE);
 	}

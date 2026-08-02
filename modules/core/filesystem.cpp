@@ -25,13 +25,14 @@ namespace lf::fs {
 
 		string text(
 			(std::istreambuf_iterator<char>(file)),
-			std::istreambuf_iterator<char>());
+			std::istreambuf_iterator<char>()
+		);
 		if (!file.eof() && file.fail()) {
 			return unexpected(error(
 				generic_errc::input_error,
-				lf::format("failed to read '{}'", path)));
+				lf::format("failed to read '{}'", path)
+			));
 		}
 		return text;
 	}
 } // namespace lf::fs
-

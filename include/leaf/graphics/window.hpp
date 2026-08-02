@@ -1,8 +1,8 @@
 #ifndef LEAF_GRAPHICS_WINDOW_HPP
 #define LEAF_GRAPHICS_WINDOW_HPP
 
-#include <leaf/graphics/resource.hpp>
 #include <leaf/core/string.hpp>
+#include <leaf/graphics/resource.hpp>
 #include <leaf/math/dim.hpp>
 #include <leaf/math/pos.hpp>
 
@@ -13,7 +13,7 @@ namespace rt {
 	struct window_t;
 	struct PlatformCursor;
 
-	template <>
+	template<>
 	struct resource_traits<window> {
 		using native_handle = window_t*;
 		static void destroy(native_handle handle);

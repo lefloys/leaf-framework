@@ -54,7 +54,7 @@ namespace lf::store {
 			default: return UserRelationship::Unknown;
 			}
 		}
-	}
+	} // namespace
 
 	string_view StateName(UserState state) {
 		switch (state) {
@@ -187,4 +187,4 @@ namespace lf::store {
 		}
 		return App{ std::to_string(game_info.m_gameID.AppID()) };
 	}
-}
+} // namespace lf::store

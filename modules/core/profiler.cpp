@@ -22,7 +22,7 @@ namespace lf {
 		std::atomic<bool> profiler_enabled = false;
 		std::mutex profiler_mutex;
 		unordered_map<string, ProfileBucket> profiler_buckets;
-	}
+	} // namespace
 
 	void SetProfilerEnabled(bool enabled) {
 		profiler_enabled.store(enabled, std::memory_order_relaxed);
@@ -91,14 +91,14 @@ namespace lf {
 				entry.calls,
 				entry.total_ms,
 				average_ms,
-				entry.max_ms));
+				entry.max_ms
+			));
 		}
 	}
 
-	ProfileScope::ProfileScope(string_view name) :
-		name(name),
-		start(std::chrono::steady_clock::now()),
-		enabled(ProfilerEnabled()) {}
+	ProfileScope::ProfileScope(string_view name) : name(name),
+												   start(std::chrono::steady_clock::now()),
+												   enabled(ProfilerEnabled()) {}
 
 	ProfileScope::~ProfileScope() {
 		if (!enabled) {
@@ -109,4 +109,3 @@ namespace lf {
 		RecordProfileSample(name, std::chrono::duration<f64, std::milli>(end - start).count());
 	}
 } // namespace lf
-

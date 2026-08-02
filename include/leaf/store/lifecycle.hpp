@@ -9,4 +9,4 @@ namespace lf {
 	string_view store_backend_name();
 	void update_store();
 	void exit_store();
-}
+} // namespace lf

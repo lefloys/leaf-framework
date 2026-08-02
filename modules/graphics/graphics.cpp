@@ -1,15 +1,13 @@
 #include "leaf/graphics/graphics.hpp"
 
-#include "leaf/core/logging.hpp"
 #include "leaf/config.hpp"
+#include "leaf/core/logging.hpp"
 
-#include <rutile.h>
 #include <rt_ext_glfw.h>
 #include <rt_ext_swapchain.h>
+#include <rutile.h>
 
 #include <cstdlib>
-
-
 
 namespace rt {
 	namespace {
@@ -36,7 +34,7 @@ namespace rt {
 			}
 			return error::no_error;
 		}
-	}
+	} // namespace
 
 	void rutile_log_output(const char* message, void*) {
 		if (!message || !message[0]) {
@@ -51,26 +49,60 @@ namespace rt {
 		}
 	}
 	static error rutile_error(enum rt_error err, string_view context) {
-		if (err == RT_SUCCESS) { return error::no_error; }
+		if (err == RT_SUCCESS) {
+			return error::no_error;
+		}
 
 		error_code code;
 		switch (err) {
-		case RT_OUT_OF_HOST_MEMORY: /*********/ code = graphics_errc::out_of_host_memory; /*****/ break;
-		case RT_OUT_OF_DEVICE_MEMORY:/********/ code = graphics_errc::out_of_device_memory; /***/ break;
-		case RT_IMPROPER_USAGE: /*************/ code = graphics_errc::invalid_argument; /*******/ break;
-		case RT_PLATFORM_FAILURE:/************/ code = graphics_errc::platform_failure; /*******/ break;
-		case RT_DEVICE_LOST: /****************/ code = graphics_errc::device_lost; /************/ break;
-		case RT_ALREADY_INITIALIZED: /********/ code = graphics_errc::already_exists; /*********/ break;
-		case RT_NO_BACKEND: /*****************/ code = graphics_errc::not_supported; /**********/ break;
-		case RT_UNSUPPORTED_PLATFORM: /*******/ code = graphics_errc::not_supported; /**********/ break;
-		case RT_UNSUPPORTED_FEATURE: /********/ code = graphics_errc::unsupported_feature; /****/ break;
-		case RT_INITIALIZATION_FAILED: /******/ code = graphics_errc::initialization; /*********/ break;
-		case RT_LAYER_NOT_PRESENT: /**********/ code = graphics_errc::layer_not_present; /******/ break;
-		case RT_EXTENSION_NOT_PRESENT: /******/ code = graphics_errc::extension_not_present; /**/ break;
-		case RT_INCOMPATIBLE_DRIVER: /********/ code = graphics_errc::incompatible_driver; /****/ break;
-		case RT_SHADER_COMPILATION_FAILED: /**/ code = graphics_errc::shader_compilation; /*****/ break;
-		case RT_SHADER_LINK_FAILED: /*********/ code = graphics_errc::shader_link_failed; /*****/ break;
-		case RT_FEATURE_NOT_SUPPORTED: /******/ code = graphics_errc::unsupported_feature; /****/ break;
+		case RT_OUT_OF_HOST_MEMORY:					  /*********/
+			code = graphics_errc::out_of_host_memory; /*****/
+			break;
+		case RT_OUT_OF_DEVICE_MEMORY:					/********/
+			code = graphics_errc::out_of_device_memory; /***/
+			break;
+		case RT_IMPROPER_USAGE:						/*************/
+			code = graphics_errc::invalid_argument; /*******/
+			break;
+		case RT_PLATFORM_FAILURE:					/************/
+			code = graphics_errc::platform_failure; /*******/
+			break;
+		case RT_DEVICE_LOST:				   /****************/
+			code = graphics_errc::device_lost; /************/
+			break;
+		case RT_ALREADY_INITIALIZED:			  /********/
+			code = graphics_errc::already_exists; /*********/
+			break;
+		case RT_NO_BACKEND:						 /*****************/
+			code = graphics_errc::not_supported; /**********/
+			break;
+		case RT_UNSUPPORTED_PLATFORM:			 /*******/
+			code = graphics_errc::not_supported; /**********/
+			break;
+		case RT_UNSUPPORTED_FEATURE:				   /********/
+			code = graphics_errc::unsupported_feature; /****/
+			break;
+		case RT_INITIALIZATION_FAILED:			  /******/
+			code = graphics_errc::initialization; /*********/
+			break;
+		case RT_LAYER_NOT_PRESENT:					 /**********/
+			code = graphics_errc::layer_not_present; /******/
+			break;
+		case RT_EXTENSION_NOT_PRESENT:					 /******/
+			code = graphics_errc::extension_not_present; /**/
+			break;
+		case RT_INCOMPATIBLE_DRIVER:				   /********/
+			code = graphics_errc::incompatible_driver; /****/
+			break;
+		case RT_SHADER_COMPILATION_FAILED:			  /**/
+			code = graphics_errc::shader_compilation; /*****/
+			break;
+		case RT_SHADER_LINK_FAILED:					  /*********/
+			code = graphics_errc::shader_link_failed; /*****/
+			break;
+		case RT_FEATURE_NOT_SUPPORTED:				   /******/
+			code = graphics_errc::unsupported_feature; /****/
+			break;
 		default: UNREACHABLE(); break;
 		}
 		const char* message = rtErrorMessage();
@@ -82,8 +114,6 @@ namespace rt {
 	error rutile_error() {
 		return rutile_error(rtError(), "Rutile call");
 	}
-
-
 
 	error init_graphics(span<string_view> args, bool headless) {
 		lf::log::Info("[leaf] Starting graphics...");
@@ -143,5 +173,4 @@ namespace rt {
 	}
 
 	string_view GraphicsBackendName() { return rtGetName(); }
-}
-
+} // namespace rt

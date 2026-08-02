@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 namespace lf {
-	template <typename kT, typename vT, typename Hasher = std::hash<kT>, typename KeyEqual = std::equal_to<kT>>
+	template<typename kT, typename vT, typename Hasher = std::hash<kT>, typename KeyEqual = std::equal_to<kT>>
 	class unordered_map : public std::unordered_map<kT, vT, Hasher, KeyEqual> {
 	  public:
 		vT& at(const kT& key) {
@@ -53,24 +53,24 @@ namespace lf {
 		bool operator()(string_view lhs, const char* rhs) const noexcept {
 			return lhs == string_view(rhs);
 		}
-		template <size_t N>
+		template<size_t N>
 		bool operator()(const char (&lhs)[N], string_view rhs) const noexcept {
 			return string_view(lhs, N - 1) == rhs;
 		}
-		template <size_t N>
+		template<size_t N>
 		bool operator()(string_view lhs, const char (&rhs)[N]) const noexcept {
 			return lhs == string_view(rhs, N - 1);
 		}
-		template <size_t N>
+		template<size_t N>
 		bool operator()(const char (&lhs)[N], const std::string& rhs) const noexcept {
 			return string_view(lhs, N - 1) == string_view(rhs);
 		}
-		template <size_t N>
+		template<size_t N>
 		bool operator()(const std::string& lhs, const char (&rhs)[N]) const noexcept {
 			return string_view(lhs) == string_view(rhs, N - 1);
 		}
 	};
 
-	template <typename T>
+	template<typename T>
 	using unordered_map_string = unordered_map<string, T, transparent_string_view_hash, transparent_string_view_equal>;
 } // namespace lf

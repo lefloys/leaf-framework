@@ -19,22 +19,34 @@ namespace lf {
 		log::Info("[leaf] initializing leaf-framework...");
 
 		err = init_system(args);
-		if (err) { goto system_exit; }
+		if (err) {
+			goto system_exit;
+		}
 
 		err = rt::init_graphics(args, false);
-		if (err) { goto graphics_exit; }
+		if (err) {
+			goto graphics_exit;
+		}
 
 		err = init_store(args);
-		if (err) { goto store_exit; }
+		if (err) {
+			goto store_exit;
+		}
 
 		err = init_platform(args);
-		if (err) { goto platform_exit; }
+		if (err) {
+			goto platform_exit;
+		}
 
 		err = rt::init_graphics_extensions(false);
-		if (err) { goto platform_exit; }
+		if (err) {
+			goto platform_exit;
+		}
 
 		err = init_rml(args);
-		if (err) { goto platform_exit; }
+		if (err) {
+			goto platform_exit;
+		}
 
 		return err;
 	platform_exit:
@@ -49,18 +61,23 @@ namespace lf {
 		return err;
 	}
 
-
 	error InitHeadless(span<string_view> args) {
 		error err;
 
 		err = init_system(args);
-		if (err) { goto system_exit; }
+		if (err) {
+			goto system_exit;
+		}
 
 		err = rt::init_graphics(args, true);
-		if (err) { goto graphics_exit; }
+		if (err) {
+			goto graphics_exit;
+		}
 
 		err = init_store(args);
-		if (err) { goto store_exit; }
+		if (err) {
+			goto store_exit;
+		}
 
 		return err;
 	store_exit:

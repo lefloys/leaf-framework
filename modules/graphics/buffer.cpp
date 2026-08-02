@@ -9,7 +9,7 @@ namespace rt::detail {
 		case BufferMode::Dynamic: return RT_BUFFER_DYNAMIC;
 		}
 		std::unreachable();
-	} 
+	}
 
 	rt_buffer_usage to_rutile(BufferUsage usage) {
 		return static_cast<rt_buffer_usage>(static_cast<u32>(usage));

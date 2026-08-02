@@ -1,10 +1,10 @@
 #pragma once
 
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <sstream>
 
 namespace lf {
 	namespace detail {
@@ -28,7 +28,7 @@ namespace lf {
 			out.append(value ? "true" : "false");
 		}
 
-		template <typename T>
+		template<typename T>
 		inline void append_arg(std::string& out, const T& value) {
 			if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
 				out.append(std::to_string(value));
@@ -46,7 +46,7 @@ namespace lf {
 			out.append(pattern.substr(pos));
 		}
 
-		template <typename Arg, typename... Args>
+		template<typename Arg, typename... Args>
 		void format_impl(std::string& out, std::string_view pattern, std::size_t pos, Arg&& arg, Args&&... args) {
 			const std::size_t open = pattern.find('{', pos);
 			if (open == std::string_view::npos) {
@@ -64,9 +64,9 @@ namespace lf {
 			append_arg(out, std::forward<Arg>(arg));
 			format_impl(out, pattern, close + 1, std::forward<Args>(args)...);
 		}
-	}
+	} // namespace detail
 
-	template <typename... Args>
+	template<typename... Args>
 	std::string format(std::string_view pattern, Args&&... args) {
 		std::string out;
 		out.reserve(pattern.size() + sizeof...(Args) * 8);

@@ -50,4 +50,4 @@ namespace lf::store {
 		UserRelationship relationship() const;
 		i32 level() const;
 	};
-}
+} // namespace lf::store

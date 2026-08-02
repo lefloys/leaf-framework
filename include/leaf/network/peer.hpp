@@ -23,4 +23,4 @@ namespace lf::net {
 		string m_id;
 		u16 m_channel;
 	};
-}
+} // namespace lf::net

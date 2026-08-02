@@ -36,18 +36,20 @@ namespace lf {
 			if (relative.is_absolute()) {
 				return unexpected(error(
 					generic_errc::input_error,
-					lf::format("virtual path tail '{}' must be relative", path)));
+					lf::format("virtual path tail '{}' must be relative", path)
+				));
 			}
 			for (const fs::path& part : relative) {
 				if (part == "..") {
 					return unexpected(error(
 						generic_errc::input_error,
-						lf::format("virtual path tail '{}' escapes its mod root", path)));
+						lf::format("virtual path tail '{}' escapes its mod root", path)
+					));
 				}
 			}
 			return relative;
 		}
-	}
+	} // namespace
 
 	void ClearVirtualFileSpace() {
 		std::lock_guard lock(virtual_roots_mutex());
@@ -118,7 +120,8 @@ namespace lf {
 		if (end == string_view::npos || end == 2) {
 			return unexpected(error(
 				generic_errc::input_error,
-				lf::format("invalid virtual path '{}'", path)));
+				lf::format("invalid virtual path '{}'", path)
+			));
 		}
 
 		string mod_name(path.substr(2, end - 2));
@@ -137,7 +140,8 @@ namespace lf {
 		if (it == virtual_roots().end()) {
 			return unexpected(error(
 				generic_errc::input_error,
-				lf::format("virtual path '{}' references unknown mod '{}'", path, mod_name)));
+				lf::format("virtual path '{}' references unknown mod '{}'", path, mod_name)
+			));
 		}
 		return it->second / *relative_tail;
 	}
@@ -154,5 +158,4 @@ namespace lf {
 		}
 		return text;
 	}
-}
-
+} // namespace lf

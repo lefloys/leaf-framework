@@ -22,13 +22,13 @@ namespace lf {
 	void LogProfileSnapshot(string_view label = "profile");
 
 	class ProfileScope {
-	public:
+	  public:
 		explicit ProfileScope(string_view name);
 		ProfileScope(const ProfileScope&) = delete;
 		ProfileScope& operator=(const ProfileScope&) = delete;
 		~ProfileScope();
 
-	private:
+	  private:
 		string_view name;
 		std::chrono::steady_clock::time_point start;
 		bool enabled = false;

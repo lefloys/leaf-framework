@@ -11,25 +11,25 @@ namespace lf {
 	using string_view = std::basic_string_view<char>;
 	using wstring_view = std::basic_string_view<wchar>;
 
-	template <>
+	template<>
 	struct type_name_trait<string> {
 		static constexpr const char* get() {
 			return "string";
 		}
 	};
-	template <>
+	template<>
 	struct type_name_trait<wstring> {
 		static constexpr const char* get() {
 			return "wstring";
 		}
 	};
-	template <>
+	template<>
 	struct type_name_trait<string_view> {
 		static constexpr const char* get() {
 			return "string_view";
 		}
 	};
-	template <>
+	template<>
 	struct type_name_trait<wstring_view> {
 		static constexpr const char* get() {
 			return "wstring_view";
@@ -53,16 +53,16 @@ namespace lf {
 		i64 parse_fraction(i64& digits);
 	};
 
-	template <typename T>
+	template<typename T>
 	struct pretty_string_trait {
 		static string to_string(const T& value) = delete;
 		static T from_string(string_view str) = delete;
 	};
-	template <typename T>
+	template<typename T>
 	string to_pretty_string(const T& value) {
 		return pretty_string_trait<T>::to_string(value);
 	}
-	template <typename T>
+	template<typename T>
 	T from_pretty_string(string_view str) {
 		return pretty_string_trait<T>::from_string(str);
 	}

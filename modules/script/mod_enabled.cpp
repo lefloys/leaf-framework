@@ -22,8 +22,7 @@ namespace lf {
 		return result;
 	}
 
-	void save_enabled_mods(const fs::path& yaml_path,
-						   const std::unordered_map<string, ModEnabledInfo>& mods) {
+	void save_enabled_mods(const fs::path& yaml_path, const std::unordered_map<string, ModEnabledInfo>& mods) {
 		YAML::Emitter emitter;
 		emitter << YAML::BeginMap;
 		emitter << "mods" << YAML::BeginMap;

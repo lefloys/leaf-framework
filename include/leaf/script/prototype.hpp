@@ -12,10 +12,10 @@ namespace lf {
 		PrototypeBase(const dict& data) {
 			string name;
 			data.assign(
-				dict::field("name", name),
-				dict::field("local_name", local_name, name),
-				dict::field("local_description", local_description, local_name),
-				dict::field("order", order, "1")
+				field("name", name),
+				field("local_name", local_name, name),
+				field("local_description", local_description, local_name),
+				field("order", order, "1")
 			);
 		}
 		virtual ~PrototypeBase() = default;
@@ -29,7 +29,7 @@ namespace lf {
 			return data.find(field_name) != data.end();
 		}
 
-		template <typename T>
+		template<typename T>
 		void load_field(const dict& data, string_view field_name, T& out) {
 			const auto iterator = data.find(field_name);
 			if (iterator == data.end()) {
@@ -43,7 +43,7 @@ namespace lf {
 			out = data.parse_field<T>(field_name);
 		}
 
-		template <typename T>
+		template<typename T>
 		void load_field(const list& data, size_t index, T& out) {
 			if (index >= data.size()) {
 				throw runtime_exception(lf::format("index {} out of range", index));
@@ -57,7 +57,7 @@ namespace lf {
 		}
 	};
 
-	template <typename T>
+	template<typename T>
 	struct Prototype : public PrototypeBase {
 		Prototype(const dict& data) : PrototypeBase(data) {}
 		virtual ~Prototype() = default;

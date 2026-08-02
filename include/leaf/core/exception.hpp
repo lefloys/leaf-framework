@@ -1,6 +1,5 @@
 #pragma once
 
-#include "leaf/core/error.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/core/types.hpp"
 #include <exception>
