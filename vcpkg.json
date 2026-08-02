@@ -3,7 +3,6 @@
   "version-string": "0.1.0",
   "builtin-baseline": "037b4815c334c193455f657ef2a39da6d5888146",
   "dependencies": [
-    "catch2",
     "cli11",
     "curl",
     "glfw3",
