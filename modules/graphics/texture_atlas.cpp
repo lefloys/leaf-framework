@@ -1,5 +1,6 @@
 #include "leaf/graphics/texture_atlas.hpp"
 
+#include "leaf/core/cast.hpp"
 #include "leaf/core/format.hpp"
 #include "leaf/core/logging.hpp"
 #include "leaf/script/virtual_filesystem.hpp"
@@ -11,12 +12,10 @@
 #include <cstring>
 #include <future>
 #include <limits>
-#include <memory>
-#include <thread>
-#include <unordered_map>
-#include <vector>
-#include <stdexcept>
-#include <type_traits>
+	#include <memory>
+	#include <thread>
+	#include <unordered_map>
+	#include <vector>
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include <stb_image.h>
@@ -44,26 +43,6 @@ namespace lf {
 	};
 
 	using stbi_image = std::unique_ptr<stbi_uc, decltype(&stbi_image_free)>;
-
-	template<typename To, typename From>
-	To safe_cast(From value) {
-		if constexpr (std::is_floating_point_v<To>) {
-			return static_cast<To>(value);
-		} else if constexpr (std::is_signed_v<From> == std::is_signed_v<To>) {
-			if (value < static_cast<From>(std::numeric_limits<To>::min()) || value > static_cast<From>(std::numeric_limits<To>::max())) {
-				throw std::out_of_range("texture atlas numeric cast");
-			}
-		} else if constexpr (std::is_signed_v<From>) {
-			if (value < 0 || static_cast<std::make_unsigned_t<From>>(value) > std::numeric_limits<To>::max()) {
-				throw std::out_of_range("texture atlas numeric cast");
-			}
-		} else {
-			if (value > static_cast<std::make_unsigned_t<To>>(std::numeric_limits<To>::max())) {
-				throw std::out_of_range("texture atlas numeric cast");
-			}
-		}
-		return static_cast<To>(value);
-	}
 
 	vector<atlas_frame> inspect_frames(span<const atlas_source_frame> sources, const texture_atlas_options& options) {
 		vector<atlas_frame> frames;

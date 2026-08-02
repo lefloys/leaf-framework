@@ -21,6 +21,7 @@
 #include <functional>
 #include <limits>
 #include <tuple>
+#include <typeinfo>
 #include <type_traits>
 #include <utility>
 
@@ -502,6 +503,25 @@ namespace lf::bin {
 
 	struct read_stream_tag {};
 	struct write_stream_tag {};
+
+	struct inherited_context {
+		void* m_context = nullptr;
+		const std::type_info* m_context_type = nullptr;
+
+		template<typename T>
+		void set_context(T& context) {
+			m_context = &context;
+			m_context_type = &typeid(T);
+		}
+
+		template<typename T>
+		T& context() const {
+			assert(m_context != nullptr && m_context_type != nullptr && *m_context_type == typeid(T));
+			return *static_cast<T*>(m_context);
+		}
+	};
+
+
 	struct fast_stream_tag {};
 
 	template<auto Version>
@@ -779,8 +799,10 @@ namespace lf::bin {
 	** field context for diagnostics. Use it directly when a payload is embedded
 	** in a larger byte stream or when trailing bytes are expected.
 	*/
-	struct read_stream {
+	struct read_stream : inherited_context {
 		using stream_tag = read_stream_tag;
+		using inherited_context::context;
+		using inherited_context::set_context;
 
 		explicit read_stream(span<const lf::byte> bytes) : m_input(bytes) {}
 		explicit read_stream(span<const lf::byte> bytes, read_limits limits) : m_input(bytes), m_limits(limits) {}
@@ -953,8 +975,10 @@ namespace lf::bin {
 	** field context tracking. Use it for hot paths where detailed parse errors
 	** are less important than throughput.
 	*/
-	struct fast_read_stream {
+	struct fast_read_stream : inherited_context {
 		using stream_tag = read_stream_tag;
+		using inherited_context::context;
+		using inherited_context::set_context;
 		using speed_tag = fast_stream_tag;
 
 		explicit fast_read_stream(span<const lf::byte> bytes) : m_input(bytes) {}
@@ -1073,8 +1097,10 @@ namespace lf::bin {
 	** the common case, or construct write_stream directly when building a larger
 	** packet in multiple steps.
 	*/
-	struct write_stream {
+	struct write_stream : inherited_context {
 		using stream_tag = write_stream_tag;
+		using inherited_context::context;
+		using inherited_context::set_context;
 
 		write_stream() = default;
 
@@ -1220,8 +1246,10 @@ namespace lf::bin {
 	** fast_write_stream emits the same bytes as write_stream but skips field
 	** context tracking.
 	*/
-	struct fast_write_stream {
+	struct fast_write_stream : inherited_context {
 		using stream_tag = write_stream_tag;
+		using inherited_context::context;
+		using inherited_context::set_context;
 		using speed_tag = fast_stream_tag;
 
 		fast_write_stream() = default;
@@ -1321,8 +1349,10 @@ namespace lf::bin {
 	** existing buffer. Writes fail with parse_error if the output span is too
 	** small.
 	*/
-	struct fixed_write_stream {
+	struct fixed_write_stream : inherited_context {
 		using stream_tag = write_stream_tag;
+		using inherited_context::context;
+		using inherited_context::set_context;
 
 		explicit fixed_write_stream(span<lf::byte> bytes) : m_output(bytes) {}
 

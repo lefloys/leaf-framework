@@ -2,6 +2,7 @@
 #include "leaf/core/error.hpp"
 #include "leaf/core/exception.hpp"
 #include "leaf/core/concepts.hpp"
+#include "leaf/core/cast.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/core/typename.hpp"
 #include "leaf/core/types.hpp"
@@ -267,13 +268,13 @@ namespace lf {
 			return get<bool>();
 		} else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
 			if (is<i64>()) {
-				return static_cast<T>(get<i64>());
+				return safe_cast<T>(get<i64>());
 			}
 			if (is<u64>()) {
-				return static_cast<T>(get<u64>());
+				return safe_cast<T>(get<u64>());
 			}
 			if (is<f64>()) {
-				return static_cast<T>(get<f64>());
+				return safe_cast<T>(get<f64>());
 			}
 		} else if constexpr (std::is_same_v<T, string>) {
 			return get<string>();
