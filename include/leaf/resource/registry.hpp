@@ -4,18 +4,17 @@
 #include "leaf/core/format.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/core/vector.hpp"
-#include "leaf/script/database.hpp"
-#include "leaf/script/prototype.hpp"
+#include "leaf/resource/database.hpp"
+#include "leaf/resource/prototype.hpp"
 
 #include <type_traits>
 
 namespace lf {
 	struct PrototypeTypeFunctions {
 		void (*clear)() = nullptr;
-		void (*register_name)(string_view) = nullptr;
-		void (*create)(string_view, const dict&) = nullptr;
+		void (*create)(string_view) = nullptr;
+		void (*init)(string_view, const dict&) = nullptr;
 		string_view (*type)() = nullptr;
-		void (*reserve)(size_t) = nullptr;
 		size_t (*count)() = nullptr;
 		string_view (*name)(size_t) = nullptr;
 		void (*load_assets)() = nullptr;
@@ -25,13 +24,15 @@ namespace lf {
 		template<typename T>
 		static void RegisterType() {
 			using db = Database<T>;
+			static const auto name = [](size_t index) {
+				return db::name(typename T::ID{ static_cast<typename T::ID::vnum_t>(index + 1) });
+			};
 			functions.push_back({ &db::clear,
-								  &db::register_name,
 								  &db::create,
+								  &db::init,
 								  &db::type,
-								  &db::reserve,
 								  &db::count,
-								  &db::name,
+								  name,
 								  &db::load_assets });
 		}
 

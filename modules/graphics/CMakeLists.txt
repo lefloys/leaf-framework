@@ -3,6 +3,7 @@ find_path("STB_INCLUDE_DIR" "stb_image.h" REQUIRED)
 add_library("leaf-graphics" STATIC
     "buffer.cpp"
     "command_buffer.cpp"
+    "cursor.cpp"
     "framebuffer.cpp"
     "graphics.cpp"
     "graphics_program.cpp"

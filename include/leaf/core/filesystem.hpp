@@ -1,6 +1,7 @@
 #pragma once
 #include "leaf/core/error.hpp"
 #include "leaf/core/string.hpp"
+#include "leaf/core/vector.hpp"
 
 #include <filesystem>
 #include <system_error>
@@ -25,4 +26,5 @@ namespace lf::fs {
 
 	path operator/(folder folder, const path& other);
 	report<string> ReadTextFile(string_view path);
+	report<vector<byte>> ReadBinaryFile(string_view path);
 } // namespace lf::fs

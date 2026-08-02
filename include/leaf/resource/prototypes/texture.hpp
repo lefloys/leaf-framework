@@ -3,7 +3,7 @@
 #include "leaf/core/error.hpp"
 #include "leaf/core/vector.hpp"
 #include "leaf/graphics/texture_atlas.hpp"
-#include "leaf/script/prototype.hpp"
+#include "leaf/resource/prototype.hpp"
 
 #include <functional>
 

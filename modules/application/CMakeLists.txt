@@ -3,10 +3,8 @@ find_path("STB_INCLUDE_DIR" "stb_image.h" REQUIRED)
 find_path("MINIAUDIO_INCLUDE_DIR" "miniaudio.h" REQUIRED)
 
 add_library("leaf-application" STATIC
-    "cursor.cpp"
     "rml_backend.cpp"
     "scene.cpp"
-    "sound.cpp"
     "window.cpp"
     "rml_backend.rtsl"
 )
@@ -28,6 +26,7 @@ target_link_libraries("leaf-application"
         "leaf::graphics"
         "leaf::network"
         "leaf::script"
+        "leaf::audio"
         "leaf::vendor"
         "rtsl-sdk"
         "RmlUi::RmlUi"

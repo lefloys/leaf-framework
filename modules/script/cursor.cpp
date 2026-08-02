@@ -1,4 +1,4 @@
-#include "leaf/script/prototypes/cursor.hpp"
+#include "leaf/resource/prototypes/cursor.hpp"
 
 #include "leaf/core/format.hpp"
 #include "leaf/core/logging.hpp"

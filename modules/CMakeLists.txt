@@ -1,4 +1,6 @@
 add_subdirectory("core")
+add_subdirectory("audio")
+add_subdirectory("resource")
 add_subdirectory("math")
 add_subdirectory("system")
 add_subdirectory("platform")

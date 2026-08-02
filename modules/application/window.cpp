@@ -1,6 +1,7 @@
 #include "leaf/application/elements/window.hpp"
 
 #include <leaf/core/format.hpp>
+#include <leaf/math/dim.hpp>
 #include <leaf/math/pos.hpp>
 
 #include <RmlUi/Core/ComputedValues.h>
@@ -536,22 +537,15 @@ keybind {
 			std::optional<Rml::String> max_height;
 		};
 
-		struct ContextSize {
-			i32 width = 0;
-			i32 height = 0;
-		};
-
 		std::optional<Interaction> interaction;
 		Rml::ElementDocument* bound_document = nullptr;
 		std::optional<pos2<f32>> normalized_position;
-		std::optional<ContextSize> normalized_context_size;
+		std::optional<dim2<i32>> normalized_context_size;
 		std::optional<ExpandedLayout> expanded_layout;
 		bool manually_resized = false;
 		bool default_position_applied = false;
 		bool initially_raised = false;
 
-		void bind_document_events();
-		void unbind_document_events();
 		void prepare_for_layout();
 		void install_chrome();
 		void install_handles();
@@ -560,7 +554,7 @@ keybind {
 
 		void raise_when_visible();
 		void apply_default_position();
-		void context_dimensions(f32& width, f32& height);
+		dim2<f32> context_dimensions() const;
 		f32 available_width(f32 context_width);
 		f32 available_height(f32 context_height);
 		void update_normalized_position();
@@ -591,7 +585,10 @@ keybind {
 	}
 
 	ElementWindow::~ElementWindow() {
-		unbind_document_events();
+		if (bound_document) {
+			bound_document->RemoveEventListener("mousemove", this, true);
+			bound_document->RemoveEventListener("mouseup", this, true);
+		}
 		RemoveEventListener("mousedown", this, true);
 		RemoveEventListener("click", this, true);
 	}
@@ -610,6 +607,11 @@ keybind {
 
 	void ElementWindow::OnChildAdd(Rml::Element* child) {
 		Rml::Element::OnChildAdd(child);
+		if (!bound_document && GetOwnerDocument()) {
+			bound_document = GetOwnerDocument();
+			bound_document->AddEventListener("mousemove", this, true);
+			bound_document->AddEventListener("mouseup", this, true);
+		}
 		if (child && !same_tag(*child, "window-resize") && !interaction && !manual_placement(*this)) {
 			default_position_applied = false;
 			SetClass("window-placed", false);
@@ -650,30 +652,6 @@ keybind {
 				update_normalized_position();
 			}
 		}
-	}
-
-	void ElementWindow::bind_document_events() {
-		if (bound_document) {
-			return;
-		}
-
-		bound_document = GetOwnerDocument();
-		if (!bound_document) {
-			return;
-		}
-
-		bound_document->AddEventListener("mousemove", this, true);
-		bound_document->AddEventListener("mouseup", this, true);
-	}
-
-	void ElementWindow::unbind_document_events() {
-		if (!bound_document) {
-			return;
-		}
-
-		bound_document->RemoveEventListener("mousemove", this, true);
-		bound_document->RemoveEventListener("mouseup", this, true);
-		bound_document = nullptr;
 	}
 
 	void ElementWindow::prepare_for_layout() {
@@ -778,9 +756,9 @@ keybind {
 	}
 
 	void ElementWindow::apply_default_position() {
-		f32 context_width = 0.0f;
-		f32 context_height = 0.0f;
-		context_dimensions(context_width, context_height);
+		const dim2<f32> context_size = context_dimensions();
+		const f32 context_width = context_size.width;
+		const f32 context_height = context_size.height;
 		const bool should_center = center_placement(*this);
 
 		if (should_center) {
@@ -820,16 +798,16 @@ keybind {
 		reveal(*this);
 	}
 
-	void ElementWindow::context_dimensions(f32& width, f32& height) {
-		width = 0.0f;
-		height = 0.0f;
+	dim2<f32> ElementWindow::context_dimensions() const {
 		if (!GetContext()) {
-			return;
+			return {};
 		}
 
-		Rml::Vector2i context_size = GetContext()->GetDimensions();
-		width = std::max(0.0f, static_cast<f32>(context_size.x));
-		height = std::max(0.0f, static_cast<f32>(context_size.y));
+		const Rml::Vector2i context_size = GetContext()->GetDimensions();
+		return {
+			.width = std::max(0.0f, static_cast<f32>(context_size.x)),
+			.height = std::max(0.0f, static_cast<f32>(context_size.y))
+		};
 	}
 
 	f32 ElementWindow::available_width(f32 context_width) {
@@ -841,9 +819,9 @@ keybind {
 	}
 
 	void ElementWindow::update_normalized_position() {
-		f32 context_width = 0.0f;
-		f32 context_height = 0.0f;
-		context_dimensions(context_width, context_height);
+		const dim2<f32> context_size = context_dimensions();
+		const f32 context_width = context_size.width;
+		const f32 context_height = context_size.height;
 		if (context_width <= 0.0f || context_height <= 0.0f) {
 			return;
 		}
@@ -854,7 +832,7 @@ keybind {
 		};
 		if (GetContext()) {
 			Rml::Vector2i size = GetContext()->GetDimensions();
-			normalized_context_size = ContextSize{ .width = size.x, .height = size.y };
+			normalized_context_size = dim2<i32>{ size.x, size.y };
 		}
 	}
 
@@ -863,28 +841,28 @@ keybind {
 			return;
 		}
 
-		f32 context_width = 0.0f;
-		f32 context_height = 0.0f;
-		context_dimensions(context_width, context_height);
+		const dim2<f32> context_size = context_dimensions();
+		const f32 context_width = context_size.width;
+		const f32 context_height = context_size.height;
 		if (context_width <= 0.0f || context_height <= 0.0f) {
 			return;
 		}
 
-		Rml::Vector2i context_size = GetContext()->GetDimensions();
+		const Rml::Vector2i current_context_size = GetContext()->GetDimensions();
 		if (!normalized_context_size ||
-			normalized_context_size->width != context_size.x ||
-			normalized_context_size->height != context_size.y) {
+				normalized_context_size->width != current_context_size.x ||
+				normalized_context_size->height != current_context_size.y) {
 			set_px(*this, "left", normalized_position->x * available_width(context_width));
 			set_px(*this, "top", normalized_position->y * available_height(context_height));
-			normalized_context_size = ContextSize{ .width = context_size.x, .height = context_size.y };
+			normalized_context_size = dim2<i32>{ current_context_size.x, current_context_size.y };
 		}
 		clamp_to_context();
 	}
 
 	void ElementWindow::clamp_to_context() {
-		f32 context_width = 0.0f;
-		f32 context_height = 0.0f;
-		context_dimensions(context_width, context_height);
+		const dim2<f32> context_size = context_dimensions();
+		const f32 context_width = context_size.width;
+		const f32 context_height = context_size.height;
 		if (context_width <= 0.0f || context_height <= 0.0f) {
 			return;
 		}
@@ -949,14 +927,12 @@ keybind {
 		if (Rml::Element* close = find_ancestor_class(target, "window-close-button")) {
 			if (find_window(close) == this) {
 				close->SetClass("window-button-pressed", true);
-				bind_document_events();
 				return;
 			}
 		}
 		if (Rml::Element* collapse = find_ancestor_class(target, "window-collapse-button")) {
 			if (find_window(collapse) == this) {
 				collapse->SetClass("window-button-pressed", true);
-				bind_document_events();
 				event.StopImmediatePropagation();
 				return;
 			}
@@ -967,7 +943,6 @@ keybind {
 			return;
 		}
 
-		bind_document_events();
 		event.StopImmediatePropagation();
 	}
 
@@ -1102,7 +1077,6 @@ keybind {
 	void ElementWindow::end() {
 		clear_pressed_buttons();
 		interaction.reset();
-		unbind_document_events();
 	}
 
 	void ElementWindow::cancel_document_interaction() {

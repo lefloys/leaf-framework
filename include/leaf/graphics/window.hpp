@@ -5,8 +5,13 @@
 #include <leaf/graphics/resource.hpp>
 #include <leaf/math/dim.hpp>
 #include <leaf/math/pos.hpp>
+#include <leaf/resource/prototypes/cursor.hpp>
 
 #include <vector>
+
+namespace lf {
+	bool SetCursorPrototype(rt::view<rt::window> display, CursorPrototype::ID id);
+}
 
 namespace rt {
 

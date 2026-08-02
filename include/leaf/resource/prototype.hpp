@@ -4,7 +4,7 @@
 #include <leaf/core/format.hpp>
 #include <leaf/core/identifier.hpp>
 #include <leaf/core/string.hpp>
-#include <leaf/script/database.hpp>
+#include <leaf/resource/database.hpp>
 #include <leaf/script/local_string.hpp>
 
 namespace lf {

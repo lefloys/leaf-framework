@@ -5,6 +5,7 @@
 #include <leaf/core/span.hpp>
 #include <leaf/core/string.hpp>
 #include <leaf/graphics/window.hpp>
+#include <leaf/script/state.hpp>
 
 #include <RmlUi/Core/Element.h>
 #include <RmlUi/Core/EventListener.h>
@@ -61,7 +62,7 @@ namespace lf {
 		/*!
 		** @brief Callback used to install project-specific Lua bindings.
 		*/
-		using ScriptInstaller = std::function<void(sol::state&, Rml::ElementDocument&)>;
+		using ScriptInstaller = script_installer;
 
 		/*!
 		** @brief Callback invoked during fixed scene updates.
@@ -318,7 +319,7 @@ namespace lf {
 		};
 		std::vector<PendingScript> pending_scripts;
 		std::unique_ptr<ScriptEventListener> script_events;
-		string active_pressed_cursor;
+		CursorPrototype::ID active_pressed_cursor;
 		Rml::Vector2f last_mouse_position = { 0.0f, 0.0f };
 		bool has_mouse_position = false;
 		bool script_events_bound = false;

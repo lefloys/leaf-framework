@@ -3,8 +3,8 @@
 #include "leaf/core/logging.hpp"
 #include "leaf/script/localization.hpp"
 #include "leaf/script/mod_enabled.hpp"
-#include "leaf/script/prototypes/texture.hpp"
-#include "leaf/script/registry.hpp"
+#include "leaf/resource/prototypes/texture.hpp"
+#include "leaf/resource/registry.hpp"
 #include "leaf/script/settings.hpp"
 #include "leaf/script/virtual_filesystem.hpp"
 
@@ -799,7 +799,6 @@ end
 					return error(generic_errc::type_mismatch, "data.raw." + string(fn.type()) + " must be a table/dict");
 				}
 				dict& type_table = it->second.get<dict>();
-				fn.reserve(type_table.size());
 				// Iterate in sorted name order so prototype ids are deterministic;
 				// dict is an unordered map and its iteration order is unspecified.
 				vector<string_view> names;
@@ -810,7 +809,7 @@ end
 				std::sort(names.begin(), names.end());
 				for (string_view name : names) {
 					try {
-						fn.register_name(name);
+						fn.create(name);
 					} catch (const lf::exception& e) {
 						return error(generic_errc::parse_error, e.what()).add_context(lf::format("registering prototype '{}' (type:{})", name, fn.type()));
 					}
@@ -834,7 +833,7 @@ end
 						return error(generic_errc::type_mismatch, lf::format("data.raw[{}][{}] must be a table/dict", fn.type(), name));
 					}
 					try {
-						fn.create(name, data.get<dict>());
+						fn.init(name, data.get<dict>());
 					} catch (const lf::exception& e) {
 						return error(generic_errc::parse_error, e.what()).add_context(lf::format("creating prototype '{}' (type:{})", name, fn.type()));
 					}

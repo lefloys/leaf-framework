@@ -2,7 +2,7 @@
 
 #include "leaf/core/string.hpp"
 #include "leaf/core/types.hpp"
-#include "leaf/script/prototype.hpp"
+#include "leaf/resource/prototype.hpp"
 
 namespace lf {
 	struct PlatformCursor;

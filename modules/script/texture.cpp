@@ -1,9 +1,9 @@
-#include "leaf/script/prototypes/texture.hpp"
+#include "leaf/resource/prototypes/texture.hpp"
 
 #include "leaf/core/exception.hpp"
 #include "leaf/core/filesystem.hpp"
 #include "leaf/graphics/queue.hpp"
-#include "leaf/script/database.hpp"
+#include "leaf/resource/database.hpp"
 
 #include <algorithm>
 #include <chrono>

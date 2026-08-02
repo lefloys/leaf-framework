@@ -11,7 +11,9 @@ add_library("leaf-script" STATIC
     "prototype_inspector_script.cpp"
     "virtual_filesystem.cpp"
     "cursor.cpp"
+    "extensions.cpp"
     "sound.cpp"
+    "state.cpp"
     "texture.cpp"
 )
 add_library("leaf::script" ALIAS "leaf-script")
@@ -22,6 +24,8 @@ target_include_directories("leaf-script" PRIVATE "${STB_INCLUDE_DIR}")
 target_link_libraries("leaf-script"
     PUBLIC
         "leaf::core"
+        "leaf::resource"
+        "leaf::audio"
         "sol2::sol2"
     PRIVATE
         "lua"

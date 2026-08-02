@@ -1,11 +1,13 @@
 #include "leaf/application/scene.hpp"
-#include "leaf/application/cursor.hpp"
+#include <leaf/graphics/window.hpp>
 #include "leaf/application/elements/window.hpp"
 
 #include <leaf/application/rml_backend.hpp>
-#include <leaf/application/sound.hpp>
+#include <leaf/audio/sound.hpp>
 #include <leaf/core/exception.hpp>
 #include <leaf/core/format.hpp>
+#include <leaf/resource/database.hpp>
+#include <leaf/script/extensions.hpp>
 #include <leaf/core/logging.hpp>
 #include <leaf/core/memory.hpp>
 #include <leaf/core/messages.hpp>
@@ -773,13 +775,12 @@ namespace lf {
 		pending_scripts.clear();
 		script_events.reset();
 		title_text.clear();
-		active_pressed_cursor.clear();
+		active_pressed_cursor = CursorPrototype::ID{};
 		last_mouse_position = { 0.0f, 0.0f };
 		has_mouse_position = false;
 		script_events_bound = false;
 		start_time = std::chrono::steady_clock::now();
-		lua = sol::state();
-		lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
+		lua = CreateState();
 		lua["scene_args"] = string(this->scene_args);
 
 		lua.set_function("print", [](sol::variadic_args args) {
@@ -1183,13 +1184,12 @@ namespace lf {
 			return rml_escape(lua_value_to_string(value));
 		});
 
-		sol::table sound_type = lua.create_table();
-		sound_type["ui"] = lua.create_table_with("id", "ui");
-		sound_type["effects"] = lua.create_table_with("id", "effects");
-		sound_type["music"] = lua.create_table_with("id", "music");
-		sound_type["master"] = lua.create_table_with("id", "master");
-		lua["sound_type"] = sound_type;
-		InstallSoundScript(lua);
+		sol::table sound_group = lua.create_table();
+		sound_group["ui"] = lua.create_table_with("id", "ui");
+		sound_group["effects"] = lua.create_table_with("id", "effects");
+		sound_group["music"] = lua.create_table_with("id", "music");
+		sound_group["master"] = lua.create_table_with("id", "master");
+		lua["sound_group"] = sound_group;
 		InstallPrototypeInspectorScript(lua);
 
 		lua.set_function("localize", [](string_view section, string_view key, sol::variadic_args args) {
@@ -1388,9 +1388,7 @@ namespace lf {
 			return true;
 		});
 
-		for (const ScriptInstaller& installer : this->script_installers) {
-			installer(lua, *document);
-		}
+		PrepareState(lua, this->script_installers);
 		install_ui_automation_helpers();
 
 		script_events = std::make_unique<ScriptEventListener>(*this);
@@ -1543,7 +1541,7 @@ namespace lf {
 	}
 
 	void Scene::unload_document() {
-		SetCursorPrototype(display, {});
+		SetCursorPrototype(display, CursorPrototype::ID{});
 		if (document) {
 			Rml::Context* context = document->GetContext();
 			ReleaseWindowDocumentEvents(*document);
@@ -1552,7 +1550,7 @@ namespace lf {
 			document = nullptr;
 		}
 		pending_scripts.clear();
-		lua = sol::state();
+		lua = CreateState();
 	}
 
 	void Scene::clear_script_events() {
@@ -1801,8 +1799,8 @@ end
 
 	void Scene::update_cursor(Rml::Element* start, bool pressed, bool released) {
 		if (released) {
-			active_pressed_cursor.clear();
-		} else if (!active_pressed_cursor.empty()) {
+			active_pressed_cursor = CursorPrototype::ID{};
+		} else if (active_pressed_cursor) {
 			SetCursorPrototype(display, active_pressed_cursor);
 			return;
 		}
@@ -1822,17 +1820,18 @@ end
 				cursor = element->GetAttribute<Rml::String>("cursor", "");
 			}
 			if (!cursor.empty()) {
+				const auto id = Database<CursorPrototype>::find(cursor);
 				if (pressed) {
-					active_pressed_cursor = cursor;
+					active_pressed_cursor = id;
 				}
-				SetCursorPrototype(display, cursor);
+				SetCursorPrototype(display, id);
 				return;
 			}
 		}
 		if (pressed) {
-			active_pressed_cursor.clear();
+			active_pressed_cursor = CursorPrototype::ID{};
 		}
-		SetCursorPrototype(display, {});
+		SetCursorPrototype(display, CursorPrototype::ID{});
 	}
 
 	void Scene::update_cursor_at_last_mouse() {
