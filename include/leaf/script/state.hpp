@@ -6,9 +6,13 @@
 
 #include <functional>
 
+namespace Rml {
+	class ElementDocument;
+}
+
 namespace lf {
-	using script_installer = std::function<void(sol::state&)>;
+	using script_installer = std::function<void(sol::state&, Rml::ElementDocument&)>;
 
 	sol::state CreateState();
-	void PrepareState(sol::state& state, span<const script_installer> installers);
+	void PrepareState(sol::state& state, Rml::ElementDocument& document, span<const script_installer> installers);
 }

@@ -1388,7 +1388,7 @@ namespace lf {
 			return true;
 		});
 
-		PrepareState(lua, this->script_installers);
+		PrepareState(lua, *document, this->script_installers);
 		install_ui_automation_helpers();
 
 		script_events = std::make_unique<ScriptEventListener>(*this);
@@ -2273,9 +2273,9 @@ end
 		}
 	}
 
-	void Scene::queue_script(string script, string source_name) {
+	void Scene::queue_script(string_view script, string_view source_name) {
 		std::lock_guard lock(scene_mutex);
-		pending_scripts.push_back({ std::move(source_name), std::move(script) });
+		pending_scripts.push_back({ string(source_name), string(script) });
 	}
 
 	std::optional<Scene::LoadRequest> Scene::take_load_request() {

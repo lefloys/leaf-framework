@@ -2,6 +2,8 @@
 
 #include "leaf/script/extensions.hpp"
 
+#include <RmlUi/Core/ElementDocument.h>
+
 namespace lf {
 	sol::state CreateState() {
 		sol::state state;
@@ -10,9 +12,9 @@ namespace lf {
 		return state;
 	}
 
-	void PrepareState(sol::state& state, span<const script_installer> installers) {
+	void PrepareState(sol::state& state, Rml::ElementDocument& document, span<const script_installer> installers) {
 		for (const script_installer& install : installers) {
-			install(state);
+			install(state, document);
 		}
 	}
 }
