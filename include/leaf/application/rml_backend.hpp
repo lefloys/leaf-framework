@@ -13,8 +13,8 @@
 #include "leaf/graphics/texture.hpp"
 #include "leaf/graphics/texture_view.hpp"
 #include "leaf/graphics/uniform_location.hpp"
-#include "leaf/math/dim.hpp"
-#include "leaf/math/pos.hpp"
+#include "leaf/script/math/dim.hpp"
+#include "leaf/script/math/pos.hpp"
 
 #include <RmlUi/Core/RenderInterface.h>
 

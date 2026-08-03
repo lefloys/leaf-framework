@@ -158,7 +158,7 @@ namespace lf {
 		}
 
 		static report<string> expanded_source(string logical_path, fs::path absolute_path, fs::path relative_root) {
-			report<string> source = fs::ReadTextFile(absolute_path.string());
+			report<string> source = fs::Read(absolute_path.string(), tags::String);
 			if (!source) {
 				return unexpected(source.error());
 			}
@@ -190,7 +190,7 @@ namespace lf {
 							return unexpected(error(generic_errc::parse_error, lf::format("invalid virtual path '{}'", include_path)));
 						}
 						string mod_name(include_path.substr(2, end - 2));
-						report<fs::path> virtual_root = ResolveVirtualPathReport(string("__") + mod_name + "__/");
+						report<fs::path> virtual_root = ResolveVirtualPathReport(string("<") + mod_name + ">/");
 						if (!virtual_root) {
 							return unexpected(virtual_root.error());
 						}

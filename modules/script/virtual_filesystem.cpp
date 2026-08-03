@@ -5,6 +5,7 @@
 
 #include <mutex>
 #include <unordered_map>
+#include <system_error>
 
 namespace lf {
 	namespace {
@@ -29,6 +30,23 @@ namespace lf {
 				}
 			}
 			return relative;
+		}
+
+		fs::path contained_path(const fs::path& root, const fs::path& relative) {
+			std::error_code error;
+			const fs::path canonical_root = std::filesystem::weakly_canonical(root, error);
+			if (error) {
+				throw runtime_exception(lf::format("failed to resolve virtual root '{}': {}", root.string(), error.message()));
+			}
+			const fs::path canonical_path = std::filesystem::weakly_canonical(root / relative, error);
+			if (error) {
+				throw runtime_exception(lf::format("failed to resolve virtual path '{}': {}", (root / relative).string(), error.message()));
+			}
+			const fs::path remainder = canonical_path.lexically_relative(canonical_root);
+			if (remainder.is_absolute() || remainder == ".." || remainder.string().starts_with(".." + std::string(1, std::filesystem::path::preferred_separator))) {
+				throw runtime_exception(lf::format("virtual path '{}' escapes its mod root", relative.string()));
+			}
+			return canonical_path;
 		}
 
 		report<fs::path> checked_relative_path_report(string_view path) {
@@ -66,7 +84,7 @@ namespace lf {
 	}
 
 	bool IsVirtualPath(string_view path) {
-		return path.size() >= 4 && path.starts_with("__");
+		return path.size() >= 3 && path.front() == '<';
 	}
 	fs::path ResolveVirtualPath(string_view path, fs::path relative_root) {
 		if (path.empty()) {
@@ -82,13 +100,13 @@ namespace lf {
 			return relative_root.empty() ? raw_path : relative_root / raw_path;
 		}
 
-		size_t end = path.find("__", 2);
-		if (end == string_view::npos || end == 2) {
+		size_t end = path.find('>', 1);
+		if (end == string_view::npos || end == 1) {
 			throw runtime_exception(lf::format("invalid virtual path '{}'", path));
 		}
 
-		string mod_name(path.substr(2, end - 2));
-		string_view tail = path.substr(end + 2);
+		string mod_name(path.substr(1, end - 1));
+		string_view tail = path.substr(end + 1);
 		if (!tail.empty() && (tail.front() == '/' || tail.front() == '\\')) {
 			tail.remove_prefix(1);
 		}
@@ -99,7 +117,7 @@ namespace lf {
 		if (it == virtual_roots().end()) {
 			throw runtime_exception(lf::format("virtual path '{}' references unknown mod '{}'", path, mod_name));
 		}
-		return it->second / relative_tail;
+		return contained_path(it->second, relative_tail);
 	}
 
 	report<fs::path> ResolveVirtualPathReport(string_view path, fs::path relative_root) {
@@ -116,16 +134,16 @@ namespace lf {
 			return relative_root.empty() ? raw_path : relative_root / raw_path;
 		}
 
-		size_t end = path.find("__", 2);
-		if (end == string_view::npos || end == 2) {
+		size_t end = path.find('>', 1);
+		if (end == string_view::npos || end == 1) {
 			return unexpected(error(
 				generic_errc::input_error,
 				lf::format("invalid virtual path '{}'", path)
 			));
 		}
 
-		string mod_name(path.substr(2, end - 2));
-		string_view tail = path.substr(end + 2);
+		string mod_name(path.substr(1, end - 1));
+		string_view tail = path.substr(end + 1);
 		if (!tail.empty() && (tail.front() == '/' || tail.front() == '\\')) {
 			tail.remove_prefix(1);
 		}
@@ -143,7 +161,11 @@ namespace lf {
 				lf::format("virtual path '{}' references unknown mod '{}'", path, mod_name)
 			));
 		}
-		return it->second / *relative_tail;
+		try {
+			return contained_path(it->second, *relative_tail);
+		} catch (const runtime_exception& exception) {
+			return unexpected(error(generic_errc::input_error, exception.what()));
+		}
 	}
 
 	report<string> ReadVirtualTextFile(string_view path, fs::path relative_root) {
@@ -152,7 +174,7 @@ namespace lf {
 			return unexpected(resolved_path.error().add_context(lf::format("resolving text file '{}'", path)));
 		}
 
-		auto text = fs::ReadTextFile(resolved_path->string());
+		auto text = fs::Read(resolved_path->string(), tags::String);
 		if (!text) {
 			return unexpected(text.error().add_context(lf::format("reading text file '{}'", path)));
 		}

@@ -1,8 +1,8 @@
 #include "leaf/application/elements/window.hpp"
 
 #include <leaf/core/format.hpp>
-#include <leaf/math/dim.hpp>
-#include <leaf/math/pos.hpp>
+#include <leaf/script/math/dim.hpp>
+#include <leaf/script/math/pos.hpp>
 
 #include <RmlUi/Core/ComputedValues.h>
 #include <RmlUi/Core/Context.h>

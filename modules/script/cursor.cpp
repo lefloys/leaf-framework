@@ -11,12 +11,12 @@
 
 namespace lf {
 	CursorPrototype::CursorPrototype(const dict& data) : Prototype(data) {
-		load_field(data, "path", path);
-		if (has_field(data, "hotspot_x")) {
-			load_field(data, "hotspot_x", hotspot_x);
+		data.assign(field("path", path));
+		if (data.contains("hotspot_x")) {
+			data.assign(field("hotspot_x", hotspot_x));
 		}
-		if (has_field(data, "hotspot_y")) {
-			load_field(data, "hotspot_y", hotspot_y);
+		if (data.contains("hotspot_y")) {
+			data.assign(field("hotspot_y", hotspot_y));
 		}
 	}
 

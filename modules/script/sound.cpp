@@ -45,33 +45,30 @@ namespace lf {
 	}
 
 	SoundPrototype::SoundPrototype(const dict& data) : Prototype(data) {
-		load_field(data, "path", path);
-		if (has_field(data, "sound_group")) {
+		data.assign(field("path", path));
+		if (data.contains("sound_group")) {
 			string group;
-			load_field(data, "sound_group", group);
+			data.assign(field("sound_group", group));
 			this->group = Database<SoundGroupPrototype>::find(group);
 		}
-		if (has_field(data, "volume")) {
-			load_field(data, "volume", volume);
+		if (data.contains("volume")) {
+			data.assign(field("volume", volume));
 		}
 	}
 
 
 	error SoundPrototype::load() {
-		if (sound.channels != 0 || !sound.samples.empty() || path.empty()) {
-			return {};
-		}
 		auto resolved = ResolveVirtualPathReport(path);
 		if (!resolved) {
 			log::Warning("{}", lf::format("[sound] {}", resolved.error().message));
 			return {};
 		}
-		auto bytes = fs::ReadBinaryFile(resolved->string());
+		auto bytes = fs::Read(resolved->string(), lf::tags::Binary);
 		if (!bytes) {
 			log::Warning("{}", lf::format("[sound] {}", bytes.error().message));
 			return {};
 		}
-		auto loaded = LoadSound(*bytes);
+		auto loaded = LoadSound(lf::span<const lf::byte>(bytes->data(), bytes->size()));
 		if (!loaded) {
 			log::Warning("{}", lf::format("[sound] {}", loaded.error().message));
 			return {};

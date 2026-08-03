@@ -7,7 +7,7 @@
 #include "leaf/graphics/resource.hpp"
 #include "leaf/graphics/texture.hpp"
 #include "leaf/graphics/texture_view.hpp"
-#include "leaf/math/rect.hpp"
+#include "leaf/script/math/rect.hpp"
 
 #include <functional>
 

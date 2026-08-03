@@ -58,7 +58,7 @@ namespace lf {
 	}
 
 	error load_locale_file(const fs::path& path, section_map& entries) {
-		auto file_text = fs::ReadTextFile(path.string());
+		auto file_text = fs::Read(path.string(), tags::String);
 		if (!file_text) {
 			return file_text.error();
 		}

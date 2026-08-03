@@ -17,9 +17,16 @@
 #include <variant>
 
 namespace lf {
+
+	template<typename T>
+	struct object_trait;
+
 	class dict;
 	class list;
 	class object;
+
+
+
 	using dict_underlying = unordered_map_string<object>;
 	using list_underlying = vector<object>;
 	using object_underlying = std::variant<std::monostate, bool, i64, u64, f64, string, dict, list>;
@@ -46,6 +53,10 @@ namespace lf {
 		template<typename T>
 		T parse_index(size_t index) const;
 	};
+	template<>
+	struct object_trait<dict>;
+	template<>
+	struct object_trait<list>;
 
 	class object : object_underlying {
 	  public:
@@ -103,9 +114,18 @@ namespace lf {
 		decltype(auto) visit(Visitor&& visitor) const;
 	};
 
+	template<typename>
+	inline constexpr bool dependent_false = false;
+
 	template<typename T>
 	struct object_trait {
-		static T parse(const object& obj) = delete;
+		static T parse(const object& obj) {
+			if constexpr (requires(const dict& data) { T{ data }; }) {
+				return T{ object_trait<dict>::parse(obj) };
+			} else {
+				static_assert(dependent_false<T>, "no object trait parser for this type");
+			}
+		}
 		static dict to_dict(const T& value) = delete;
 	};
 
@@ -452,6 +472,18 @@ namespace lf {
 				return obj.get<list>();
 			}
 			throw runtime_exception(lf::format("cannot convert type '{}' to list", obj.current_type_name()));
+		}
+	};
+	template<typename T>
+	struct object_trait<vector<T>> {
+		static vector<T> parse(const object& obj) {
+			const list& values = object_trait<list>::parse(obj);
+			vector<T> result;
+			result.reserve(values.size());
+			for (size_t index = 0; index < values.size(); ++index) {
+				result.push_back(values.parse_index<T>(index));
+			}
+			return result;
 		}
 	};
 } // namespace lf

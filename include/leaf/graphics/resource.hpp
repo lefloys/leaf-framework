@@ -8,8 +8,8 @@
 #include <leaf/core/string.hpp>
 #include <leaf/core/types.hpp>
 #include <leaf/core/vector.hpp>
-#include <leaf/math/dim.hpp>
-#include <leaf/math/pos.hpp>
+#include <leaf/script/math/dim.hpp>
+#include <leaf/script/math/pos.hpp>
 
 #include <rutile.h>
 

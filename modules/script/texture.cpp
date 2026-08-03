@@ -10,10 +10,6 @@
 #include <utility>
 
 namespace lf {
-	bool has_field(const dict& data, string_view field_name) {
-		return data.find(field_name) != data.end();
-	}
-
 	TextureSourceFrame parse_frame(const object& object, const string& default_path) {
 		TextureSourceFrame frame;
 		frame.path = default_path;
@@ -26,22 +22,22 @@ namespace lf {
 		}
 
 		const dict& data = object.get<dict>();
-		if (has_field(data, "path")) {
+		if (data.contains("path")) {
 			frame.path = data.parse_field<string>("path");
 		}
 
-		bool has_x = has_field(data, "x");
-		bool has_y = has_field(data, "y");
-		bool has_width = has_field(data, "w") || has_field(data, "width");
-		bool has_height = has_field(data, "h") || has_field(data, "height");
+		bool has_x = data.contains("x");
+		bool has_y = data.contains("y");
+		bool has_width = data.contains("w") || data.contains("width");
+		bool has_height = data.contains("h") || data.contains("height");
 		if (has_x || has_y || has_width || has_height) {
 			if (!has_x || !has_y || !has_width || !has_height) {
 				throw runtime_exception("texture frame rect needs x, y, and w/h or width/height");
 			}
 			frame.rect = rect<u32>{
 				{ data.parse_field<u32>("x"), data.parse_field<u32>("y") },
-				{ has_field(data, "w") ? data.parse_field<u32>("w") : data.parse_field<u32>("width"),
-				  has_field(data, "h") ? data.parse_field<u32>("h") : data.parse_field<u32>("height") },
+				  { data.contains("w") ? data.parse_field<u32>("w") : data.parse_field<u32>("width"),
+					data.contains("h") ? data.parse_field<u32>("h") : data.parse_field<u32>("height") },
 			};
 		}
 		return frame;
@@ -49,16 +45,16 @@ namespace lf {
 
 	TexturePrototype::TexturePrototype(const dict& data)
 		: Prototype<identifier<TexturePrototype, u16, void>>(data) {
-		if (has_field(data, "path")) {
-			load_field(data, "path", path);
+		if (data.contains("path")) {
+			data.assign(field("path", path));
 		}
-		if (has_field(data, "world_size")) {
-			load_field(data, "world_size", world_size);
+		if (data.contains("world_size")) {
+			data.assign(field("world_size", world_size));
 		}
-		if (has_field(data, "fps")) {
-			load_field(data, "fps", frames_per_second);
+		if (data.contains("fps")) {
+			data.assign(field("fps", frames_per_second));
 		}
-		if (has_field(data, "frames")) {
+		if (data.contains("frames")) {
 			const object& value = data.at("frames");
 			if (value.is<list>()) {
 				const list& frame_list = value.get<list>();

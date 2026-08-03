@@ -26,9 +26,9 @@
 #include <typeinfo>
 #include <utility>
 
-#include <leaf/math/dim.hpp>
-#include <leaf/math/pos.hpp>
-#include <leaf/math/vec.hpp>
+#include <leaf/script/math/dim.hpp>
+#include <leaf/script/math/pos.hpp>
+#include <leaf/script/math/vec.hpp>
 
 template<typename...>
 lf::error process(...)

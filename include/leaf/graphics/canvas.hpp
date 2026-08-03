@@ -5,7 +5,7 @@
 #include <leaf/core/vector.hpp>
 #include <leaf/graphics/buffer.hpp>
 #include <leaf/graphics/command_buffer.hpp>
-#include <leaf/math/pos.hpp>
+#include <leaf/script/math/pos.hpp>
 
 #include <type_traits>
 
