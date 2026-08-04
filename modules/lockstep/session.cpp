@@ -389,43 +389,43 @@ namespace lf::lockstep {
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, wire_payload& payload) {
 		return stream(
-			bin::field("id", payload.id),
-			bin::field("source", payload.source),
-			bin::field("hash", payload.hash),
-			bin::field("bytes", payload.bytes)
+			field("id", payload.id),
+			field("source", payload.source),
+			field("hash", payload.hash),
+			field("bytes", payload.bytes)
 		);
 	}
 
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, const wire_payload& payload) {
 		return stream(
-			bin::field("id", payload.id),
-			bin::field("source", payload.source),
-			bin::field("hash", payload.hash),
-			bin::field("bytes", payload.bytes)
+			field("id", payload.id),
+			field("source", payload.source),
+			field("hash", payload.hash),
+			field("bytes", payload.bytes)
 		);
 	}
 
 	error stream_tick(bin::write_stream& stream, const char* name, Tick tick) {
 		const u32 wire_tick = static_cast<u32>(tick);
-		return stream(bin::field(name, wire_tick));
+		return stream(field(name, wire_tick));
 	}
 
 	error stream_tick(bin::read_stream& stream, const char* name, Tick& tick) {
 		u32 wire_tick = 0;
-		IF_ERROR_RETURN_ERROR(stream(bin::field(name, wire_tick)));
+		IF_ERROR_RETURN_ERROR(stream(field(name, wire_tick)));
 		tick = wire_tick;
 		return {};
 	}
 
 	error stream_packet_sequence(bin::write_stream& stream, const char* name, PacketSequence sequence) {
 		const u32 wire_sequence = static_cast<u32>(sequence);
-		return stream(bin::field(name, wire_sequence));
+		return stream(field(name, wire_sequence));
 	}
 
 	error stream_packet_sequence(bin::read_stream& stream, const char* name, PacketSequence& sequence) {
 		u32 wire_sequence = 0;
-		IF_ERROR_RETURN_ERROR(stream(bin::field(name, wire_sequence)));
+		IF_ERROR_RETURN_ERROR(stream(field(name, wire_sequence)));
 		sequence = wire_sequence;
 		return {};
 	}
@@ -433,19 +433,19 @@ namespace lf::lockstep {
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, tick_closure& closure) {
 		IF_ERROR_RETURN_ERROR(stream_tick(stream, "tick", closure.tick));
-		return stream(bin::field("commands", closure.commands));
+		return stream(field("commands", closure.commands));
 	}
 
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, const tick_closure& closure) {
 		IF_ERROR_RETURN_ERROR(stream_tick(stream, "tick", closure.tick));
-		return stream(bin::field("commands", closure.commands));
+		return stream(field("commands", closure.commands));
 	}
 
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, request_for_heartbeat& requests) {
 		vector<u32> wire_sequences;
-		IF_ERROR_RETURN_ERROR(stream(bin::field("sequences", wire_sequences)));
+		IF_ERROR_RETURN_ERROR(stream(field("sequences", wire_sequences)));
 		requests.sequences.clear();
 		requests.sequences.reserve(wire_sequences.size());
 		for (u32 sequence : wire_sequences) {
@@ -461,38 +461,38 @@ namespace lf::lockstep {
 		for (PacketSequence sequence : requests.sequences) {
 			wire_sequences.emplace_back(static_cast<u32>(sequence));
 		}
-		return stream(bin::field("sequences", wire_sequences));
+		return stream(field("sequences", wire_sequences));
 	}
 
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, transfer_block_requests::range& range) {
 		return stream(
-			bin::field("first", range.first),
-			bin::field("count", range.count)
+			field("first", range.first),
+			field("count", range.count)
 		);
 	}
 
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, const transfer_block_requests::range& range) {
 		return stream(
-			bin::field("first", range.first),
-			bin::field("count", range.count)
+			field("first", range.first),
+			field("count", range.count)
 		);
 	}
 
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, transfer_block_requests& requests) {
 		return stream(
-			bin::field("snapshot_id", requests.snapshot_id),
-			bin::field("ranges", requests.ranges)
+			field("snapshot_id", requests.snapshot_id),
+			field("ranges", requests.ranges)
 		);
 	}
 
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, const transfer_block_requests& requests) {
 		return stream(
-			bin::field("snapshot_id", requests.snapshot_id),
-			bin::field("ranges", requests.ranges)
+			field("snapshot_id", requests.snapshot_id),
+			field("ranges", requests.ranges)
 		);
 	}
 
@@ -500,8 +500,8 @@ namespace lf::lockstep {
 	error process(Stream& stream, client_to_server_heartbeat& heartbeat) {
 		IF_ERROR_RETURN_ERROR(stream_tick(stream, "client_tick", heartbeat.client_tick));
 		return stream(
-			bin::field("requests", heartbeat.requests),
-			bin::field("commands", heartbeat.commands)
+			field("requests", heartbeat.requests),
+			field("commands", heartbeat.commands)
 		);
 	}
 
@@ -509,24 +509,24 @@ namespace lf::lockstep {
 	error process(Stream& stream, const client_to_server_heartbeat& heartbeat) {
 		IF_ERROR_RETURN_ERROR(stream_tick(stream, "client_tick", heartbeat.client_tick));
 		return stream(
-			bin::field("requests", heartbeat.requests),
-			bin::field("commands", heartbeat.commands)
+			field("requests", heartbeat.requests),
+			field("commands", heartbeat.commands)
 		);
 	}
 
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, server_to_client_heartbeat& heartbeat) {
 		return stream(
-			bin::field("requests", heartbeat.requests),
-			bin::field("tick_closures", heartbeat.tick_closures)
+			field("requests", heartbeat.requests),
+			field("tick_closures", heartbeat.tick_closures)
 		);
 	}
 
 	template<bin::byte_stream Stream>
 	error process(Stream& stream, const server_to_client_heartbeat& heartbeat) {
 		return stream(
-			bin::field("requests", heartbeat.requests),
-			bin::field("tick_closures", heartbeat.tick_closures)
+			field("requests", heartbeat.requests),
+			field("tick_closures", heartbeat.tick_closures)
 		);
 	}
 
@@ -699,7 +699,7 @@ namespace lf::lockstep {
 	template<typename Writer>
 	vector<byte> write_packet(packet_kind kind, Writer writer) {
 		bin::write_stream stream;
-		if (error err = stream(bin::field("kind", kind))) {
+		if (error err = stream(field("kind", kind))) {
 			throw runtime_exception(err.message);
 		}
 		if (error err = writer(stream)) {
@@ -714,8 +714,8 @@ namespace lf::lockstep {
 			const u32 wire_session_id = static_cast<u32>(session_id);
 			const u32 wire_packet_sequence = static_cast<u32>(packet_sequence);
 			IF_ERROR_RETURN_ERROR(stream(
-				bin::field("session_id", wire_session_id),
-				bin::field("packet_sequence", wire_packet_sequence)
+				field("session_id", wire_session_id),
+				field("packet_sequence", wire_packet_sequence)
 			));
 			return writer(stream);
 		});
@@ -725,8 +725,8 @@ namespace lf::lockstep {
 		u32 wire_session_id = 0;
 		u32 wire_packet_sequence = 0;
 		IF_ERROR_RETURN_ERROR(stream(
-			bin::field("session_id", wire_session_id),
-			bin::field("packet_sequence", wire_packet_sequence)
+			field("session_id", wire_session_id),
+			field("packet_sequence", wire_packet_sequence)
 		));
 		session_id = wire_session_id;
 		packet_sequence = wire_packet_sequence;
@@ -785,14 +785,14 @@ namespace lf::lockstep {
 	template<bin::readable_byte_stream Stream>
 	error process(Stream& stream, host_session& session, const net::Peer& peer) {
 		packet_kind kind = {};
-		IF_ERROR_RETURN_ERROR(stream(bin::field("kind", kind)));
+		IF_ERROR_RETURN_ERROR(stream(field("kind", kind)));
 
 		switch (kind) {
 		case packet_kind::connect_request: {
 			PacketSequence packet_sequence = 0;
 			u32 version = 0;
 			IF_ERROR_RETURN_ERROR(stream_packet_sequence(stream, "packet_sequence", packet_sequence));
-			IF_ERROR_RETURN_ERROR(stream(bin::field("protocol_version", version)));
+			IF_ERROR_RETURN_ERROR(stream(field("protocol_version", version)));
 			if (version != protocol_version) {
 				return {};
 			}
@@ -806,7 +806,7 @@ namespace lf::lockstep {
 			PacketSequence packet_sequence = 0;
 			vector<byte> login_payload;
 			IF_ERROR_RETURN_ERROR(read_connected_header(stream, session_id, packet_sequence));
-			IF_ERROR_RETURN_ERROR(stream(bin::field("login_payload", login_payload)));
+			IF_ERROR_RETURN_ERROR(stream(field("login_payload", login_payload)));
 
 			host_connection* connection = session.find_connection(peer, session_id);
 			if (!connection) {
@@ -845,7 +845,7 @@ namespace lf::lockstep {
 			PacketSequence packet_sequence = 0;
 			client_to_server_heartbeat heartbeat;
 			IF_ERROR_RETURN_ERROR(read_connected_header(stream, session_id, packet_sequence));
-			IF_ERROR_RETURN_ERROR(stream(bin::field("heartbeat", heartbeat)));
+			IF_ERROR_RETURN_ERROR(stream(field("heartbeat", heartbeat)));
 
 			host_connection* connection = session.find_connection(peer, session_id);
 			if (!connection || connection->connection_state != state::joined) {
@@ -882,7 +882,7 @@ namespace lf::lockstep {
 			PacketSequence packet_sequence = 0;
 			transfer_block_requests requests;
 			IF_ERROR_RETURN_ERROR(read_connected_header(stream, session_id, packet_sequence));
-			IF_ERROR_RETURN_ERROR(stream(bin::field("requests", requests)));
+			IF_ERROR_RETURN_ERROR(stream(field("requests", requests)));
 
 			host_connection* connection = session.find_connection(peer, session_id);
 			if (connection) {
@@ -931,7 +931,7 @@ namespace lf::lockstep {
 		}
 
 		packet_kind kind = {};
-		IF_ERROR_RETURN_ERROR(stream(bin::field("kind", kind)));
+		IF_ERROR_RETURN_ERROR(stream(field("kind", kind)));
 
 		switch (kind) {
 		case packet_kind::connect_accept: {
@@ -940,14 +940,14 @@ namespace lf::lockstep {
 			u32 wire_session_id = 0;
 			u32 version = 0;
 			IF_ERROR_RETURN_ERROR(stream_packet_sequence(stream, "packet_sequence", packet_sequence));
-			IF_ERROR_RETURN_ERROR(stream(bin::field("protocol_version", version)));
+			IF_ERROR_RETURN_ERROR(stream(field("protocol_version", version)));
 			if (version != protocol_version) {
 				session.socket.disconnect();
 				session.session_state = state::disconnected;
 				session.push_event(SessionEvent{ .kind = SessionEventKind::disconnected });
 				return {};
 			}
-			IF_ERROR_RETURN_ERROR(stream(bin::field("session_id", wire_session_id)));
+			IF_ERROR_RETURN_ERROR(stream(field("session_id", wire_session_id)));
 			accepted_session_id = wire_session_id;
 
 			session.session_id = accepted_session_id;
@@ -966,11 +966,11 @@ namespace lf::lockstep {
 			u64 total_bytes = 0;
 			u32 chunk_count = 0;
 			IF_ERROR_RETURN_ERROR(read_connected_header(stream, session_id, packet_sequence));
-			IF_ERROR_RETURN_ERROR(stream(bin::field("snapshot_id", snapshot_id)));
+			IF_ERROR_RETURN_ERROR(stream(field("snapshot_id", snapshot_id)));
 			IF_ERROR_RETURN_ERROR(stream_tick(stream, "baseline_tick", baseline_tick));
 			IF_ERROR_RETURN_ERROR(stream(
-				bin::field("total_bytes", total_bytes),
-				bin::field("chunk_count", chunk_count)
+				field("total_bytes", total_bytes),
+				field("chunk_count", chunk_count)
 			));
 
 			if (!session.valid_session(session_id)) {
@@ -1002,9 +1002,9 @@ namespace lf::lockstep {
 			vector<byte> bytes;
 			IF_ERROR_RETURN_ERROR(read_connected_header(stream, session_id, packet_sequence));
 			IF_ERROR_RETURN_ERROR(stream(
-				bin::field("snapshot_id", snapshot_id),
-				bin::field("chunk_index", chunk_index),
-				bin::field("bytes", bytes)
+				field("snapshot_id", snapshot_id),
+				field("chunk_index", chunk_index),
+				field("bytes", bytes)
 			));
 
 			if (!session.valid_session(session_id) || !session.snapshot.active || session.snapshot.snapshot_id != snapshot_id) {
@@ -1029,7 +1029,7 @@ namespace lf::lockstep {
 			PacketSequence packet_sequence = 0;
 			u64 snapshot_id = 0;
 			IF_ERROR_RETURN_ERROR(read_connected_header(stream, session_id, packet_sequence));
-			IF_ERROR_RETURN_ERROR(stream(bin::field("snapshot_id", snapshot_id)));
+			IF_ERROR_RETURN_ERROR(stream(field("snapshot_id", snapshot_id)));
 
 			if (!session.valid_session(session_id) || !session.snapshot.active || session.snapshot.snapshot_id != snapshot_id) {
 				return {};
@@ -1043,7 +1043,7 @@ namespace lf::lockstep {
 			PacketSequence packet_sequence = 0;
 			server_to_client_heartbeat heartbeat;
 			IF_ERROR_RETURN_ERROR(read_connected_header(stream, session_id, packet_sequence));
-			IF_ERROR_RETURN_ERROR(stream(bin::field("heartbeat", heartbeat)));
+			IF_ERROR_RETURN_ERROR(stream(field("heartbeat", heartbeat)));
 
 			if (!session.valid_session(session_id)) {
 				return {};
@@ -1189,7 +1189,7 @@ namespace lf::lockstep {
 				server_to_client_heartbeat heartbeat;
 				heartbeat.requests.sequences = take_heartbeat_requests(connection.pending_heartbeat_requests);
 				heartbeat.tick_closures.emplace_back(closure);
-				return stream(bin::field("heartbeat", heartbeat));
+				return stream(field("heartbeat", heartbeat));
 			});
 			remember_sent_packet(connection.sent_heartbeats, heartbeat_sequence, send_queue.back().bytes);
 		}
@@ -1307,8 +1307,8 @@ namespace lf::lockstep {
 		vector<byte> bytes = write_packet(packet_kind::connect_accept, [&](bin::write_stream& stream) -> error {
 			const u32 wire_session_id = static_cast<u32>(connection.session_id);
 			IF_ERROR_RETURN_ERROR(stream_packet_sequence(stream, "packet_sequence", packet_sequence));
-			IF_ERROR_RETURN_ERROR(stream(bin::field("protocol_version", protocol_version)));
-			return stream(bin::field("session_id", wire_session_id));
+			IF_ERROR_RETURN_ERROR(stream(field("protocol_version", protocol_version)));
+			return stream(field("session_id", wire_session_id));
 		});
 		socket.send(connection.peer, bytes_view(bytes));
 		flush_send_queue();
@@ -1384,11 +1384,11 @@ namespace lf::lockstep {
 
 		send_connected(connection, packet_kind::snapshot_begin, [&](bin::write_stream& stream) -> error {
 			const u64 total_bytes = static_cast<u64>(connection.snapshot_bytes.size());
-			IF_ERROR_RETURN_ERROR(stream(bin::field("snapshot_id", connection.snapshot_id)));
+			IF_ERROR_RETURN_ERROR(stream(field("snapshot_id", connection.snapshot_id)));
 			IF_ERROR_RETURN_ERROR(stream_tick(stream, "baseline_tick", connection.snapshot_baseline_tick));
 			return stream(
-				bin::field("total_bytes", total_bytes),
-				bin::field("chunk_count", connection.snapshot_chunk_count)
+				field("total_bytes", total_bytes),
+				field("chunk_count", connection.snapshot_chunk_count)
 			);
 		});
 	}
@@ -1425,16 +1425,16 @@ namespace lf::lockstep {
 			vector<byte> bytes;
 			bytes.assign(connection.snapshot_bytes.begin() + static_cast<i64>(offset), connection.snapshot_bytes.begin() + static_cast<i64>(offset + count));
 			return stream(
-				bin::field("snapshot_id", connection.snapshot_id),
-				bin::field("chunk_index", chunk_index),
-				bin::field("bytes", bytes)
+				field("snapshot_id", connection.snapshot_id),
+				field("chunk_index", chunk_index),
+				field("bytes", bytes)
 			);
 		});
 	}
 
 	void host_session::send_snapshot_end(host_connection& connection) {
 		send_connected(connection, packet_kind::snapshot_end, [&](bin::write_stream& stream) -> error {
-			return stream(bin::field("snapshot_id", connection.snapshot_id));
+			return stream(field("snapshot_id", connection.snapshot_id));
 		});
 	}
 
@@ -1700,7 +1700,7 @@ namespace lf::lockstep {
 		++next_send_sequence;
 		vector<byte> bytes = write_packet(packet_kind::connect_request, [&](bin::write_stream& stream) -> error {
 			IF_ERROR_RETURN_ERROR(stream_packet_sequence(stream, "packet_sequence", packet_sequence));
-			return stream(bin::field("protocol_version", protocol_version));
+			return stream(field("protocol_version", protocol_version));
 		});
 		socket.send(host, bytes_view(bytes));
 		remember_sent_packet(sent_packets, packet_sequence, bytes);
@@ -1711,7 +1711,7 @@ namespace lf::lockstep {
 			return;
 		}
 		send_connected(packet_kind::join_request, [&](bin::write_stream& stream) -> error {
-			return stream(bin::field("login_payload", login_payload));
+			return stream(field("login_payload", login_payload));
 		});
 	}
 
@@ -1762,7 +1762,7 @@ namespace lf::lockstep {
 			return;
 		}
 		send_connected(packet_kind::snapshot_request, [&](bin::write_stream& stream) -> error {
-			return stream(bin::field("requests", requests));
+			return stream(field("requests", requests));
 		});
 	}
 
@@ -1778,7 +1778,7 @@ namespace lf::lockstep {
 		const PacketSequence heartbeat_sequence = next_heartbeat_sequence;
 		++next_heartbeat_sequence;
 		send_connected(packet_kind::client_heartbeat, heartbeat_sequence, [&](bin::write_stream& stream) -> error {
-			return stream(bin::field("heartbeat", heartbeat));
+			return stream(field("heartbeat", heartbeat));
 		});
 		remember_sent_packet(sent_heartbeats, heartbeat_sequence, sent_packets.back().bytes);
 		outgoing_commands.clear();

@@ -56,9 +56,9 @@ namespace lf::bin {
 	** template<lf::bin::byte_stream Stream, lf::bin::data<player_save> Player>
 	** lf::error process(Stream& stream, Player& player) {
 	**     return stream(
-	**         lf::bin::field("position", player.position),
-	**         lf::bin::field("name", player.name),
-	**         lf::bin::field("health", player.health)
+	**         lf::field("position", player.position),
+	**         lf::field("name", player.name),
+	**         lf::field("health", player.health)
 	**     );
 	** }
 	**
@@ -81,8 +81,8 @@ namespace lf::bin {
 	** - strings and vectors are encoded as size followed by contiguous element data
 	**   in logical order.
 	** - padding bytes are ignored on read and reserved on write; their contents are undefined.
-	** - Versioned formats should dispatch through version_tag and migrate forward one
-	**   declared source version at a time.
+	** - Versioned formats select shared schemas by their encoded version and migrate
+	**   forward one declared source version at a time.
 	** - read<T>() expects the whole input span to be consumed. Use read_stream directly
 	**   for embedded/chunked payloads with trailing bytes.
 	**/
@@ -187,18 +187,6 @@ namespace lf::bin {
 
 	/*!
 	** @ingroup binary
-	** @brief Named field reference passed to a binary stream.
-	**
-	** field_ref stores the field name, the value to process, and optional extra
-	** arguments forwarded to a custom process overload.
-	*/
-	template<typename T, typename... Args>
-	struct field_ref {
-		string_view name;
-		T& value;
-		std::tuple<Args&...> args;
-	};
-
 	/*!
 	** @ingroup binary
 	** @brief Per-hierarchy traits for RTTI-free polymorphic serialization.
@@ -309,18 +297,12 @@ namespace lf::bin {
 	template<typename T>
 	concept byte_stream = readable_byte_stream<T> || writable_byte_stream<T>;
 
-	template<typename T, typename... Args>
-	struct field_ref;
-
-	template<typename T, typename... Args>
-	field_ref<T, Args...> field(string_view name, T& value, Args&... args);
-
 	template<lf::bitfield_enum Mask, byte_stream Stream, typename T>
 	error gated_field(Stream& stream, Mask mask, string_view name, T& value) {
 		if ((stream.mode() & mask) == Mask{}) {
 			return {};
 		}
-		return stream(field(name, value));
+		return stream(lf::field(name, value));
 	}
 
 	template<typename T>
@@ -345,13 +327,13 @@ namespace lf::bin {
 	error process(Stream& stream, ::lf::identifier<T, VNum, GNum>& value) {
 		if constexpr (std::is_same_v<GNum, void>) {
 			VNum idx = 0;
-			IF_ERROR_RETURN_ERROR(stream(field("id", idx)));
+			IF_ERROR_RETURN_ERROR(stream(lf::field("id", idx)));
 			value = ::lf::identifier<T, VNum, GNum>(idx);
 			return {};
 		} else {
 			VNum idx = 0;
 			GNum gen = 0;
-			IF_ERROR_RETURN_ERROR(stream(field("id", idx), field("gen", gen)));
+			IF_ERROR_RETURN_ERROR(stream(lf::field("id", idx), lf::field("gen", gen)));
 			value = ::lf::identifier<T, VNum, GNum>(idx, gen);
 			return {};
 		}
@@ -361,12 +343,17 @@ namespace lf::bin {
 	error process(Stream& stream, const ::lf::identifier<T, VNum, GNum>& value) {
 		if constexpr (std::is_same_v<GNum, void>) {
 			VNum idx = value.get();
-			return stream(field("id", idx));
+			return stream(lf::field("id", idx));
 		} else {
 			VNum idx = value.get();
 			GNum gen = value.gen();
-			return stream(field("id", idx), field("gen", gen));
+			return stream(lf::field("id", idx), lf::field("gen", gen));
 		}
+	}
+
+	template<writable_byte_stream Stream, typename T, typename VNum, typename GNum>
+	error process(Stream& stream, ::lf::identifier<T, VNum, GNum>& value) {
+		return process(stream, static_cast<const ::lf::identifier<T, VNum, GNum>&>(value));
 	}
 
 	template<byte_stream Stream, typename... Ps>
@@ -377,12 +364,12 @@ namespace lf::bin {
 			mask_t mask = 0;
 			size_t bit = 0;
 			((mask |= static_cast<mask_t>(ps.present(ps.value)) << bit++), ...);
-			IF_ERROR_RETURN_ERROR(stream(field("mask", mask)));
+			IF_ERROR_RETURN_ERROR(stream(lf::field("mask", mask)));
 			size_t index = 0;
 			error err;
 			auto write_one = [&](auto& p) -> bool {
 				if (mask & (static_cast<mask_t>(1) << index++)) {
-					err = stream(field(p.name, p.value));
+					err = stream(lf::field(p.name, p.value));
 				}
 				return !err;
 			};
@@ -390,12 +377,12 @@ namespace lf::bin {
 			return err;
 		} else {
 			mask_t mask = 0;
-			IF_ERROR_RETURN_ERROR(stream(field("mask", mask)));
+			IF_ERROR_RETURN_ERROR(stream(lf::field("mask", mask)));
 			size_t index = 0;
 			error err;
 			auto read_one = [&](auto& p) -> bool {
 				if (mask & (static_cast<mask_t>(1) << index++)) {
-					err = stream(field(p.name, p.value));
+					err = stream(lf::field(p.name, p.value));
 				} else {
 					p.value = p.fallback;
 				}
@@ -455,21 +442,6 @@ namespace lf::bin {
 		return detail::dispatch_polymorphic_read_impl<Base, Stream, tuple_t>(id, stream, out, std::make_index_sequence<std::tuple_size_v<tuple_t>>{});
 	}
 
-	/*!
-	** @ingroup binary
-	** @brief Creates a named field reference for stream(...).
-	** @param name Diagnostic field name.
-	** @param value Value to serialize or parse.
-	** @param args Optional arguments forwarded to process(stream, value, args...).
-	*/
-	template<typename T, typename... Args>
-	field_ref<T, Args...> field(string_view name, T& value, Args&... args) { return { name, value, { args... } }; }
-
-	template<typename T>
-	struct is_field_ref : std::false_type {};
-	template<typename T, typename... Args>
-	struct is_field_ref<field_ref<T, Args...>> : std::true_type {};
-
 	template<typename T>
 	struct enum_validator {
 		static constexpr bool is_valid(T) {
@@ -492,9 +464,6 @@ namespace lf::bin {
 	template<>
 	inline constexpr bool trivially_binary_serializable_v<lf::byte> = true;
 
-	template<typename T>
-	concept binary_field = is_field_ref<std::remove_cvref_t<T>>::value || schema_node<T>;
-
 	struct read_stream_tag {};
 	struct write_stream_tag {};
 
@@ -516,11 +485,6 @@ namespace lf::bin {
 	};
 
 	struct fast_stream_tag {};
-
-	template<auto Version>
-	struct version_tag {
-		static constexpr auto value = Version;
-	};
 
 	/*!
 	** @ingroup binary
@@ -656,9 +620,31 @@ namespace lf::bin {
 			return process(stream, value);
 		}
 
-		template<typename Stream, typename T, typename Default>
-		error process_schema(Stream& stream, const field_node<T, Default>& item) {
-			return stream(field_ref<T>{ item.name, item.value, {} });
+		template<lf::version Version, typename Stream, typename T, typename... Args>
+		error process_selected_schema_version(Stream& stream, T& value, Args&... args);
+
+		template<typename Stream, typename T, typename Default, lf::version Version, typename... Args>
+		error process_schema(Stream& stream, const field_node<T, Default, schema_version<Version>, Args...>& item) {
+			return std::apply(
+				[&](const auto&, auto&... args) -> error {
+					return process_selected_schema_version<Version>(stream, item.value, args...);
+				},
+				item.args
+			);
+		}
+
+		template<typename Stream, typename T, typename Default, typename... Args>
+		error process_schema(Stream& stream, const field_node<T, Default, Args...>& item) {
+			return std::apply(
+				[&](auto&... args) -> error {
+					if constexpr (sizeof...(Args) == 0) {
+						return stream.process(item.value);
+					} else {
+						return process(stream, item.value, args...);
+					}
+				},
+				item.args
+			);
 		}
 
 		template<typename Stream, typename... Fields>
@@ -685,25 +671,12 @@ namespace lf::bin {
 		return std::apply([&](const auto&... children) { return stream(children...); }, item.children);
 		}
 
-		template<typename Stream, binary_field Field>
+		template<typename Stream, schema_node Field>
 		error process_field_value(Stream& stream, Field&& item) {
-			if constexpr (schema_node<Field>) {
-				return process_schema(stream, item);
-			} else {
-				return std::apply(
-					[&](auto&... args) -> error {
-						if constexpr (sizeof...(args) == 0) {
-							return stream.process(item.value);
-						} else {
-							return process(stream, item.value, args...);
-						}
-					},
-					item.args
-				);
-			}
+			return process_schema(stream, item);
 		}
 
-		template<typename Stream, binary_field Field>
+		template<typename Stream, schema_node Field>
 		error process_field(Stream& stream, Field&& item, string_view action) {
 			if constexpr (is_fast_stream_v<Stream>) {
 				if (auto err = process_field_value(stream, std::forward<Field>(item)); err) {
@@ -715,7 +688,13 @@ namespace lf::bin {
 				return {};
 			}
 
-			context_scope scope(stream, item.name);
+			const string_view name = [&]() -> string_view {
+				if constexpr (requires { item.name; }) {
+					return item.name;
+				}
+				return {};
+			}();
+			context_scope scope(stream, name);
 			if (auto err = process_field_value(stream, std::forward<Field>(item)); err) {
 				add_context_if_missing(stream, err, action);
 				return err;
@@ -726,7 +705,7 @@ namespace lf::bin {
 			return {};
 		}
 
-		template<typename Stream, binary_field... Fields>
+		template<typename Stream, schema_node... Fields>
 		error process_fields(Stream& stream, string_view action, Fields&&... fields) {
 			if constexpr (requires { stream.add_progress_total(sizeof...(Fields)); }) {
 				stream.add_progress_total(sizeof...(Fields));
@@ -976,7 +955,7 @@ namespace lf::bin {
 		**
 		** This is the usual implementation tool for custom process overloads.
 		*/
-		template<binary_field... Fields>
+		template<schema_node... Fields>
 		error operator()(Fields&&... fields) {
 			return detail::process_fields(*this, "reading", std::forward<Fields>(fields)...);
 		}
@@ -1112,7 +1091,7 @@ namespace lf::bin {
 			return detail::process_value(*this, value);
 		}
 
-		template<binary_field... Fields>
+		template<schema_node... Fields>
 		error operator()(Fields&&... fields) {
 			return detail::process_fields(*this, "reading", std::forward<Fields>(fields)...);
 		}
@@ -1253,7 +1232,7 @@ namespace lf::bin {
 		**
 		** This is the usual implementation tool for custom process overloads.
 		*/
-		template<binary_field... Fields>
+		template<schema_node... Fields>
 		error operator()(Fields&&... fields) {
 			return detail::process_fields(*this, "writing", std::forward<Fields>(fields)...);
 		}
@@ -1368,7 +1347,7 @@ namespace lf::bin {
 			return detail::process_value(*this, value);
 		}
 
-		template<binary_field... Fields>
+		template<schema_node... Fields>
 		error operator()(Fields&&... fields) {
 			return detail::process_fields(*this, "writing", std::forward<Fields>(fields)...);
 		}
@@ -1485,7 +1464,7 @@ namespace lf::bin {
 			return detail::process_value(*this, value);
 		}
 
-		template<binary_field... Fields>
+		template<schema_node... Fields>
 		error operator()(Fields&&... fields) {
 			return detail::process_fields(*this, "writing", std::forward<Fields>(fields)...);
 		}
@@ -1578,7 +1557,7 @@ namespace lf::bin {
 			return detail::process_value(*this, value);
 		}
 
-		template<binary_field... Fields>
+		template<schema_node... Fields>
 		error operator()(Fields&&... fields) {
 			return detail::process_fields(*this, "measuring", std::forward<Fields>(fields)...);
 		}
@@ -1591,68 +1570,69 @@ namespace lf::bin {
 	};
 
 	namespace detail {
-		struct missing_migration_source {};
+		template<typename... Args>
+		concept has_single_version_argument =
+			(0u + ... + static_cast<unsigned>(std::same_as<std::remove_cvref_t<Args>, lf::version>)) == 1u;
+
+		template<typename... Args>
+			requires has_single_version_argument<Args...>
+		lf::version version_argument(Args&... args) {
+			const lf::version* result = nullptr;
+			auto select = [&result]<typename Arg>(Arg& arg) {
+				if constexpr (std::same_as<std::remove_cvref_t<Arg>, lf::version>) {
+					result = &arg;
+				}
+			};
+			(select(args), ...);
+			return *result;
+		}
+
+		// A schema trait may provide this only when its wire protocol must perform
+		// stream-owned work between groups of otherwise ordinary schema nodes.
+		template<lf::version Version, byte_stream Stream, typename T, typename... Args>
+		error process_version_schema(Stream& stream, T& value, Args&... args) {
+			using trait = lf::schema_trait<std::remove_cvref_t<T>, Version>;
+			if constexpr (requires { trait::process(stream, value, args...); }) {
+				return trait::process(stream, value, args...);
+			} else {
+				return stream(lf::schema<Version>(value));
+			}
+		}
+
+		template<lf::version TargetVersion, byte_stream Stream, typename T, typename... Args>
+		error process_source_schema(Stream& stream, T& value, lf::version file_version, Args&... args) {
+			using value_type = std::remove_cvref_t<T>;
+			if (file_version == TargetVersion) {
+				return process_version_schema<TargetVersion>(stream, value, args...);
+			}
+			if constexpr (lf::detail::has_migration_source<value_type, TargetVersion>) {
+				return process_source_schema<lf::migration_source<value_type, TargetVersion>>(stream, value, file_version, args...);
+			} else {
+				return error(generic_errc::parse_error, context_message(stream, "unsupported schema version"));
+			}
+		}
 	} // namespace detail
 
-	template<typename T, auto TargetVersion>
-	constexpr auto migration_source = detail::missing_migration_source{};
-
-	namespace detail {
-	template<typename T, auto TargetVersion>
-	concept has_migration_source = !std::same_as<std::remove_cvref_t<decltype(migration_source<T, TargetVersion>)>, missing_migration_source>;
-	}
-
-	/*!
-	** @ingroup binary
-	** @brief Processes a value with a specific binary schema version.
-	**
-	** Define process(stream, version_tag<Version>{}, value) overloads for each
-	** layout version, then call this helper when writing or when reading bytes
-	** already known to match Version exactly.
-	*/
-	template<typename T, auto Version, byte_stream Stream, data<T> Value>
-	error process(Stream& stream, Value& value) {
-		return process(stream, version_tag<Version>{}, value);
-	}
-
-	/*!
-	** @ingroup binary
-	** @brief Migrates data from its encoded file version to a target version.
-	**
-	** Specialize migration_source<T, TargetVersion> with the immediately
-	** preceding version, and provide migrate(version_tag<TargetVersion>, value)
-	** to transform the already-read value one version step forward.
-	*/
-	template<typename T, auto TargetVersion, readable_byte_stream Stream>
-	error migrate(Stream& stream, version file_version, T& value) {
-		if constexpr (detail::has_migration_source<T, TargetVersion>) {
-			constexpr auto SourceVersion = migration_source<T, TargetVersion>;
-			if (auto err = process<T, SourceVersion>(stream, file_version, value); err) {
+	// Process the requested schema while writing. When reading, the file version
+	// remains one of the normal process arguments: load its declared source layout
+	// and then migrate the in-memory value to TargetVersion.
+	template<lf::version TargetVersion, byte_stream Stream, typename T, typename... Args>
+		requires detail::has_single_version_argument<Args...>
+	error process(Stream& stream, T& value, Args&... args) {
+		if constexpr (writable_byte_stream<Stream>) {
+			return detail::process_version_schema<TargetVersion>(stream, value, args...);
+		} else {
+			const lf::version file_version = detail::version_argument(args...);
+			if (auto err = detail::process_source_schema<TargetVersion>(stream, value, file_version, args...); err) {
 				return err;
 			}
-			if constexpr (requires {
-							  migrate(version_tag<TargetVersion>{}, value);
-						  }) {
-				return migrate(version_tag<TargetVersion>{}, value);
-			} else {
-				return error(generic_errc::parse_error, detail::context_message(stream, "unsupported binary version"));
-			}
-		} else {
-			return error(generic_errc::parse_error, detail::context_message(stream, "unsupported binary version"));
+			return lf::migrate<TargetVersion>(value, file_version);
 		}
 	}
 
-	/*!
-	** @ingroup binary
-	** @brief Reads a versioned value and migrates it to TargetVersion if needed.
-	*/
-	template<typename T, auto TargetVersion, readable_byte_stream Stream>
-	error process(Stream& stream, version file_version, T& value) {
-		if (file_version == TargetVersion) {
-			return process<T, TargetVersion>(stream, value);
-		}
-
-		return migrate<T, TargetVersion>(stream, file_version, value);
+	template<lf::version TargetVersion, byte_stream Stream, typename T>
+	error process(Stream& stream, T& value) {
+		return detail::process_version_schema<TargetVersion>(stream, value);
 	}
 
 	namespace detail {
@@ -2194,6 +2174,59 @@ namespace lf::bin {
 		}
 	}
 
+	template<byte_stream Stream, typename Map, typename... Args>
+		requires(specialized_data<Map, unordered_map> && sizeof...(Args) > 0)
+	error process(Stream& stream, Map& value, Args&... args) {
+		using map_t = std::remove_cvref_t<Map>;
+		using key_t = typename map_t::key_type;
+		using mapped_t = typename map_t::mapped_type;
+
+		if constexpr (is_writing_stream_v<Stream>) {
+			const size item_count = value.size();
+			if (auto err = stream(field("size", item_count)); err) {
+				return err;
+			}
+			if constexpr (requires { stream.add_progress_total(value.size()); }) {
+				stream.add_progress_total(value.size());
+			}
+			size_t index = 0;
+			for (const auto& [key, mapped] : value) {
+				const string item_name = lf::format("[{}]", index);
+				detail::context_scope scope(stream, item_name);
+				if (auto err = stream(field("key", key, args...), field("value", mapped, args...)); err) {
+					return err;
+				}
+				++index;
+			}
+			return {};
+		} else {
+			size item_count = 0;
+			if (auto err = stream(field("size", item_count)); err) {
+				return err;
+			}
+			if (item_count.value > stream.limits().max_vector_elements) {
+				return error(generic_errc::parse_error, detail::context_message(stream, lf::format("reading {} failed: map size {} exceeds limit {}", detail::value_type_name<Map>(), item_count.value, stream.limits().max_vector_elements)));
+			}
+			if constexpr (requires { stream.add_progress_total(item_count.value); }) {
+				stream.add_progress_total(item_count.value);
+			}
+			map_t temp;
+			temp.reserve(static_cast<size_t>(item_count.value));
+			for (size_t index = 0; index < static_cast<size_t>(item_count.value); ++index) {
+				key_t key{};
+				mapped_t mapped{};
+				const string item_name = lf::format("[{}]", index);
+				detail::context_scope scope(stream, item_name);
+				if (auto err = stream(field("key", key, args...), field("value", mapped, args...)); err) {
+					return err;
+				}
+				temp.emplace(std::move(key), std::move(mapped));
+			}
+			value = std::move(temp);
+			return {};
+		}
+	}
+
 	template<byte_stream Stream, typename Array>
 		requires(data<Array, std::remove_cvref_t<Array>> && is_array<std::remove_cvref_t<Array>>::value)
 	error process(Stream& stream, Array& value) {
@@ -2233,6 +2266,33 @@ namespace lf::bin {
 		}
 		return {};
 	}
+
+	namespace detail {
+		template<lf::version Version, typename T>
+		concept has_selected_schema = requires(T& value) {
+			lf::schema_trait<std::remove_cvref_t<T>, Version>::get(value);
+		};
+
+		template<typename T>
+		concept schema_version_container =
+			specialized_data<T, vector> ||
+			specialized_data<T, optional> ||
+			specialized_data<T, unordered_map> ||
+			(data<T, std::remove_cvref_t<T>> && is_array<std::remove_cvref_t<T>>::value) ||
+			requires { typename std::remove_cvref_t<T>::element_type; };
+
+		template<lf::version Version, typename Stream, typename T, typename... Args>
+		error process_selected_schema_version(Stream& stream, T& value, Args&... args) {
+			if constexpr (has_selected_schema<Version, T>) {
+				return process_version_schema<Version>(stream, value, args...);
+			} else if constexpr (schema_version_container<T>) {
+				auto schema_version = lf::schema_version<Version>{};
+				return process(stream, value, schema_version, args...);
+			} else {
+				return process(stream, value, args...);
+			}
+		}
+	} // namespace detail
 
 	template<byte_stream Stream, glm_vec2_data Vec2>
 	error process(Stream& stream, Vec2& value) {

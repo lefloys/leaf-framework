@@ -33,8 +33,8 @@ namespace lf {
 	using object_underlying = std::variant<std::monostate, bool, i64, u64, f64, string, dict, list>;
 
 	class dict : public dict_underlying {
-		template<typename T, typename Default>
-		field_presence assign_schema(const field_node<T, Default>& field) const;
+	template<typename T, typename Default, typename... Args>
+		field_presence assign_schema(const field_node<T, Default, Args...>& field) const;
 
 		template<typename... Fields>
 		field_presence assign_schema(const group_node<Fields...>& group) const;
@@ -133,8 +133,8 @@ namespace lf {
 		static dict to_dict(const T& value) = delete;
 	};
 
-	template<typename T, typename Default>
-	field_presence dict::assign_schema(const field_node<T, Default>& field) const {
+	template<typename T, typename Default, typename... Args>
+	field_presence dict::assign_schema(const field_node<T, Default, Args...>& field) const {
 		const auto iterator = find(field.name);
 		if (iterator == end()) {
 			if constexpr (!std::is_void_v<Default>) {
@@ -167,8 +167,14 @@ namespace lf {
 		bool should_process = false;
 		if constexpr (requires { conditional.condition(controller_presence); }) {
 			should_process = conditional.condition(controller_presence);
-		} else if (controller_presence == field_presence::present) {
-			should_process = conditional.condition(conditional.controller.value);
+		} else if constexpr (requires { conditional.condition(conditional.controller.value); }) {
+			if (controller_presence == field_presence::present) {
+				should_process = conditional.condition(conditional.controller.value);
+			}
+		} else if constexpr (requires { conditional.condition(); }) {
+			should_process = conditional.condition();
+		} else {
+			static_assert(dependent_false<Condition>, "schema conditional must accept field presence, controller value, or no arguments");
 		}
 		if (!should_process) {
 			return controller_presence;
@@ -470,6 +476,12 @@ namespace lf {
 				throw lf::runtime_exception(lf::format("value {} out of range for u08", v));
 			}
 			return static_cast<u08>(v);
+		}
+	};
+	template<>
+	struct object_trait<byte> {
+		static byte parse(const object& obj) {
+			return static_cast<byte>(object_trait<u08>::parse(obj));
 		}
 	};
 
