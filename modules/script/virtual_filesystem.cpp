@@ -90,6 +90,12 @@ namespace lf {
 		if (path.empty()) {
 			return {};
 		}
+		if (path.starts_with("__")) {
+			const size_t end = path.find("__", 2);
+			if (end != string_view::npos) {
+				return ResolveVirtualPath(string("<") + string(path.substr(2, end - 2)) + ">" + string(path.substr(end + 2)), std::move(relative_root));
+			}
+		}
 
 		fs::path raw_path = fs::path(path);
 		if (raw_path.is_absolute()) {
@@ -123,6 +129,12 @@ namespace lf {
 	report<fs::path> ResolveVirtualPathReport(string_view path, fs::path relative_root) {
 		if (path.empty()) {
 			return fs::path();
+		}
+		if (path.starts_with("__")) {
+			const size_t end = path.find("__", 2);
+			if (end != string_view::npos) {
+				return ResolveVirtualPathReport(string("<") + string(path.substr(2, end - 2)) + ">" + string(path.substr(end + 2)), std::move(relative_root));
+			}
 		}
 
 		fs::path raw_path = fs::path(path);

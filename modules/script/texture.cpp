@@ -4,6 +4,7 @@
 #include "leaf/core/filesystem.hpp"
 #include "leaf/graphics/queue.hpp"
 #include "leaf/resource/database.hpp"
+#include "leaf/script/virtual_filesystem.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -48,8 +49,8 @@ namespace lf {
 		if (data.contains("path")) {
 			data.assign(field("path", path));
 		}
-		if (data.contains("world_size")) {
-			data.assign(field("world_size", world_size));
+		if (data.contains("distance")) {
+			data.assign(field("distance", distance));
 		}
 		if (data.contains("fps")) {
 			data.assign(field("fps", frames_per_second));
@@ -62,6 +63,8 @@ namespace lf {
 				for (const object& frame : frame_list) {
 					frames.emplace_back(parse_frame(frame, path));
 				}
+			} else if (value.is<dict>() && value.get<dict>().empty()) {
+				// Lua represents an empty table as a dictionary until it has an array entry.
 			} else if (value.convertible<u16>()) {
 				u16 count = std::max<u16>(value.as<u16>(), 1);
 				frames.reserve(count);
@@ -91,6 +94,16 @@ namespace lf {
 			const TexturePrototype& texture = textures[texture_index];
 			for (size_t frame_index = 0; frame_index < texture.frames.size(); ++frame_index) {
 				const TextureSourceFrame& frame = texture.frames[frame_index];
+				if (frame.path.empty()) {
+					continue;
+				}
+				report<fs::path> resolved = ResolveVirtualPathReport(frame.path);
+				if (!resolved) {
+					return resolved.error().add_context(lf::format("loading texture frame '{}'", frame.path));
+				}
+				if (!fs::exists(*resolved)) {
+					return error(generic_errc::input_error, lf::format("missing texture frame '{}'", frame.path));
+				}
 				atlas_source_frame source;
 				source.texture_index = static_cast<u32>(texture_index);
 				source.frame_index = static_cast<u32>(frame_index);

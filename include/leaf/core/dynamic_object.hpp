@@ -1,6 +1,7 @@
 #pragma once
 #include "leaf/core/cast.hpp"
 #include "leaf/core/concepts.hpp"
+#include "leaf/core/distance.hpp"
 #include "leaf/core/error.hpp"
 #include "leaf/core/exception.hpp"
 #include "leaf/core/schema.hpp"
@@ -298,14 +299,14 @@ namespace lf {
 				return static_cast<f32>(d);
 			} else if (obj.is<i64>()) {
 				i64 i = obj.get<i64>();
-				if (i < static_cast<i64>(std::numeric_limits<f32>::lowest()) ||
-					i > static_cast<i64>(std::numeric_limits<f32>::max())) {
+				if (static_cast<f64>(i) < static_cast<f64>(std::numeric_limits<f32>::lowest()) ||
+					static_cast<f64>(i) > static_cast<f64>(std::numeric_limits<f32>::max())) {
 					throw lf::runtime_exception(lf::format("value {} out of range for f32", i));
 				}
 				return static_cast<f32>(i);
 			} else if (obj.is<u64>()) {
 				u64 u = obj.get<u64>();
-				if (u > static_cast<u64>(std::numeric_limits<f32>::max())) {
+				if (static_cast<f64>(u) > static_cast<f64>(std::numeric_limits<f32>::max())) {
 					throw lf::runtime_exception(lf::format("value {} out of range for f32", u));
 				}
 				return static_cast<f32>(u);
@@ -328,6 +329,13 @@ namespace lf {
 			} else {
 				throw lf::runtime_exception(lf::format("cannot convert type '{}' to f64", obj.current_type_name()));
 			}
+		}
+	};
+
+	template<>
+	struct object_trait<distance> {
+		static distance parse(const object& obj) {
+			return distance::from_quantum(object_trait<f64>::parse(obj));
 		}
 	};
 	template<>

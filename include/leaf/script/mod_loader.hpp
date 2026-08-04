@@ -6,6 +6,8 @@
 #include "leaf/script/localization.hpp"
 #include "leaf/script/mod_info.hpp"
 
+#include <sol/sol.hpp>
+
 namespace lf {
 	/*!
 	** @ingroup modding
@@ -27,6 +29,7 @@ namespace lf {
 	** @brief Gets the raw option table produced by the most recent successful mod load.
 	*/
 	const vector<ModInfo>& LoadedMods();
+	object sol_to_object(const sol::object& value);
 
 	/*!
 	** @ingroup modding

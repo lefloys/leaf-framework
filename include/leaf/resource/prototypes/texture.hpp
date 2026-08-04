@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leaf/core/error.hpp"
+#include "leaf/core/distance.hpp"
 #include "leaf/core/vector.hpp"
 #include "leaf/graphics/texture_atlas.hpp"
 #include "leaf/resource/prototype.hpp"
@@ -23,7 +24,7 @@ namespace lf {
 		~TexturePrototype();
 
 		string path;
-		f32 world_size = 1.0f;
+		lf::distance distance = lf::distance::from_quantum(1);
 		f32 frames_per_second = 0.0f;
 		vector<TextureSourceFrame> frames;
 		vector<rect<f32>> atlas_frames;
