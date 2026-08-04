@@ -47,15 +47,10 @@ namespace lf {
 			string script;
 		};
 
-		using ScriptInstaller = script_installer;
+		void launch(string_view initial, string_view args = {}, script_installer installer = {});
 
 
-		using FixedUpdater = std::function<void(Rml::ElementDocument&)>;
-
-		void launch(string_view initial, string_view args = {}, span<const ScriptInstaller> script_installers = {}, span<const FixedUpdater> fixed_updaters = {});
-
-
-		void launch(rt::handle<rt::window> display, string_view initial, string_view args = {}, span<const ScriptInstaller> script_installers = {}, span<const FixedUpdater> fixed_updaters = {});
+		void launch(rt::handle<rt::window> display, string_view initial, string_view args = {}, script_installer installer = {});
 
 
 		rt::unique<rt::window> release_window();
@@ -67,13 +62,6 @@ namespace lf {
 
 
 		void set_render_rate(double hz);
-
-		void set_fixed_update_rate(double hz);
-
-
-		void set_pre_fixed_update(std::function<void()> callback);
-
-		void set_fixed_update_error_handler(std::function<void(const std::exception&)> handler);
 
 		double render_rate_hz() const;
 
@@ -105,12 +93,7 @@ namespace lf {
 		string filter_text_input(string_view text) const;
 
 
-		void fixed_update();
-
 		void load(string_view initial, string_view args = {});
-
-
-		void install_handlers(span<const ScriptInstaller> script_installers, span<const FixedUpdater> fixed_updaters);
 
 		void set_rml(string_view id, string_view rml);
 
@@ -163,7 +146,6 @@ namespace lf {
 
 		void start_threads();
 		void render_loop(std::stop_token stop);
-		void fixed_update_loop(std::stop_token stop);
 
 		sol::state lua;
 		Rml::Context* context = nullptr;
@@ -175,8 +157,7 @@ namespace lf {
 		std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
 
 		std::optional<LoadRequest> pending_load_request;
-		std::vector<ScriptInstaller> script_installers;
-		std::vector<FixedUpdater> fixed_updaters;
+		script_installer installer;
 		std::vector<PendingScript> pending_scripts;
 		std::unique_ptr<ScriptEventListener> script_events;
 
@@ -188,14 +169,10 @@ namespace lf {
 		mutable std::recursive_mutex scene_mutex;
 
 		std::atomic<double> configured_render_hz{ 0.0 };
-		std::atomic<double> configured_fixed_update_hz{ 60.0 };
 		RateMeter render_rate;
 		RateMeter update_rate;
 		double applied_update_hz = -1.0;
-		std::function<void()> pre_fixed_update;
-		std::function<void(const std::exception&)> fixed_update_error_handler;
 		std::jthread render_thread;
-		std::jthread fixed_update_thread;
 		std::atomic_bool threads_started{ false };
 	};
 

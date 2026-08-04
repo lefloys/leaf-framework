@@ -1,4 +1,5 @@
 #include "leaf/application/rml_backend.hpp"
+#include "leaf/application/application.hpp"
 
 #include "embed/font.h"
 #include "leaf/core/format.hpp"
@@ -75,6 +76,7 @@ namespace lf {
 			return error(generic_errc::unknown, "Rml::Initialise failed");
 		}
 		g_rml_initialized = true;
+		Application::install_rml_elements();
 
 		Rml::Span<const Rml::byte> default_font(
 			reinterpret_cast<const Rml::byte*>(Comic_Sans_MS_ttf),

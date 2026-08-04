@@ -3,6 +3,7 @@ find_path("STB_INCLUDE_DIR" "stb_image.h" REQUIRED)
 find_path("MINIAUDIO_INCLUDE_DIR" "miniaudio.h" REQUIRED)
 
 add_library("leaf-application" STATIC
+	"application.cpp"
     "rml_backend.cpp"
     "scene.cpp"
     "window.cpp"

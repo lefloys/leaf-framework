@@ -1,4 +1,5 @@
 #include "leaf/application/scene.hpp"
+#include <leaf/application/scene.hpp>
 #include <leaf/graphics/window.hpp>
 #include "leaf/application/elements/window.hpp"
 
@@ -74,6 +75,29 @@ namespace lf {
 			case sol::type::string: return value.as<string>();
 			default: return lf::format("{}", sol::type_name(value.lua_state(), value.get_type()));
 			}
+		}
+
+		sol::object lua_setting_value(sol::state_view lua, const object& value) {
+			return value.visit([&]<typename T>(const T& current) -> sol::object {
+				using value_type = std::remove_cvref_t<T>;
+				if constexpr (std::same_as<value_type, std::monostate>) {
+					return sol::make_object(lua, sol::lua_nil);
+				} else if constexpr (std::same_as<value_type, dict>) {
+					sol::table table = lua.create_table();
+					for (const auto& [name, child] : current) {
+						table[name] = lua_setting_value(lua, child);
+					}
+					return sol::make_object(lua, table);
+				} else if constexpr (std::same_as<value_type, list>) {
+					sol::table table = lua.create_table();
+					for (size_t index = 0; index < current.size(); ++index) {
+						table[index + 1] = lua_setting_value(lua, current[index]);
+					}
+					return sol::make_object(lua, table);
+				} else {
+					return sol::make_object(lua, current);
+				}
+			});
 		}
 
 		string lua_escape(string_view value) {
@@ -600,8 +624,7 @@ namespace lf {
 	void Scene::launch(
 		string_view initial,
 		string_view args,
-		span<const ScriptInstaller> script_installers,
-		span<const FixedUpdater> fixed_updaters
+		script_installer installer
 	) {
 		if (!display) {
 			display.reset(rt::Window::Create());
@@ -610,8 +633,7 @@ namespace lf {
 			owned_context_name = next_scene_context_name();
 			context = &create_scene_context(owned_context_name, this->display);
 		}
-		this->script_installers.assign(script_installers.begin(), script_installers.end());
-		this->fixed_updaters.assign(fixed_updaters.begin(), fixed_updaters.end());
+		this->installer = std::move(installer);
 		load(initial, args);
 		// Start the render and fixed-update threads BEFORE rt::Window::Show so the
 		// first visible frame is already a real rendered frame. Showing the
@@ -641,16 +663,14 @@ namespace lf {
 		rt::handle<rt::window> display,
 		string_view initial,
 		string_view args,
-		span<const ScriptInstaller> script_installers,
-		span<const FixedUpdater> fixed_updaters
+		script_installer installer
 	) {
 		this->display.reset(display);
 		if (!context) {
 			owned_context_name = next_scene_context_name();
 			context = &create_scene_context(owned_context_name, this->display);
 		}
-		this->script_installers.assign(script_installers.begin(), script_installers.end());
-		this->fixed_updaters.assign(fixed_updaters.begin(), fixed_updaters.end());
+		this->installer = std::move(installer);
 		load(initial, args);
 		// See the no-display launch overload above for why threads start before
 		// rt::Window::Show — first visible frame must be a real rendered frame.
@@ -736,15 +756,6 @@ namespace lf {
 	)
 		: context(&context),
 		  display(std::move(display)) {}
-
-	void Scene::install_handlers(
-		span<const ScriptInstaller> new_script_installers,
-		span<const FixedUpdater> new_fixed_updaters
-	) {
-		std::lock_guard lock(scene_mutex);
-		this->script_installers.assign(new_script_installers.begin(), new_script_installers.end());
-		this->fixed_updaters.assign(new_fixed_updaters.begin(), new_fixed_updaters.end());
-	}
 
 	void Scene::load(
 		string_view initial,
@@ -1257,45 +1268,38 @@ namespace lf {
 			return true;
 		});
 
-		lua.set_function("settings_master_volume", []() -> f32 {
-			return load_core_setting_f32("sound.master", 1.0f);
-		});
-
-		lua.set_function("settings_music_volume", []() -> f32 {
-			return load_core_setting_f32("sound.music", 0.8f);
-		});
-
-		lua.set_function("settings_effects_volume", []() -> f32 {
-			return load_core_setting_f32("sound.effects", 1.0f);
-		});
-
-		lua.set_function("settings_fullscreen", []() -> bool {
-			return load_core_setting_bool("graphics.fullscreen", false);
-		});
-
-		lua.set_function("settings_vsync", []() -> bool {
-			return load_core_setting_bool("graphics.vsync", false);
-		});
-
-		lua.set_function("settings", [](sol::this_state state) -> sol::table {
+		// Settings are one data surface, not a growing collection of globals.
+		// Scripts choose both the mod and key, while persistence stays in the
+		// settings subsystem rather than being duplicated by every binding.
+		sol::table settings = lua.create_table();
+		settings["get"] = [](sol::this_state state, sol::object, string_view mod, string_view name, sol::optional<sol::object> fallback) -> sol::object {
 			sol::state_view lua(state);
-
-			sol::table sound = lua.create_table();
-			sound["master"] = load_core_setting_f32("sound.master", 1.0f);
-			sound["music"] = load_core_setting_f32("sound.music", 0.8f);
-			sound["effects"] = load_core_setting_f32("sound.effects", 1.0f);
-
-			sol::table graphics = lua.create_table();
-			graphics["fullscreen"] = load_core_setting_bool("graphics.fullscreen", false);
-			graphics["vsync"] = load_core_setting_bool("graphics.vsync", false);
-			graphics["max_fps"] = load_core_setting_f32("graphics.max-fps", 60.0f);
-
-			sol::table result = lua.create_table();
-			result["language"] = load_core_setting("language", "en-US");
-			result["sound"] = sound;
-			result["graphics"] = graphics;
-			return result;
-		});
+			object fallback_value;
+			if (fallback) {
+				fallback_value = sol_to_object(*fallback);
+			}
+			report<object> value = LoadSetting(mod, name, std::move(fallback_value));
+			return value ? lua_setting_value(lua, *value) : sol::make_object(lua, sol::lua_nil);
+		};
+		settings["set"] = [this](sol::object, string_view mod, string_view name, sol::object value) -> bool {
+			const bool fullscreen = mod == "core" && name == "graphics.fullscreen" && value.is<bool>() ? value.as<bool>() : false;
+			const bool vsync = mod == "core" && name == "graphics.vsync" && value.is<bool>() ? value.as<bool>() : false;
+			const bool update_fullscreen = mod == "core" && name == "graphics.fullscreen" && value.is<bool>();
+			const bool update_vsync = mod == "core" && name == "graphics.vsync" && value.is<bool>();
+			object stored = sol_to_object(value);
+			if (error err = SaveSetting(mod, name, std::move(stored))) {
+				log::Error("{}", lf::format("[settings] {}", err.message));
+				return false;
+			}
+			if (update_vsync && this->display) {
+				rt::Window::SetVsync(this->display, vsync);
+			}
+			if (update_fullscreen && this->display) {
+				rt::Window::RequestFullscreen(this->display, fullscreen);
+			}
+			return true;
+		};
+		lua.globals()["settings"] = settings;
 
 		lua.set_function("graphics_backend", []() -> string_view {
 			return "vulkan";
@@ -1388,7 +1392,9 @@ namespace lf {
 			return true;
 		});
 
-		PrepareState(lua, *document, this->script_installers);
+		if (installer) {
+			installer(lua, *document);
+		}
 		install_ui_automation_helpers();
 
 		script_events = std::make_unique<ScriptEventListener>(*this);
@@ -1426,23 +1432,6 @@ namespace lf {
 		configured_render_hz.store(hz);
 	}
 
-	void Scene::set_fixed_update_rate(double hz) {
-		configured_fixed_update_hz.store(hz);
-	}
-
-	void Scene::set_pre_fixed_update(std::function<void()> callback) {
-		// Locked because the fixed-update thread reads pre_fixed_update each
-		// iteration; without the lock, replacing it on the main thread races
-		// with std::function's copy/destruct on the worker.
-		std::lock_guard lock(scene_mutex);
-		pre_fixed_update = std::move(callback);
-	}
-
-	void Scene::set_fixed_update_error_handler(std::function<void(const std::exception&)> handler) {
-		std::lock_guard lock(scene_mutex);
-		fixed_update_error_handler = std::move(handler);
-	}
-
 	double Scene::render_rate_hz() const {
 		return render_rate.rate();
 	}
@@ -1454,14 +1443,8 @@ namespace lf {
 		if (render_thread.joinable()) {
 			render_thread.request_stop();
 		}
-		if (fixed_update_thread.joinable()) {
-			fixed_update_thread.request_stop();
-		}
 		if (render_thread.joinable()) {
 			render_thread.join();
-		}
-		if (fixed_update_thread.joinable()) {
-			fixed_update_thread.join();
 		}
 		threads_started = false;
 	}
@@ -1471,9 +1454,6 @@ namespace lf {
 			return;
 		}
 		render_thread = std::jthread([this](std::stop_token stop) { render_loop(stop); });
-		if (configured_fixed_update_hz.load() > 0.0) {
-			fixed_update_thread = std::jthread([this](std::stop_token stop) { fixed_update_loop(stop); });
-		}
 	}
 
 	void Scene::render_loop(std::stop_token stop) {
@@ -1494,49 +1474,6 @@ namespace lf {
 				return;
 			}
 			render_rate.mark();
-		}
-	}
-
-	void Scene::fixed_update_loop(std::stop_token stop) {
-		using clock = std::chrono::steady_clock;
-		double applied_hz = -1.0;
-		auto interval = clock::duration::zero();
-		auto next_tick = clock::now();
-		while (!stop.stop_requested()) {
-			const double desired_hz = configured_fixed_update_hz.load();
-			if (desired_hz <= 0.0) {
-				// Hot-disabled: yield and recheck. The loop stays alive so
-				// re-enabling later just works.
-				std::this_thread::sleep_for(std::chrono::milliseconds(50));
-				next_tick = clock::now();
-				continue;
-			}
-			if (desired_hz != applied_hz) {
-				interval = std::chrono::duration_cast<clock::duration>(
-					std::chrono::duration<double>(1.0 / desired_hz)
-				);
-				applied_hz = desired_hz;
-				next_tick = clock::now();
-			}
-			next_tick += interval;
-			std::this_thread::sleep_until(next_tick);
-			if (stop.stop_requested()) {
-				return;
-			}
-			try {
-				std::unique_lock lock(scene_mutex);
-				if (pre_fixed_update) {
-					pre_fixed_update();
-				}
-				fixed_update();
-			} catch (const std::exception& e) {
-				if (fixed_update_error_handler) {
-					fixed_update_error_handler(e);
-				} else {
-					log::Error("[scene] fixed update threw: {}", e.what());
-				}
-				return;
-			}
 		}
 	}
 
@@ -2215,15 +2152,6 @@ end
 		}
 		rt::Window::EndFrame(window_view());
 		return !rt::Window::ShouldClose(window_view());
-	}
-
-	void Scene::fixed_update() {
-		if (!document) {
-			return;
-		}
-		for (const FixedUpdater& updater : fixed_updaters) {
-			updater(*document);
-		}
 	}
 
 	void Scene::set_rml(string_view id, string_view rml) {

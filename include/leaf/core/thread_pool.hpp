@@ -16,9 +16,9 @@
 namespace lf {
 	class ThreadPool {
 	  public:
-		explicit ThreadPool(usize worker_count) {
+		explicit ThreadPool(size_t worker_count) {
 			workers.reserve(worker_count);
-			for (usize index = 0; index < worker_count; ++index) {
+			for (size_t index = 0; index < worker_count; ++index) {
 				workers.emplace_back([this](std::stop_token stop) {
 					while (!stop.stop_requested()) {
 						std::function<void()> task;
