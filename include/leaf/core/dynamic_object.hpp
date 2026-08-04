@@ -39,6 +39,9 @@ namespace lf {
 		template<typename... Fields>
 		field_presence assign_schema(const group_node<Fields...>& group) const;
 
+		template<typename Condition, typename... Children>
+		field_presence assign_schema(const when_node<Condition, Children...>& conditional) const;
+
 		template<typename Controller, typename Condition, typename... Children>
 		field_presence assign_schema(const conditional_node<Controller, Condition, Children...>& conditional) const;
 
@@ -169,6 +172,21 @@ namespace lf {
 		}
 		if (!should_process) {
 			return controller_presence;
+		}
+		field_presence result = field_presence::absent;
+		std::apply(
+			[this, &result](const auto&... field) {
+				((result = assign_schema(field) == field_presence::present ? field_presence::present : result), ...);
+			},
+			conditional.children
+		);
+		return result;
+	}
+
+	template<typename Condition, typename... Children>
+	field_presence dict::assign_schema(const when_node<Condition, Children...>& conditional) const {
+		if (!conditional.condition()) {
+			return field_presence::absent;
 		}
 		field_presence result = field_presence::absent;
 		std::apply(

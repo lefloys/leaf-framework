@@ -1,12 +1,35 @@
 #pragma once
 
+#include "leaf/core/error.hpp"
 #include "leaf/core/string.hpp"
+#include "leaf/core/version.hpp"
 
 #include <tuple>
 #include <type_traits>
 #include <utility>
 
 namespace lf {
+
+	template<typename T, lf::version Version = lf::version{}>
+	struct schema_trait;
+
+	template<typename T, lf::version TargetVersion>
+	struct migrate_trait;
+
+	template<typename T>
+	auto schema(T& value) {
+		return schema_trait<std::remove_cvref_t<T>>::get(value);
+	}
+
+	template<lf::version Version, typename T>
+	auto schema(T& value) {
+		return schema_trait<std::remove_cvref_t<T>, Version>::get(value);
+	}
+
+	template<lf::version TargetVersion, typename T>
+	error migrate(T& value, lf::version current_version) {
+		return migrate_trait<std::remove_cvref_t<T>, TargetVersion>::apply(value, current_version);
+	}
 
 	enum class field_presence : u08 {
 		absent,
@@ -22,6 +45,9 @@ namespace lf {
 	template<typename Controller, typename Condition, typename... Children>
 	struct conditional_node;
 
+	template<typename Condition, typename... Children>
+	struct when_node;
+
 	template<typename T>
 	struct is_schema_node : std::false_type {};
 
@@ -33,6 +59,9 @@ namespace lf {
 
 	template<typename Controller, typename Condition, typename... Children>
 	struct is_schema_node<conditional_node<Controller, Condition, Children...>> : std::true_type {};
+
+	template<typename Condition, typename... Children>
+	struct is_schema_node<when_node<Condition, Children...>> : std::true_type {};
 
 	template<typename T>
 	concept schema_node = is_schema_node<std::remove_cvref_t<T>>::value;
@@ -102,8 +131,17 @@ namespace lf {
 		conditional_node(Controller controller, Condition condition, ChildArgs&&... children) : controller(std::move(controller)), condition(std::move(condition)), children(std::forward<ChildArgs>(children)...) {}
 	};
 
+	template<typename Condition, typename... Children>
+	struct when_node {
+		Condition condition;
+		std::tuple<Children...> children;
+	};
+
 	template<typename Controller, typename Condition, typename... Children>
 	conditional_node(Controller, Condition, Children&&...) -> conditional_node<Controller, Condition, std::remove_cvref_t<Children>...>;
+
+	template<typename Condition, typename... Children>
+	when_node(Condition, Children&&...) -> when_node<Condition, std::remove_cvref_t<Children>...>;
 
 	template<typename T>
 	field_node<T> field(string_view name, T& value) { return { name, value }; }
@@ -113,5 +151,10 @@ namespace lf {
 
 	template<typename... Fields>
 	group_node<std::remove_cvref_t<Fields>...> group(Fields&&... fields) { return { { std::forward<Fields>(fields)... } }; }
+
+	template<typename Condition, typename... Children>
+	when_node<std::remove_cvref_t<Condition>, std::remove_cvref_t<Children>...> when(Condition&& condition, Children&&... children) {
+		return { std::forward<Condition>(condition), { std::forward<Children>(children)... } };
+	}
 
 } // namespace lf

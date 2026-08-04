@@ -677,6 +677,14 @@ namespace lf::bin {
 			return std::apply([&](const auto&... children) { return stream(children...); }, item.children);
 		}
 
+		template<typename Stream, typename Condition, typename... Children>
+		error process_schema(Stream& stream, const when_node<Condition, Children...>& item) {
+		if (!item.condition()) {
+			return {};
+		}
+		return std::apply([&](const auto&... children) { return stream(children...); }, item.children);
+		}
+
 		template<typename Stream, binary_field Field>
 		error process_field_value(Stream& stream, Field&& item) {
 			if constexpr (schema_node<Field>) {
@@ -1590,8 +1598,8 @@ namespace lf::bin {
 	constexpr auto migration_source = detail::missing_migration_source{};
 
 	namespace detail {
-		template<typename T, auto TargetVersion>
-		concept has_migration_source = !std::same_as<std::remove_cvref_t<decltype(migration_source<T, TargetVersion>)>, missing_migration_source>;
+	template<typename T, auto TargetVersion>
+	concept has_migration_source = !std::same_as<std::remove_cvref_t<decltype(migration_source<T, TargetVersion>)>, missing_migration_source>;
 	}
 
 	/*!
