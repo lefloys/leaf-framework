@@ -26,9 +26,9 @@
 #include <typeinfo>
 #include <utility>
 
-#include <leaf/script/math/dim.hpp>
-#include <leaf/script/math/pos.hpp>
-#include <leaf/script/math/vec.hpp>
+#include <leaf/core/math/dim.hpp>
+#include <leaf/core/math/pos.hpp>
+#include <leaf/core/math/vec.hpp>
 
 template<typename...>
 lf::error process(...)
@@ -38,7 +38,8 @@ namespace lf::bin {
 	using ::process;
 
 	template<typename Stream, typename T, typename... Args>
-	error process(Stream& stream, T& value, Args&... args);
+	error process(Stream& stream, T& value, Args&... args)
+		requires false;
 
 	/*!
 	** @ingroup binary
@@ -1587,13 +1588,18 @@ namespace lf::bin {
 			return *result;
 		}
 
-		// A schema trait may provide this only when its wire protocol must perform
-		// stream-owned work between groups of otherwise ordinary schema nodes.
+		template<lf::version Version, typename Stream, typename T, typename... Args>
+		concept version_processable = byte_stream<Stream> && requires(Stream& stream, T& value, Args&... args) {
+			{ process(stream, value, lf::schema_version<Version>{}, args...) } -> std::same_as<error>;
+		};
+
+		// Versioned custom processing is a free process overload found through ADL.
+		// The schema version precedes caller-supplied arguments so the overload is
+		// tied to one wire layout while retaining the established argument order.
 		template<lf::version Version, byte_stream Stream, typename T, typename... Args>
 		error process_version_schema(Stream& stream, T& value, Args&... args) {
-			using trait = lf::schema_trait<std::remove_cvref_t<T>, Version>;
-			if constexpr (requires { trait::process(stream, value, args...); }) {
-				return trait::process(stream, value, args...);
+			if constexpr (version_processable<Version, Stream, T, Args...>) {
+				return process(stream, value, lf::schema_version<Version>{}, args...);
 			} else {
 				return stream(lf::schema<Version>(value));
 			}

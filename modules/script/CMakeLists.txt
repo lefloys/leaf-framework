@@ -8,7 +8,6 @@ add_library("leaf-script" STATIC
     "mod_enabled.cpp"
     "mod_info.cpp"
     "mod_loader.cpp"
-    "prototype_inspector_script.cpp"
     "virtual_filesystem.cpp"
     "cursor.cpp"
     "extensions.cpp"

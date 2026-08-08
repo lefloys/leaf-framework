@@ -1,7 +1,7 @@
 #pragma once
 
-#include <leaf/core/vector.hpp>
 #include <leaf/core/singleton.hpp>
+#include <leaf/core/vector.hpp>
 
 #include <sol/sol.hpp>
 
@@ -14,5 +14,4 @@ namespace lf {
 		static void register_installer(script_extension extension);
 		static void install(sol::state& state);
 	};
-
 }

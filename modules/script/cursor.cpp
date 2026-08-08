@@ -10,14 +10,8 @@
 #include <memory>
 
 namespace lf {
-	CursorPrototype::CursorPrototype(const dict& data) : Prototype(data) {
-		data.assign(field("path", path));
-		if (data.contains("hotspot_x")) {
-			data.assign(field("hotspot_x", hotspot_x));
-		}
-		if (data.contains("hotspot_y")) {
-			data.assign(field("hotspot_y", hotspot_y));
-		}
+	CursorPrototype::CursorPrototype(const dict& data) : Prototype{ data } {
+		data.assign(schema(*this));
 	}
 
 	error CursorPrototype::load() {

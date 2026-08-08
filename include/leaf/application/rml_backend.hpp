@@ -2,6 +2,7 @@
 
 #include "leaf/core/error.hpp"
 #include "leaf/core/filesystem.hpp"
+#include "leaf/core/memory.hpp"
 #include "leaf/core/span.hpp"
 #include "leaf/core/vector.hpp"
 #include "leaf/graphics/buffer.hpp"
@@ -13,14 +14,22 @@
 #include "leaf/graphics/texture.hpp"
 #include "leaf/graphics/texture_view.hpp"
 #include "leaf/graphics/uniform_location.hpp"
-#include "leaf/script/math/dim.hpp"
-#include "leaf/script/math/pos.hpp"
+#include "leaf/core/math/dim.hpp"
+#include "leaf/core/math/pos.hpp"
 
 #include <RmlUi/Core/RenderInterface.h>
+#include <RmlUi/Core/ElementInstancer.h>
 
 #include <functional>
 
 namespace lf {
+	// A concrete application element supplied before startup. Leaf takes
+	// ownership and registers it only after RmlUi itself is initialized.
+	struct RmlElementRegistration {
+		string tag;
+		unique_ptr<Rml::ElementInstancer> instancer;
+	};
+
 	class RmlRenderInterface : public Rml::RenderInterface {
 	  public:
 		struct CustomDrawContext {
@@ -61,8 +70,8 @@ namespace lf {
 		struct TextureData;
 		struct QueuedGeometry;
 
+		unique_ptr<TextureData> create_texture_data(u32 width, u32 height, const void* pixels);
 		Rml::TextureHandle create_texture(u32 width, u32 height, const void* pixels);
-		void create_white_texture();
 		void draw_geometry(Geometry* geometry, pos2<f32> translation, Rml::TextureHandle texture);
 		void flush_queued_geometry();
 		void draw_batch(const vector<UiVertex>& vertices, TextureData* texture, int left, int top, int right, int bottom);
@@ -77,7 +86,7 @@ namespace lf {
 		usize batch_vertex_buffer_index = 0;
 		rt::uniform_location uniform_location{};
 		rt::uniform_location texture_location{};
-		TextureData* white_texture = nullptr;
+		unique_ptr<TextureData> white_texture;
 		bool scissor_enabled = false;
 		bool program_bound = false;
 		Rml::Rectanglei scissor{};
@@ -86,11 +95,11 @@ namespace lf {
 		vector<UiVertex> batch_vertices;
 		vector<rt::unique<rt::buffer>> batch_vertex_buffers;
 		vector<u64> batch_vertex_buffer_sizes;
-		vector<Geometry*> retired_geometry;
-		vector<TextureData*> retired_textures;
+		vector<unique_ptr<Geometry>> retired_geometry;
+		vector<unique_ptr<TextureData>> retired_textures;
 	};
 
-	error init_rml(span<string_view> args);
+	error init_rml(span<string_view> args, vector<RmlElementRegistration> elements = {});
 	void exit_rml();
 	RmlRenderInterface& rml_renderer();
 } // namespace lf

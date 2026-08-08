@@ -1,12 +1,12 @@
 #pragma once
 
+#include "leaf/core/array.hpp"
 #include "leaf/core/identifier.hpp"
+#include "leaf/core/optional.hpp"
 #include "leaf/core/types.hpp"
 #include "leaf/core/vector.hpp"
 
-#include <array>
 #include <concepts>
-#include <optional>
 #include <tuple>
 #include <utility>
 
@@ -18,22 +18,22 @@ namespace lf {
 
 		struct bundle {
 			template<typename T>
-			std::optional<T>& component() {
-				return std::get<std::optional<T>>(values);
+			optional<T>& component() {
+				return std::get<optional<T>>(values);
 			}
 
 			template<typename T>
-			const std::optional<T>& component() const {
-				return std::get<std::optional<T>>(values);
+			const optional<T>& component() const {
+				return std::get<optional<T>>(values);
 			}
 
 		  private:
-			std::tuple<std::optional<Component>...> values;
+			std::tuple<optional<Component>...> values;
 			friend component_container;
 		};
 
 		struct slot {
-			std::array<size_t, sizeof...(Component)> components{};
+			array<size_t, sizeof...(Component)> components{};
 		};
 
 		component_container() : slots(1) {
@@ -53,7 +53,7 @@ namespace lf {
 			slots[index] = {};
 			const Handle handle{ static_cast<typename Handle::vnum_t>(index) };
 			([&] {
-				auto& component = std::get<std::optional<Component>>(bundle.values);
+				auto& component = std::get<optional<Component>>(bundle.values);
 				if (component) {
 					add(handle, std::move(*component));
 				}
@@ -152,7 +152,7 @@ namespace lf {
 	  private:
 		template<typename T>
 		static constexpr size_t component_index = [] {
-			constexpr std::array matches{ std::same_as<T, Component>... };
+			constexpr array matches{ std::same_as<T, Component>... };
 			for (size_t index = 0; index < matches.size(); ++index) {
 				if (matches[index]) {
 					return index;

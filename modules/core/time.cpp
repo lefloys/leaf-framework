@@ -9,10 +9,10 @@ namespace lf {
 		return instant::from_quantum(nanoseconds);
 	}
 
-	string pretty_string_trait<timespan>::to_string(const timespan& value) {
-		i64 rem = value.value;
+	string pretty_string_trait<duration>::to_string(const duration& value) {
+		i64 rem = value.quantum_count();
 		string result;
-		for (auto& u : unit_trait<timespan>::units) {
+		for (const auto& u : duration_units) {
 			i64 n = rem / u.first;
 			if (n > 0) {
 				if (!result.empty()) {
@@ -27,8 +27,8 @@ namespace lf {
 		}
 		return result;
 	}
-	timespan pretty_string_trait<timespan>::from_string(string_view str) {
-		string_parser p(str);
+	duration pretty_string_trait<duration>::from_string(string_view str) {
+		auto p = string_parser{ str };
 		i64 total_ns = 0;
 
 		while (!p.eof()) {
@@ -43,7 +43,7 @@ namespace lf {
 			string_view unit = p.parse_alpha();
 
 			bool matched = false;
-			for (auto& u : unit_trait<timespan>::units) {
+			for (const auto& u : duration_units) {
 				if (u.second == unit) {
 					total_ns += value * u.first;
 					matched = true;
@@ -56,6 +56,6 @@ namespace lf {
 			}
 		}
 
-		return timespan(total_ns);
+		return duration::from_quantum(total_ns);
 	}
 } // namespace lf

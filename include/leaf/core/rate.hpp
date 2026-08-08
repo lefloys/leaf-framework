@@ -1,8 +1,10 @@
 #pragma once
 
+#include "leaf/core/time.hpp"
+#include "leaf/core/optional.hpp"
+
 #include <chrono>
 #include <cstddef>
-#include <optional>
 #include <thread>
 
 namespace lf {
@@ -18,6 +20,7 @@ namespace lf {
 		}
 
 		void limit(double target_hz) {
+			exact_hertz.reset();
 			if (target_hz > 0.0) {
 				target_interval = std::chrono::duration_cast<clock::duration>(
 					std::chrono::duration<double>(1.0 / target_hz)
@@ -26,6 +29,18 @@ namespace lf {
 				target_interval.reset();
 			}
 			next_tick = clock::now();
+			primed = false;
+		}
+
+		void limit(frequency target) {
+			const i64 raw_hertz = target.hertz().raw();
+			if (raw_hertz <= 0 || raw_hertz % fixed::scale != 0) {
+				limit(static_cast<double>(raw_hertz) / static_cast<double>(fixed::scale));
+				return;
+			}
+			target_interval.reset();
+			exact_hertz = raw_hertz / fixed::scale;
+			cadence_start = clock::now();
 			primed = false;
 		}
 
@@ -45,6 +60,30 @@ namespace lf {
 		}
 
 		void wait() {
+			if (exact_hertz) {
+				const clock::time_point now = clock::now();
+				if (!primed) {
+					cadence_start = now;
+					exact_tick = 1;
+					primed = true;
+					return;
+				}
+				auto deadline_for = [this](u64 tick) {
+					const u64 numerator = tick * static_cast<u64>(clock::period::den);
+					const u64 denominator = static_cast<u64>(*exact_hertz) * static_cast<u64>(clock::period::num);
+					return cadence_start + clock::duration(static_cast<clock::duration::rep>(numerator / denominator));
+				};
+				clock::time_point deadline = deadline_for(exact_tick);
+				if (now >= deadline) {
+					const u64 elapsed = static_cast<u64>((now - cadence_start).count());
+					const u64 elapsed_ticks = elapsed * static_cast<u64>(*exact_hertz) * static_cast<u64>(clock::period::num) / static_cast<u64>(clock::period::den);
+					exact_tick = elapsed_ticks + 1;
+					deadline = deadline_for(exact_tick);
+				}
+				std::this_thread::sleep_until(deadline);
+				++exact_tick;
+				return;
+			}
 			if (!target_interval) {
 				return;
 			}
@@ -65,8 +104,11 @@ namespace lf {
 
 	  private:
 		clock::time_point window_start = clock::now();
+		clock::time_point cadence_start = window_start;
 		clock::time_point next_tick = window_start;
-		std::optional<clock::duration> target_interval;
+		optional<clock::duration> target_interval;
+		optional<i64> exact_hertz;
+		u64 exact_tick = 0;
 		std::size_t sample_count = 0;
 		double current_rate = 0.0;
 		bool primed = false;

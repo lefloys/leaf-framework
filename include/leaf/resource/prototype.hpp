@@ -6,6 +6,8 @@
 #include <leaf/resource/database.hpp>
 #include <leaf/script/local_string.hpp>
 
+#include <type_traits>
+
 namespace lf {
 	template<typename T, typename VNum>
 	struct object_trait<identifier<T, VNum, void>> {
@@ -15,6 +17,15 @@ namespace lf {
 	};
 
 	struct PrototypeBase {
+		template<typename Derived>
+		static decltype(auto) base(Derived& value) {
+			if constexpr (std::is_const_v<Derived>) {
+				return static_cast<const PrototypeBase&>(value);
+			} else {
+				return static_cast<PrototypeBase&>(value);
+			}
+		}
+
 		PrototypeBase(const dict& data) {
 			string name;
 			data.assign(
@@ -29,6 +40,17 @@ namespace lf {
 		string order = "1";
 		local_string local_name;
 		local_string local_description;
+	};
+
+	template<>
+	struct schema_trait<PrototypeBase> {
+		static auto get(auto& value) {
+			return group(
+				field("order", value.order, value.order),
+				field("local_name", value.local_name.key, value.local_name.key),
+				field("local_description", value.local_description.key, value.local_description.key)
+			);
+		}
 	};
 
 	template<typename T>

@@ -1,6 +1,7 @@
 #include "leaf/system/system.hpp"
 #include "leaf/system/socket.hpp"
 #include <Shlobj.h>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -31,6 +32,11 @@ namespace lf {
 	}
 
 	void ShowErrorBox(string_view title, string_view message) {
+		if (const char* suppress_dialogs = std::getenv("LEAF_NO_ERROR_DIALOGS"); suppress_dialogs && suppress_dialogs[0]) {
+			std::fprintf(stderr, "%.*s: %.*s\n", static_cast<int>(title.size()), title.data(), static_cast<int>(message.size()), message.data());
+			std::fflush(stderr);
+			return;
+		}
 		const string title_string(title);
 		const string message_string(message);
 		MessageBoxA(nullptr, message_string.c_str(), title_string.c_str(), MB_OK | MB_ICONERROR | MB_SETFOREGROUND);

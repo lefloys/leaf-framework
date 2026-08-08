@@ -1,11 +1,12 @@
 #pragma once
+#define LF_DYNAMIC_OBJECT_INCLUDING 1
 #include "leaf/core/cast.hpp"
 #include "leaf/core/concepts.hpp"
 #include "leaf/core/distance.hpp"
 #include "leaf/core/error.hpp"
 #include "leaf/core/exception.hpp"
 #include "leaf/core/schema.hpp"
-#include "leaf/core/string.hpp"
+#include "leaf/core/string_types.hpp"
 #include "leaf/core/typename.hpp"
 #include "leaf/core/types.hpp"
 #include "leaf/core/unordered_map.hpp"
@@ -13,6 +14,7 @@
 #include <limits>
 
 #include <cstddef>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -31,6 +33,9 @@ namespace lf {
 	using dict_underlying = unordered_map_string<object>;
 	using list_underlying = vector<object>;
 	using object_underlying = std::variant<std::monostate, bool, i64, u64, f64, string, dict, list>;
+
+	template<typename T>
+	concept scalar_object_value = std::integral<T> || std::floating_point<T> || std::same_as<T, string>;
 
 	class dict : public dict_underlying {
 	template<typename T, typename Default, typename... Args>
@@ -108,7 +113,7 @@ namespace lf {
 		object& operator[](size_t index);
 		const object& operator[](size_t index) const;
 
-		template<typename T>
+		template<scalar_object_value T>
 		T as() const;
 
 		template<typename T>
@@ -124,7 +129,15 @@ namespace lf {
 	template<typename T>
 	struct object_trait {
 		static T parse(const object& obj) {
-			if constexpr (requires(const dict& data) { T{ data }; }) {
+			if constexpr (requires(T& value) { schema_trait<T>::get(value); } && std::is_default_constructible_v<T>) {
+				if (!obj.is<dict>()) {
+					throw runtime_exception(lf::format("cannot convert type '{}' to structured value", obj.current_type_name()));
+				}
+				const dict& data = obj.get<dict>();
+				T value{};
+				data.assign(schema(value));
+				return value;
+			} else if constexpr (requires(const dict& data) { T{ data }; }) {
 				return T{ object_trait<dict>::parse(obj) };
 			} else {
 				static_assert(dependent_false<T>, "no object trait parser for this type");
@@ -259,10 +272,10 @@ namespace lf {
 		return std::get<T>(*static_cast<const object_underlying*>(this));
 	}
 
-	template<typename T>
+	template<scalar_object_value T>
 	inline T object::as() const {
 		if (!convertible<T>()) {
-			throw std::bad_variant_access();
+			throw runtime_exception(lf::format("cannot convert type '{}' to '{}'", current_type_name(), type_name<T>()));
 		}
 		if constexpr (std::is_same_v<T, bool>) {
 			return get<bool>();
@@ -279,7 +292,7 @@ namespace lf {
 		} else if constexpr (std::is_same_v<T, string>) {
 			return get<string>();
 		}
-		throw std::bad_variant_access();
+		throw runtime_exception(lf::format("cannot convert type '{}' to '{}'", current_type_name(), type_name<T>()));
 	}
 
 	template<typename T>
@@ -524,4 +537,16 @@ namespace lf {
 			return result;
 		}
 	};
+
+	template<typename T>
+	struct object_trait<std::optional<T>> {
+		static std::optional<T> parse(const object& obj) {
+			if (obj.is<std::monostate>()) {
+				return std::nullopt;
+			}
+			return object_trait<T>::parse(obj);
+		}
+	};
 } // namespace lf
+#undef LF_DYNAMIC_OBJECT_INCLUDING
+#include "leaf/core/string_api.hpp"

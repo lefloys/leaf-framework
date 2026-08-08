@@ -27,5 +27,26 @@ namespace lf {
 		Sound sound;
 	};
 
-} // namespace lf
+	template<>
+	struct schema_trait<SoundGroupPrototype> {
+		static auto get(auto& value) {
+			return group(
+				schema(PrototypeBase::base(value)),
+				field("volume", value.volume)
+			);
+		}
+	};
 
+	template<>
+	struct schema_trait<SoundPrototype> {
+		static auto get(auto& value) {
+			return group(
+				schema(PrototypeBase::base(value)),
+				field("path", value.path),
+				field("sound_group", value.group),
+				field("volume", value.volume)
+			);
+		}
+	};
+
+} // namespace lf

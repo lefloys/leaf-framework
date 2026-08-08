@@ -159,10 +159,6 @@ namespace lf::log {
 		}
 	}
 
-	string Logger::render_line(const Record& r) const {
-		return ::lf::log::render_line(r);
-	}
-
 	void Logger::worker_loop(std::stop_token token) {
 		while (!token.stop_requested()) {
 
@@ -191,7 +187,7 @@ namespace lf::log {
 				continue;
 			}
 
-			const string line = render_line(item.record);
+			const string line = ::lf::log::render_line(item.record);
 
 			for (auto& s : sinks) {
 				s->write(item.record, line);

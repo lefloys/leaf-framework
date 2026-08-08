@@ -5,6 +5,7 @@
 #include <leaf/core/memory.hpp>
 #include <leaf/core/span.hpp>
 #include <leaf/core/string.hpp>
+#include <leaf/core/vector.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -15,7 +16,6 @@
 #include <source_location>
 #include <thread>
 #include <utility>
-#include <vector>
 
 namespace lf::log {
 
@@ -84,7 +84,6 @@ namespace lf::log {
 		~Logger();
 		void worker_loop(std::stop_token token);
 		void flush_sinks();
-		string render_line(const Record& record) const;
 
 		struct Item {
 			Record record;
@@ -96,7 +95,7 @@ namespace lf::log {
 		std::condition_variable drained;
 
 		std::deque<Item> queue;
-		std::vector<unique_ptr<Sink>> sinks;
+		vector<unique_ptr<Sink>> sinks;
 
 		std::jthread worker;
 

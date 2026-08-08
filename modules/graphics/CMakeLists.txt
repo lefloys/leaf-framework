@@ -9,7 +9,7 @@ add_library("leaf-graphics" STATIC
     "graphics_program.cpp"
     "queue.cpp"
     "resource.cpp"
-    "rutile.c"
+    "rutile.cpp"
     "texture.cpp"
     "texture_atlas.cpp"
     "texture_view.cpp"

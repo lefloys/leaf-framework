@@ -1,7 +1,7 @@
 #pragma once
 #include "leaf/core/types.hpp"
 
-#include <type_traits>
+#include <concepts>
 
 namespace lf {
 	template<typename Tag, typename Rep = i64>
@@ -13,7 +13,7 @@ namespace lf {
 		constexpr explicit unit(rep_type quantum_count) : value(quantum_count) {}
 
 		static constexpr unit from_quantum(rep_type quantum_count) {
-			return unit(quantum_count);
+			return unit{ quantum_count };
 		}
 
 		constexpr rep_type quantum_count() const {
@@ -25,7 +25,7 @@ namespace lf {
 		}
 
 		constexpr unit operator-() const {
-			return unit(-value);
+			return unit{ -value };
 		}
 
 		constexpr unit& operator+=(unit other) {
@@ -99,7 +99,7 @@ namespace lf {
 		rep_type value = 0;
 	};
 
-	template<typename Tag, typename Rep, typename Scalar, typename = std::enable_if_t<std::is_integral_v<Scalar>>>
+	template<typename Tag, typename Rep, std::integral Scalar>
 	constexpr unit<Tag, Rep> operator*(Scalar scalar, unit<Tag, Rep> rhs) {
 		rhs *= static_cast<Rep>(scalar);
 		return rhs;

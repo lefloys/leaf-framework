@@ -5,8 +5,8 @@
 #include "leaf/core/string.hpp"
 #include "leaf/core/types.hpp"
 #include "leaf/graphics/window.hpp"
-#include "leaf/script/math/dim.hpp"
-#include "leaf/script/math/pos.hpp"
+#include "leaf/core/math/dim.hpp"
+#include "leaf/core/math/pos.hpp"
 
 #include <rt_ext_swapchain.h>
 

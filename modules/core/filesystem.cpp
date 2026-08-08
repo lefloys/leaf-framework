@@ -55,4 +55,12 @@ namespace lf::fs {
 		if (!file) { return error(generic_errc::input_error, lf::format("failed to write file '{}'", path)); }
 		return {};
 	}
+
+	error Write(string_view path, string_view text, decltype(tags::String)) {
+		std::ofstream file{ string(path), std::ios::binary };
+		if (!file) return error(generic_errc::input_error, lf::format("failed to open file '{}'", path));
+		file.write(text.data(), static_cast<std::streamsize>(text.size()));
+		if (!file) return error(generic_errc::input_error, lf::format("failed to write file '{}'", path));
+		return {};
+	}
 } // namespace lf::fs

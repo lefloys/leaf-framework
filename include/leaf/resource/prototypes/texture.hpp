@@ -29,4 +29,42 @@ namespace lf {
 		vector<TextureSourceFrame> frames;
 		vector<rect<f32>> atlas_frames;
 	};
+
+	template<>
+	struct schema_trait<TextureSourceFrame> {
+		static auto get(auto& value) {
+			return group(
+				field("path", value.path, value.path),
+				field("rect", value.rect, value.rect)
+			);
+		}
+	};
+
+	template<>
+	struct object_trait<TextureSourceFrame> {
+		static TextureSourceFrame parse(const object& value) {
+			if (value.is<string>()) {
+				return TextureSourceFrame{ .path = value.as<string>() };
+			}
+			if (!value.is<dict>()) {
+				throw runtime_exception(lf::format("texture frame must be a path string or dictionary, got '{}'", value.current_type_name()));
+			}
+			TextureSourceFrame frame{};
+			value.get<dict>().assign(schema(frame));
+			return frame;
+		}
+	};
+
+	template<>
+	struct schema_trait<TexturePrototype> {
+		static auto get(auto& value) {
+			return group(
+				schema(PrototypeBase::base(value)),
+				field("path", value.path, value.path),
+				field("distance", value.distance),
+				field("fps", value.frames_per_second),
+				field("frames", value.frames, value.frames)
+			);
+		}
+	};
 } // namespace lf

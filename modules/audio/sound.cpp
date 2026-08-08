@@ -1,19 +1,16 @@
 #include "leaf/audio/sound.hpp"
 
+#include "leaf/core/exception.hpp"
 #include "leaf/core/format.hpp"
 #include "leaf/core/logging.hpp"
+#include "leaf/core/singleton.hpp"
 #include "leaf/resource/database.hpp"
 #include "leaf/resource/prototypes/sound.hpp"
-#include "leaf/script/settings.hpp"
 #include "leaf/script/virtual_filesystem.hpp"
 
 #include <memory>
 #include <mutex>
 #include <vector>
-
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 #ifdef PlaySound
 #undef PlaySound
@@ -22,108 +19,88 @@
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio.h>
 
-#ifdef _WIN32
-static ma_result safe_ma_sound_start(ma_sound* sound) {
-	__try {
-		return ma_sound_start(sound);
-	} __except (EXCEPTION_EXECUTE_HANDLER) {
-		return MA_ERROR;
-	}
-}
-#else
-static ma_result safe_ma_sound_start(ma_sound* sound) {
-	return ma_sound_start(sound);
-}
-#endif
-
 namespace lf {
-} // namespace lf
+	namespace {
+		struct audio_buffer {
+			ma_audio_buffer value{};
 
-struct ActiveSound {
-	std::reference_wrapper<const lf::Sound> asset;
-	ma_audio_buffer buffer{};
-	ma_sound sound{};
-	bool buffer_initialized = false;
-	bool sound_initialized = false;
+			explicit audio_buffer(const Sound& sound) {
+				const ma_uint64 frame_count = static_cast<ma_uint64>(sound.samples.size() / sound.channels);
+				const ma_audio_buffer_config config = ma_audio_buffer_config_init(
+					ma_format_f32, sound.channels, frame_count, const_cast<f32*>(sound.samples.data()), nullptr
+				);
+				if (ma_audio_buffer_init(&config, &value) != MA_SUCCESS) {
+					throw runtime_exception("failed to create sound buffer");
+				}
+			}
 
-	explicit ActiveSound(const lf::Sound& asset) : asset(asset) {}
+			~audio_buffer() {
+				ma_audio_buffer_uninit(&value);
+			}
+		};
 
-	~ActiveSound() {
-		if (sound_initialized) {
-			ma_sound_uninit(&sound);
-		}
-		if (buffer_initialized) {
-			ma_audio_buffer_uninit(&buffer);
-		}
-	}
-};
+		struct sound_voice {
+			ma_sound value{};
 
-struct SoundEngineState {
-	ma_engine engine{};
-	bool initialized = false;
-	std::mutex mutex;
-	std::vector<std::unique_ptr<ActiveSound>> sounds;
+			sound_voice(ma_engine& engine, ma_audio_buffer& source) {
+				if (ma_sound_init_from_data_source(&engine, &source, 0, nullptr, &value) != MA_SUCCESS) {
+					throw runtime_exception("failed to create sound voice");
+				}
+			}
 
-	SoundEngineState() {
-		initialized = ma_engine_init(nullptr, &engine) == MA_SUCCESS;
-	}
+			~sound_voice() {
+				ma_sound_uninit(&value);
+			}
+		};
 
-	~SoundEngineState() {
-		sounds.clear();
-		if (initialized) {
-			ma_engine_uninit(&engine);
-		}
-	}
+		struct ActiveSound {
+			Sound asset;
+			audio_buffer buffer;
+			sound_voice sound;
 
-	lf::error play(const lf::Sound& asset, f32 volume) {
-		if (!initialized) {
-			return lf::error(lf::generic_errc::input_error, "failed to initialize audio engine");
-		}
+			ActiveSound(ma_engine& engine, const Sound& asset) : asset{ asset }, buffer{ this->asset }, sound{ engine, buffer.value } {}
+		};
+
+		struct SoundEngineState : Singleton<SoundEngineState> {
+			ma_engine engine{};
+			std::mutex mutex;
+			std::vector<std::unique_ptr<ActiveSound>> sounds;
+
+			SoundEngineState() {
+				if (ma_engine_init(nullptr, &engine) != MA_SUCCESS) {
+					throw runtime_exception("failed to initialize audio engine");
+				}
+			}
+
+			~SoundEngineState() {
+				sounds.clear();
+				ma_engine_uninit(&engine);
+			}
+
+			error play(const Sound& asset, f32 volume) {
 		if (asset.channels == 0 || asset.samples.empty()) {
-			return lf::error(lf::generic_errc::input_error, "sound asset is not loaded");
+			return error(generic_errc::input_error, "sound asset is not loaded");
 		}
 
 		std::lock_guard lock(mutex);
 		for (auto it = sounds.begin(); it != sounds.end();) {
-			if (ma_sound_at_end(&(*it)->sound)) {
+			if (ma_sound_at_end(&(*it)->sound.value)) {
 				it = sounds.erase(it);
 			} else {
 				++it;
 			}
 		}
 
-		auto active = std::make_unique<ActiveSound>(asset);
-		const ma_uint64 frame_count = static_cast<ma_uint64>(asset.samples.size() / asset.channels);
-		ma_audio_buffer_config buffer_config = ma_audio_buffer_config_init(
-			ma_format_f32, asset.channels, frame_count,
-			const_cast<float*>(asset.samples.data()), nullptr
-		);
-		ma_result result = ma_audio_buffer_init(&buffer_config, &active->buffer);
-		if (result != MA_SUCCESS) {
-			return lf::error(lf::generic_errc::input_error, "failed to create sound buffer");
-		}
-		active->buffer_initialized = true;
-		result = ma_sound_init_from_data_source(&engine, &active->buffer, 0, nullptr, &active->sound);
-		if (result != MA_SUCCESS) {
-			return lf::error(lf::generic_errc::input_error, "failed to create sound voice");
-		}
-		active->sound_initialized = true;
-		ma_sound_set_volume(&active->sound, volume);
-		result = safe_ma_sound_start(&active->sound);
-		if (result != MA_SUCCESS) {
-			return lf::error(lf::generic_errc::input_error, "failed to play sound");
+		auto active = std::make_unique<ActiveSound>(engine, asset);
+		ma_sound_set_volume(&active->sound.value, volume);
+		if (ma_sound_start(&active->sound.value) != MA_SUCCESS) {
+			return error(generic_errc::input_error, "failed to play sound");
 		}
 		sounds.push_back(std::move(active));
-		return lf::error::no_error;
+		return error::no_error;
 	}
-};
-
-static SoundEngineState& sound_engine() {
-	static SoundEngineState engine;
-	return engine;
-}
-
-namespace lf {
+		};
+	} // namespace
 	report<Sound> LoadSound(span<const byte> bytes) {
 		ma_decoder decoder{};
 		ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, 0);
@@ -158,7 +135,7 @@ namespace lf {
 		if (volume <= 0.0f) {
 			return error::no_error;
 		}
-		return sound_engine().play(sound, volume);
+		return SoundEngineState::instance().play(sound, volume);
 	}
 
 } // namespace lf

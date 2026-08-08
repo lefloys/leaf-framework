@@ -9,7 +9,9 @@ add_library("leaf-core" STATIC
     "fixed.cpp"
     "logging.cpp"
     "messages.cpp"
-    "profiler.cpp"
+	"profiler.cpp"
+	"progress.cpp"
+    "random.cpp"
     "string.cpp"
     "time.cpp"
 )

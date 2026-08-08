@@ -1,7 +1,8 @@
 #pragma once
+#define LF_SCHEMA_INCLUDING 1
 
 #include "leaf/core/error.hpp"
-#include "leaf/core/string.hpp"
+#include "leaf/core/string_types.hpp"
 #include "leaf/core/version.hpp"
 
 #include <concepts>
@@ -51,6 +52,11 @@ namespace lf {
 	auto schema(T& value) {
 		return schema_trait<std::remove_cvref_t<T>>::get(value);
 	}
+
+	template<typename T>
+	concept schema_value = requires(T& value) {
+		schema_trait<std::remove_cvref_t<T>>::get(value);
+	};
 
 	template<lf::version Version, typename T>
 	auto schema(T& value) {
@@ -222,4 +228,54 @@ namespace lf {
 		return { std::forward<Condition>(condition), { std::forward<Children>(children)... } };
 	}
 
+	namespace detail {
+		template<typename>
+		inline constexpr bool schema_dependent_false = false;
+
+		template<typename Visitor, typename T, typename Default, typename... Args>
+		void visit_schema_fields(const field_node<T, Default, Args...>& field, Visitor& visitor) {
+			visitor(field);
+		}
+
+		template<typename Visitor, typename... Fields>
+		void visit_schema_fields(const group_node<Fields...>& group, Visitor& visitor) {
+			std::apply([&](const auto&... field) { (visit_schema_fields(field, visitor), ...); }, group.fields);
+		}
+
+		template<typename Visitor, typename Controller, typename Condition, typename... Children>
+		void visit_schema_fields(const conditional_node<Controller, Condition, Children...>& conditional, Visitor& visitor) {
+			visit_schema_fields(conditional.controller, visitor);
+			bool active = false;
+			if constexpr (requires { conditional.condition(conditional.controller.value); }) {
+				active = conditional.condition(conditional.controller.value);
+			} else if constexpr (requires { conditional.condition(field_presence::present); }) {
+				// Visiting exports the current in-memory value. The controller is
+				// therefore present even when a decoder would distinguish an
+				// absent input field.
+				active = conditional.condition(field_presence::present);
+			} else if constexpr (requires { conditional.condition(); }) {
+				active = conditional.condition();
+			} else {
+				static_assert(schema_dependent_false<Condition>, "schema conditional must accept a controller value, field presence, or no arguments");
+			}
+			if (active) {
+				std::apply([&](const auto&... child) { (visit_schema_fields(child, visitor), ...); }, conditional.children);
+			}
+		}
+
+		template<typename Visitor, typename Condition, typename... Children>
+		void visit_schema_fields(const when_node<Condition, Children...>& conditional, Visitor& visitor) {
+			if (conditional.condition()) {
+				std::apply([&](const auto&... child) { (visit_schema_fields(child, visitor), ...); }, conditional.children);
+			}
+		}
+	}
+
+	template<schema_node Node, typename Visitor>
+	void visit_schema_fields(const Node& node, Visitor&& visitor) {
+		detail::visit_schema_fields(node, visitor);
+	}
+
 } // namespace lf
+#undef LF_SCHEMA_INCLUDING
+#include "leaf/core/string_api.hpp"

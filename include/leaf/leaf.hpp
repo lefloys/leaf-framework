@@ -4,6 +4,7 @@
 #include "leaf/core/progress.hpp"
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
+#include "leaf/application/rml_backend.hpp"
 
 #include <leaf/graphics/buffer.hpp>
 #include <leaf/graphics/canvas.hpp>
@@ -29,7 +30,7 @@ namespace lf {
 	** Call this before creating Leaf scenes or using subsystems that need
 	** framework-level setup.
 	*/
-	error Init(span<string_view> args);
+	error Init(span<string_view> args, vector<RmlElementRegistration> elements = {});
 
 	/*!
 	** @brief Initializes Leaf without headed window/RML application support.

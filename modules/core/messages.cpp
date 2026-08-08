@@ -80,8 +80,7 @@ namespace lf {
 			return Field(field, string_view(display));
 		}
 
-		namespace {
-			bool is_escaped(string_view text, size_t index) {
+		static bool is_escaped(string_view text, size_t index) {
 				size_t slashes = 0;
 				while (index > slashes && text[index - slashes - 1] == '\\') {
 					++slashes;
@@ -89,7 +88,7 @@ namespace lf {
 				return slashes % 2 == 1;
 			}
 
-			void append_unescaped(string& out, string_view text) {
+		static void append_unescaped(string& out, string_view text) {
 				for (size_t i = 0; i < text.size(); ++i) {
 					if (text[i] == '\\' && i + 1 < text.size()) {
 						const char next = text[i + 1];
@@ -103,7 +102,7 @@ namespace lf {
 				}
 			}
 
-			void push_text_segment(vector<TextSegment>& segments, string_view text) {
+		static void push_text_segment(vector<TextSegment>& segments, string_view text) {
 				if (text.empty()) {
 					return;
 				}
@@ -114,8 +113,7 @@ namespace lf {
 				TextSegment segment;
 				append_unescaped(segment.text, text);
 				segments.push_back(std::move(segment));
-			}
-		} // namespace
+		}
 
 		vector<TextSegment> ParseAnnotatedText(string_view text) {
 			vector<TextSegment> segments;

@@ -12,7 +12,7 @@
 #include <utility>
 
 namespace lf::lockstep {
-	constexpr u32 protocol_version = 6;
+	constexpr u32 protocol_version = 7;
 
 	enum class packet_kind : u08 {
 		connect_request = 1,

@@ -1,12 +1,8 @@
 #pragma once
 #include "leaf/core/error.hpp"
-#include "leaf/core/singleton.hpp"
-#include "leaf/core/span.hpp"
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/core/tags.hpp"
-#include "leaf/core/unordered_map.hpp"
-#include "leaf/core/unordered_map.hpp"
 #include "leaf/core/vector.hpp"
 	
 #include <filesystem>
@@ -29,17 +25,6 @@ namespace lf::fs {
 		install,
 		current,
 	};
-
-	struct VirtualFilesystem : Singleton<VirtualFilesystem> {
-
-		void add(string_view name, string_view path);
-		void rmv(string_view name);
-
-		unordered_map_string<path> registry;
-	};
-
-
-
 
 	path operator/(folder folder, const path& other);
 

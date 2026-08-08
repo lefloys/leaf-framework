@@ -1,6 +1,5 @@
 #include "leaf/resource/prototypes/texture.hpp"
 
-#include "leaf/core/exception.hpp"
 #include "leaf/core/filesystem.hpp"
 #include "leaf/graphics/queue.hpp"
 #include "leaf/resource/database.hpp"
@@ -11,76 +10,11 @@
 #include <utility>
 
 namespace lf {
-	TextureSourceFrame parse_frame(const object& object, const string& default_path) {
-		TextureSourceFrame frame;
-		frame.path = default_path;
-		if (object.is<string>()) {
-			frame.path = object.as<string>();
-			return frame;
-		}
-		if (!object.is<dict>()) {
-			throw runtime_exception(lf::format("texture frame must be a path string or dictionary, got '{}'", object.current_type_name()));
-		}
-
-		const dict& data = object.get<dict>();
-		if (data.contains("path")) {
-			frame.path = data.parse_field<string>("path");
-		}
-
-		bool has_x = data.contains("x");
-		bool has_y = data.contains("y");
-		bool has_width = data.contains("w") || data.contains("width");
-		bool has_height = data.contains("h") || data.contains("height");
-		if (has_x || has_y || has_width || has_height) {
-			if (!has_x || !has_y || !has_width || !has_height) {
-				throw runtime_exception("texture frame rect needs x, y, and w/h or width/height");
-			}
-			frame.rect = rect<u32>{
-				{ data.parse_field<u32>("x"), data.parse_field<u32>("y") },
-				  { data.contains("w") ? data.parse_field<u32>("w") : data.parse_field<u32>("width"),
-					data.contains("h") ? data.parse_field<u32>("h") : data.parse_field<u32>("height") },
-			};
-		}
-		return frame;
-	}
-
 	TexturePrototype::TexturePrototype(const dict& data)
-		: Prototype<identifier<TexturePrototype, u16, void>>(data) {
-		if (data.contains("path")) {
-			data.assign(field("path", path));
-		}
-		if (data.contains("distance")) {
-			data.assign(field("distance", distance));
-		}
-		if (data.contains("fps")) {
-			data.assign(field("fps", frames_per_second));
-		}
-		if (data.contains("frames")) {
-			const object& value = data.at("frames");
-			if (value.is<list>()) {
-				const list& frame_list = value.get<list>();
-				frames.reserve(frame_list.size());
-				for (const object& frame : frame_list) {
-					frames.emplace_back(parse_frame(frame, path));
-				}
-			} else if (value.is<dict>() && value.get<dict>().empty()) {
-				// Lua represents an empty table as a dictionary until it has an array entry.
-			} else if (value.convertible<u16>()) {
-				u16 count = std::max<u16>(value.as<u16>(), 1);
-				frames.reserve(count);
-				for (u16 i = 0; i < count; ++i) {
-					TextureSourceFrame frame;
-					frame.path = path;
-					frames.emplace_back(std::move(frame));
-				}
-			} else {
-				throw runtime_exception(lf::format("texture frames must be a list or count, got '{}'", value.current_type_name()));
-			}
-		}
+		: Prototype<identifier<TexturePrototype, u16, void>>{ data } {
+		data.assign(schema(*this));
 		if (frames.empty()) {
-			TextureSourceFrame frame;
-			frame.path = path;
-			frames.emplace_back(std::move(frame));
+			frames.push_back({ .path = path });
 		}
 	}
 

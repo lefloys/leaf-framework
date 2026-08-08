@@ -12,8 +12,10 @@
 #include "leaf/store/lifecycle.hpp"
 #include "leaf/system/system.hpp"
 
+#include <utility>
+
 namespace lf {
-	error Init(span<string_view> args) {
+	error Init(span<string_view> args, vector<RmlElementRegistration> elements) {
 		error err;
 
 		log::Info("[leaf] initializing leaf-framework...");
@@ -43,7 +45,7 @@ namespace lf {
 			goto platform_exit;
 		}
 
-		err = init_rml(args);
+		err = init_rml(args, std::move(elements));
 		if (err) {
 			goto platform_exit;
 		}
