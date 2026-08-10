@@ -10,7 +10,6 @@ add_library("leaf-script" STATIC
     "mod_loader.cpp"
     "virtual_filesystem.cpp"
     "cursor.cpp"
-    "extensions.cpp"
     "sound.cpp"
     "state.cpp"
     "texture.cpp"

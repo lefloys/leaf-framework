@@ -10,7 +10,7 @@
 #include <sol/sol.hpp>
 
 namespace lf {
-	static void install_sound_script(sol::state& lua) {
+	void InstallSoundScript(sol::state& lua) {
 		lua.set_function("play_sound", [](SoundPrototype::ID::vnum_t sound_value, SoundGroupPrototype::ID::vnum_t group_value, f32 volume) {
 			const SoundPrototype& sound = Database<SoundPrototype>::get(SoundPrototype::ID{ sound_value });
 			const SoundGroupPrototype& group = Database<SoundGroupPrototype>::get(SoundGroupPrototype::ID{ group_value });
@@ -41,16 +41,6 @@ namespace lf {
 		}
 		sound = std::move(*loaded);
 		return {};
-	}
-
-	namespace {
-		struct sound_script_registration {
-			sound_script_registration() {
-				script_system::register_installer(install_sound_script);
-			}
-		};
-
-		const sound_script_registration registered_sound_script{};
 	}
 
 } // namespace lf

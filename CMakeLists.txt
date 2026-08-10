@@ -9,8 +9,6 @@ add_subdirectory("Rutile")
 
 add_subdirectory("modules")
 
-include(CTest)
-if(BUILD_TESTING)
-    add_subdirectory("tests")
-endif()
+enable_testing()
+add_subdirectory("tests")
 

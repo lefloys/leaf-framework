@@ -6,7 +6,7 @@ namespace lf {
 	sol::state CreateState() {
 		sol::state state{};
 		state.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
-		script_system::install(state);
+		InstallSoundScript(state);
 		return state;
 	}
 }
