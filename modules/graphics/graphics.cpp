@@ -3,8 +3,8 @@
 #include "leaf/config.hpp"
 #include "leaf/core/logging.hpp"
 
-#include <rt_ext_glfw.h>
-#include <rt_ext_swapchain.h>
+#include <rt_glfw_swapchain.h>
+#include <rt_swapchain.h>
 #include <rutile.h>
 
 #include <cstdlib>
@@ -122,7 +122,6 @@ namespace rt {
 			return err;
 		}
 		lf::log::Debug("[leaf] Graphics init for '{}'", graphics_api);
-		rtSettingAdd("opengl.version", "4.6");
 		if (auto err = rtLoad(graphics_api.data(), nullptr, 0)) {
 			lf::log::Error("[leaf] Failed to load graphics backend '{}'", graphics_api);
 			return error(generic_errc::unknown, "rtLoad failed");
@@ -149,12 +148,10 @@ namespace rt {
 
 	error init_graphics_extensions(bool headless) {
 		if (!headless) {
-			if (auto err = rtLoad_RT_EXT_SWAPCHAIN(); err != RT_SUCCESS) {
-				return rutile_error(err, "rtLoad_RT_EXT_SWAPCHAIN");
-			}
-			if (auto err = rtLoad_RT_EXT_GLFW(); err != RT_SUCCESS) {
-				return rutile_error(err, "rtLoad_RT_EXT_GLFW");
-			}
+			rtLoadSwapchain();
+			if (error err = rutile_error(rtError(), "rtLoadSwapchain")) return err;
+			rtLoadGlfwSwapchain();
+			if (error err = rutile_error(rtError(), "rtLoadGlfwSwapchain")) return err;
 			lf::log::Trace("[leaf] Loaded Rutile swapchain and GLFW presentation extensions");
 		}
 		return error::no_error;
@@ -167,9 +164,7 @@ namespace rt {
 	}
 
 	bool graphics_available() {
-		// The Rutile dispatch table is populated by rtLoad; before that the
-		// function pointers are null and any rt* call would crash.
-		return rt_rtQueueQuery != nullptr;
+		return rtLoaded();
 	}
 
 	string_view GraphicsBackendName() { return rtGetName(); }

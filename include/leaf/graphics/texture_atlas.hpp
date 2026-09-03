@@ -7,6 +7,7 @@
 #include "leaf/graphics/resource.hpp"
 #include "leaf/graphics/texture.hpp"
 #include "leaf/graphics/texture_view.hpp"
+#include "leaf/graphics/sampler.hpp"
 #include "leaf/core/math/rect.hpp"
 
 #include <functional>
@@ -35,6 +36,7 @@ namespace lf {
 	struct texture_atlas {
 		rt::unique<rt::texture> atlas_texture;
 		rt::unique<rt::texture_view> view;
+		rt::unique<rt::sampler> sampler;
 		vector<packed_atlas_frame> frames;
 	};
 	texture_atlas build_texture_atlas(rt::view<rt::queue> queue, span<const atlas_source_frame> source_frames, const texture_atlas_options& options = {});

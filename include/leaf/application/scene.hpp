@@ -6,7 +6,7 @@
 #include "leaf/core/string.hpp"
 #include "leaf/core/time.hpp"
 #include "leaf/core/vector.hpp"
-#include "leaf/graphics/window.hpp"
+#include "leaf/application/window.hpp"
 #include "leaf/script/state.hpp"
 
 #include <RmlUi/Core/EventListener.h>
@@ -20,8 +20,7 @@ namespace Rml {
 namespace lf {
 	class Scene final : private Rml::EventListener {
 	  public:
-		Scene();
-		explicit Scene(rt::handle<rt::window> display);
+		explicit Scene(Window& window);
 		~Scene();
 
 		void show();
@@ -35,8 +34,8 @@ namespace lf {
 		void set_render_rate(frequency rate);
 		frequency render_rate() const;
 
-		rt::view<rt::window> window() const;
-		rt::unique<rt::window> release_window();
+		Window& window();
+		const Window& window() const;
 
 	  private:
 		struct ScriptSource {
@@ -50,7 +49,7 @@ namespace lf {
 		bool execute_script(string_view source, string_view source_name);
 		void ProcessEvent(Rml::Event& event) override;
 
-		rt::unique<rt::window> display;
+		Window& display;
 		Rml::Context* context = nullptr;
 		Rml::ElementDocument* rml_document = nullptr;
 		sol::state lua = CreateState();

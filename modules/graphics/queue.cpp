@@ -53,9 +53,9 @@ namespace rt::detail {
 } // namespace rt::detail
 
 namespace rt {
-	handle<queue> Queue::Query(QueueCapability capability) {
-		rt_queue queue = rtQueueQuery(detail::to_rutile(capability));
-		detail::check_rutile_error("failed to query queue");
+	handle<queue> Queue::Create(QueueCapability capability) {
+		rt_queue queue = rtQueueCreate(detail::to_rutile(capability));
+		detail::check_rutile_error("failed to create queue");
 		return { queue };
 	}
 
@@ -69,8 +69,6 @@ namespace rt {
 		auto lock = detail::lock_queue(queue);
 		rt_timepoint timepoint = rtQueueSubmit(queue, command_buffer);
 		detail::check_rutile_error("failed to submit command buffer");
-		timepoint = rtQueueFlush(queue);
-		detail::check_rutile_error("failed to flush submitted command buffer");
 		return timepoint;
 	}
 

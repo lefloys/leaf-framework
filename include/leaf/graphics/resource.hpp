@@ -56,7 +56,7 @@ namespace rt {
 	/*!
 	** @brief Opaque Rutile graphics program resource.
 	*/
-	struct graphics_program;
+	struct program;
 
 	/*!
 	** @brief Opaque Rutile command buffer resource.
@@ -73,10 +73,12 @@ namespace rt {
 	*/
 	struct queue;
 
+	struct sampler;
+
 	/*!
 	** @brief Rutile shader uniform location.
 	*/
-	using uniform_location = rt_uniform_location;
+	using location = rt_location;
 
 	/*!
 	** @brief Rutile synchronization timestamp.
@@ -323,8 +325,9 @@ namespace rt {
 	LEAF_RESOURCE_TRAITS(buffer, rt_buffer, rtBufferDestroy);
 	LEAF_RESOURCE_TRAITS(texture, rt_texture, rtTextureDestroy);
 	LEAF_RESOURCE_TRAITS(texture_view, rt_texture_view, rtTextureViewDestroy);
-	LEAF_RESOURCE_TRAITS(graphics_program, rt_graphics_program, rtGraphicsProgramDestroy);
+	LEAF_RESOURCE_TRAITS(program, rt_program, rtProgramDestroy);
 	LEAF_RESOURCE_TRAITS(command_buffer, rt_command_buffer, rtCommandBufferDestroy);
+	LEAF_RESOURCE_TRAITS(sampler, rt_sampler, rtSamplerDestroy);
 
 #undef LEAF_RESOURCE_TRAITS
 
@@ -339,6 +342,9 @@ namespace rt {
 	template<>
 	struct resource_traits<queue> {
 		using native_handle = rt_queue;
+		static void destroy(native_handle handle) {
+			rtQueueDestroy(handle);
+		}
 	};
 
 } // namespace rt

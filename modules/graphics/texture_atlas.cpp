@@ -3,6 +3,9 @@
 #include "leaf/core/cast.hpp"
 #include "leaf/core/format.hpp"
 #include "leaf/core/logging.hpp"
+#include "leaf/graphics/command_buffer.hpp"
+#include "leaf/graphics/queue.hpp"
+#include "leaf/graphics/timepoint.hpp"
 #include "leaf/script/virtual_filesystem.hpp"
 
 #include <algorithm>
@@ -326,7 +329,12 @@ namespace lf {
 		log::Info("[textures] atlas decode/copy: {} groups in {:.3f}s", upload_groups.size(), std::chrono::duration<f64>(decode_done - pack_done).count());
 
 		atlas.atlas_texture = rt::unique(rt::Texture::Create());
-		rt::Texture::Data(queue, atlas.atlas_texture, RT_TEXTURE_2D, 0, layout.width, layout.height, 1, RT_RGBA8_UNORM, atlas_pixels.data());
+		rt::Texture::Resize(atlas.atlas_texture, RT_TEXTURE_2D, RT_RGBA8_UNORM, { layout.width, layout.height, 1 });
+		rt::unique upload_commands(rt::Cmd::Create());
+		rt::Cmd::Begin(upload_commands);
+		rt::Cmd::TextureData(upload_commands, atlas.atlas_texture, { RT_TEXTURE_ASPECT_COLOR, 0, 1, 0, 1, { layout.width, layout.height, 1 }, {} }, atlas_pixels.data());
+		rt::Cmd::End(upload_commands);
+		rt::Timepoint::Wait(rt::Queue::Submit(queue, upload_commands));
 		const auto upload_done = std::chrono::steady_clock::now();
 		log::Info("[textures] atlas GPU upload: {:.3f}s", std::chrono::duration<f64>(upload_done - decode_done).count());
 
@@ -335,8 +343,9 @@ namespace lf {
 		}
 
 		atlas.view.reset(rt::TextureView::CreateFromTexture(atlas.atlas_texture));
-		rt::TextureView::Filter(atlas.view, RT_FILTER_NEAREST, RT_FILTER_NEAREST, RT_MIP_FILTER_NONE);
-		rt::TextureView::Address(atlas.view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
+		atlas.sampler = rt::unique(rt::Sampler::Create());
+		rt::Sampler::SetFilter(atlas.sampler, RT_FILTER_NEAREST, RT_FILTER_NEAREST, RT_MIP_FILTER_NONE);
+		rt::Sampler::SetAddress(atlas.sampler, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
 		const auto view_done = std::chrono::steady_clock::now();
 		log::Info("[textures] atlas view/finalize: {:.3f}s, total {:.3f}s", std::chrono::duration<f64>(view_done - upload_done).count(), std::chrono::duration<f64>(view_done - build_start).count());
 		if (options.progress) {

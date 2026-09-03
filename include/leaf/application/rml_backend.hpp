@@ -11,9 +11,9 @@
 #include "leaf/graphics/graphics_program.hpp"
 #include "leaf/graphics/queue.hpp"
 #include "leaf/graphics/resource.hpp"
+#include "leaf/graphics/sampler.hpp"
 #include "leaf/graphics/texture.hpp"
 #include "leaf/graphics/texture_view.hpp"
-#include "leaf/graphics/uniform_location.hpp"
 #include "leaf/core/math/dim.hpp"
 #include "leaf/core/math/pos.hpp"
 
@@ -77,15 +77,15 @@ namespace lf {
 		void draw_batch(const vector<UiVertex>& vertices, TextureData* texture, int left, int top, int right, int bottom);
 		void collect_garbage();
 
-		rt::handle<rt::queue> upload_queue;
+		rt::unique<rt::queue> upload_queue;
+		rt::unique<rt::command_buffer> upload_commands;
 		rt::view<rt::command_buffer> current_command_buffer;
 		dim2<u32> current_framebuffer_size{};
-		rt::unique<rt::graphics_program> program;
-		vector<rt::unique<rt::buffer>> uniform_buffers;
-		usize uniform_buffer_index = 0;
+		rt::unique<rt::program> program;
+		rt::location vertex_location{};
 		usize batch_vertex_buffer_index = 0;
-		rt::uniform_location uniform_location{};
-		rt::uniform_location texture_location{};
+		rt::location uniform_location{};
+		rt::location texture_location{};
 		unique_ptr<TextureData> white_texture;
 		bool scissor_enabled = false;
 		bool program_bound = false;

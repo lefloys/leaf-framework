@@ -3,18 +3,17 @@ find_path("STB_INCLUDE_DIR" "stb_image.h" REQUIRED)
 add_library("leaf-graphics" STATIC
     "buffer.cpp"
     "command_buffer.cpp"
-    "cursor.cpp"
     "framebuffer.cpp"
     "graphics.cpp"
     "graphics_program.cpp"
     "queue.cpp"
     "resource.cpp"
     "rutile.cpp"
+	"sampler.cpp"
     "texture.cpp"
     "texture_atlas.cpp"
     "texture_view.cpp"
     "timepoint.cpp"
-    "window.cpp"
 )
 add_library("leaf::graphics" ALIAS "leaf-graphics")
 target_include_directories("leaf-graphics" PUBLIC

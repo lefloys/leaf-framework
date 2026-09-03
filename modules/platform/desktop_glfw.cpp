@@ -3,13 +3,13 @@
 #include "leaf/core/exception.hpp"
 #include "leaf/core/logging.hpp"
 #include "leaf/graphics/resource.hpp"
-#include "leaf/graphics/window_private.hpp"
+#include "leaf/application/window.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-#include <rt_ext_glfw.h>
-#include <rt_ext_swapchain.h>
+#include <rt_glfw_swapchain.h>
+#include <rt_swapchain.h>
 
 #include <algorithm>
 #include <array>
@@ -17,7 +17,7 @@
 
 static rt::PlatformWindow* from_glfw(GLFWwindow* wnd) { return reinterpret_cast<rt::PlatformWindow*>(wnd); }
 static GLFWwindow* to_glfw(rt::PlatformWindow* wnd) { return reinterpret_cast<GLFWwindow*>(wnd); }
-static rt::window_t* owner(GLFWwindow* wnd) { return static_cast<rt::window_t*>(glfwGetWindowUserPointer(wnd)); }
+static lf::Window* owner(GLFWwindow* wnd) { return static_cast<lf::Window*>(glfwGetWindowUserPointer(wnd)); }
 
 static rt::input_key input_key_from_glfw(int key) {
 	if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
@@ -103,7 +103,7 @@ static rt::input_modifiers input_modifiers_from_glfw(int mods) {
 
 static void mouse_button_callback(GLFWwindow* wnd, int button, int action, int mods) {
 	if (action == GLFW_PRESS || action == GLFW_RELEASE) {
-		rt::window_t* window = owner(wnd);
+		lf::Window* window = owner(wnd);
 		if (!window) {
 			return;
 		}
@@ -112,8 +112,8 @@ static void mouse_button_callback(GLFWwindow* wnd, int button, int action, int m
 		double x = 0.0;
 		double y = 0.0;
 		glfwGetCursorPos(wnd, &x, &y);
-		window->pointer({ static_cast<f32>(x), static_cast<f32>(y) });
-		window->control(
+		window->on_pointer({ static_cast<f32>(x), static_cast<f32>(y) });
+		window->on_control(
 			{ rt::INPUT_CONTROL_BUTTON, static_cast<u16>(input_button) },
 			down,
 			input_modifiers_from_glfw(mods)
@@ -125,45 +125,45 @@ static void key_callback(GLFWwindow* wnd, int key, int, int action, int mods) {
 	if (action == GLFW_PRESS || action == GLFW_RELEASE || action == GLFW_REPEAT) {
 		rt::input_key input_key = input_key_from_glfw(key);
 		if (input_key != rt::KEY_NULL) {
-			rt::window_t* window = owner(wnd);
+			lf::Window* window = owner(wnd);
 			if (!window) {
 				return;
 			}
 			bool down = action != GLFW_RELEASE;
 			rt::input_modifiers modifiers = input_modifiers_from_glfw(mods);
-			window->control({ rt::INPUT_CONTROL_KEY, static_cast<u16>(input_key) }, down, modifiers);
+			window->on_control({ rt::INPUT_CONTROL_KEY, static_cast<u16>(input_key) }, down, modifiers);
 		}
 	}
 }
 
 static void char_callback(GLFWwindow* wnd, unsigned int codepoint) {
-	rt::window_t* window = owner(wnd);
+	lf::Window* window = owner(wnd);
 	if (!window) {
 		return;
 	}
-	window->text(static_cast<u32>(codepoint));
+	window->on_text(static_cast<u32>(codepoint));
 }
 
 static void cursor_position_callback(GLFWwindow* wnd, double x, double y) {
-	rt::window_t* window = owner(wnd);
+	lf::Window* window = owner(wnd);
 	if (!window) {
 		return;
 	}
-	window->pointer({
+	window->on_pointer({
 		static_cast<f32>(x),
 		static_cast<f32>(y),
 	});
 }
 
 static void cursor_enter_callback(GLFWwindow* wnd, int entered) {
-	if (rt::window_t* window = owner(wnd)) {
-		window->pointer_enter(entered == GLFW_TRUE);
+	if (lf::Window* window = owner(wnd)) {
+		window->on_pointer_enter(entered == GLFW_TRUE);
 	}
 }
 
 static void scroll_callback(GLFWwindow* wnd, double x, double y) {
-	if (rt::window_t* window = owner(wnd)) {
-		window->scroll({
+	if (lf::Window* window = owner(wnd)) {
+		window->on_scroll({
 			static_cast<f32>(x),
 			static_cast<f32>(y),
 		});
@@ -171,18 +171,18 @@ static void scroll_callback(GLFWwindow* wnd, double x, double y) {
 }
 
 static void focus_callback(GLFWwindow* wnd, int focused) {
-	if (rt::window_t* window = owner(wnd)) {
-		window->focus(focused == GLFW_TRUE);
+	if (lf::Window* window = owner(wnd)) {
+		window->on_focus(focused == GLFW_TRUE);
 	}
 }
 
 static void drop_callback(GLFWwindow* wnd, int count, const char** paths) {
-	rt::window_t* window = owner(wnd);
+	lf::Window* window = owner(wnd);
 	if (!window) {
 		return;
 	}
 	for (int i = 0; i < count; ++i) {
-		window->drop(paths[i]);
+		window->on_drop(paths[i]);
 	}
 }
 
@@ -196,11 +196,11 @@ static void framebuffer_size_callback(GLFWwindow* wnd, int width, int height) {
 	if (window_width == 0 || window_height == 0) {
 		return;
 	}
-	rt::window_t* window = owner(wnd);
+	lf::Window* window = owner(wnd);
 	if (!window) {
 		return;
 	}
-	window->resize(
+	window->on_resize(
 		{
 			static_cast<u32>(window_width),
 			static_cast<u32>(window_height),
@@ -258,11 +258,11 @@ namespace rt {
 	}
 
 	void bind_platform_window_swapchain(PlatformWindow* wnd, rt_swapchain swapchain) {
-		rtSwapchainBindWindowGLFW(swapchain, to_glfw(wnd));
+		rtSwapchainBindGLFW(swapchain, to_glfw(wnd));
 		detail::check_rutile_error("failed to bind GLFW wnd to swapchain");
 	}
 
-	void platform_window_owner(PlatformWindow* wnd, window_t* owner) {
+	void platform_window_owner(PlatformWindow* wnd, lf::Window* owner) {
 		if (!wnd) {
 			return;
 		}

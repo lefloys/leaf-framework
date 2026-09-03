@@ -7,7 +7,7 @@
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/graphics/graphics.hpp"
-#include "leaf/graphics/window.hpp"
+#include "leaf/application/window.hpp"
 #include "leaf/platform/platform.hpp"
 #include "leaf/store/lifecycle.hpp"
 #include "leaf/system/system.hpp"

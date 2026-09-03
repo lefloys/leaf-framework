@@ -100,15 +100,15 @@ namespace rt {
 	class CompiledCanvas {
 	  public:
 		CompiledCanvas() = default;
-		explicit CompiledCanvas(const Canvas<Vertex>& canvas, BufferMode mode = BufferMode::Static) {
-			build(canvas, mode);
+		explicit CompiledCanvas(view<command_buffer> command_buffer, const Canvas<Vertex>& canvas) {
+			build(command_buffer, canvas);
 		}
 
-		void build(const Canvas<Vertex>& canvas, BufferMode mode = BufferMode::Static) {
-			build(canvas.vertex_span(), mode);
+		void build(view<command_buffer> command_buffer, const Canvas<Vertex>& canvas) {
+			build(command_buffer, canvas.vertex_span());
 		}
 
-		void build(span<const Vertex> vertices, BufferMode mode = BufferMode::Static) {
+		void build(view<command_buffer> command_buffer, span<const Vertex> vertices) {
 			vertex_count_value = static_cast<u32>(vertices.size());
 			if (vertices.empty()) {
 				return;
@@ -117,7 +117,8 @@ namespace rt {
 				vertex_buffer = unique(Buffer::Create());
 			}
 			u64 byte_size = static_cast<u64>(vertices.size_bytes());
-			Buffer::Data(vertex_buffer, mode, BufferUsage::Vertex, byte_size, vertices.data());
+			Buffer::Resize(vertex_buffer, RT_DEVICE_MEMORY, byte_size);
+			Cmd::BufferData(command_buffer, vertex_buffer, { byte_size, 0 }, reinterpret_cast<const u08*>(vertices.data()));
 		}
 
 		bool empty() const {
@@ -138,17 +139,17 @@ namespace rt {
 	};
 
 	template<typename Vertex>
-	CompiledCanvas<Vertex> compile_canvas(const Canvas<Vertex>& canvas, BufferMode mode = BufferMode::Static) {
-		return CompiledCanvas<Vertex>(canvas, mode);
+	CompiledCanvas<Vertex> compile_canvas(view<command_buffer> command_buffer, const Canvas<Vertex>& canvas) {
+		return CompiledCanvas<Vertex>(command_buffer, canvas);
 	}
 
 	namespace Cmd {
 		template<typename Vertex>
-		void Draw(view<command_buffer> command_buffer, const CompiledCanvas<Vertex>& canvas) {
+		void Draw(view<command_buffer> command_buffer, location vertex_location, const CompiledCanvas<Vertex>& canvas) {
 			if (canvas.empty()) {
 				return;
 			}
-			BindVertexBuffer(command_buffer, canvas.vertices(), 0);
+			VertexBuffer(command_buffer, vertex_location, canvas.vertices(), { static_cast<u64>(canvas.vertex_count()) * sizeof(Vertex), 0 });
 			Draw(command_buffer, canvas.vertex_count(), 0);
 		}
 	} // namespace Cmd

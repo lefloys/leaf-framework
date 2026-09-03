@@ -17,8 +17,7 @@
 #include <leaf/graphics/texture_atlas.hpp>
 #include <leaf/graphics/texture_view.hpp>
 #include <leaf/graphics/timepoint.hpp>
-#include <leaf/graphics/uniform_location.hpp>
-#include <leaf/graphics/window.hpp>
+#include <leaf/application/window.hpp>
 #include <leaf/pmg/pmg.hpp>
 
 namespace lf {

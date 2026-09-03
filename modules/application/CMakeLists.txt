@@ -8,6 +8,8 @@ add_library("leaf-application" STATIC
     "rml_backend.cpp"
     "scene.cpp"
     "scene_systems.cpp"
+	"window.cpp"
+	"window_cursor.cpp"
     "rml_backend.rtsl"
 )
 add_library("leaf::application" ALIAS "leaf-application")

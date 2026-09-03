@@ -28,24 +28,30 @@ namespace rt {
 		Format format = Format::Unknown;
 	};
 
-	struct vertex_layout {
-		u32 stride = 0;
+	struct vertex_input {
 		const vertex_attribute* attributes = nullptr;
 		u32 attribute_count = 0;
+		u32 stride = 0;
+		rt_vertex_rate rate = RT_VERTEX_RATE_VERTEX;
 	};
 
-	namespace GraphicsProgram {
-		handle<graphics_program> Create();
-		void Destroy(handle<graphics_program> program);
-		void VertexLayout(view<graphics_program> program, const vertex_layout& layout);
-		void Source(view<graphics_program> program, u64 size, const void* data);
-		void Source(view<graphics_program> program, span<const byte> data);
-		void RasterState(view<graphics_program> program, CullMode cull_mode, FrontFace front_face, FillMode fill_mode);
-		void BlendState(view<graphics_program> program, bool enabled, rt_blend_factor src_color, rt_blend_factor dst_color, rt_blend_op color_op, rt_blend_factor src_alpha, rt_blend_factor dst_alpha, rt_blend_op alpha_op);
-		void Finalize(view<graphics_program> program);
-		void Reset(view<graphics_program> program);
-		uniform_location UniformLocation(view<graphics_program> program, string_view name);
-	} // namespace GraphicsProgram
+	struct vertex_layout {
+		const vertex_input* inputs = nullptr;
+		u32 input_count = 0;
+	};
+
+	namespace Program {
+		handle<program> Create();
+		void Destroy(handle<program> program);
+		void VertexLayout(view<program> program, const vertex_layout& layout);
+		void Source(view<program> program, string_view entry_point, span<const byte> data);
+		void RasterState(view<program> program, CullMode cull_mode, FrontFace front_face, FillMode fill_mode);
+		void BlendState(view<program> program, bool enabled, rt_blend_factor src_color, rt_blend_factor dst_color, rt_blend_op color_op, rt_blend_factor src_alpha, rt_blend_factor dst_alpha, rt_blend_op alpha_op);
+		void Finalize(view<program> program);
+		location UniformLocation(view<program> program, string_view name);
+		location InputLocation(view<program> program, span<const vertex_attribute> attributes);
+		location OutputLocation(view<program> program, string_view name = {});
+	} // namespace Program
 
 } // namespace rt
 

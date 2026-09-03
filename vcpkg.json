@@ -15,6 +15,7 @@
     "rmlui",
     "sol2",
     "spirv-headers",
+    "spirv-tools",
     "stb",
     "vulkan",
     "vulkan-memory-allocator",

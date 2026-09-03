@@ -1080,7 +1080,8 @@ end
 					atlas_progress_scope.major("loading-assets", 5);
 				}
 			};
-			if (error err = TexturePrototype::BuildAtlas(rt::Queue::Query(rt::QueueCapability::Graphics), atlas_progress, atlas_phase)) {
+			rt::unique<rt::queue> atlas_queue(rt::Queue::Create(rt::QueueCapability::Graphics));
+			if (error err = TexturePrototype::BuildAtlas(atlas_queue, atlas_progress, atlas_phase)) {
 				return err.add_context("building texture atlas");
 			}
 			atlas_progress_scope.major("loading-assets", 6);

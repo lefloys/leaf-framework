@@ -4,16 +4,15 @@
 #include "leaf/core/span.hpp"
 #include "leaf/core/string.hpp"
 #include "leaf/core/types.hpp"
-#include "leaf/graphics/window.hpp"
+#include "leaf/application/window.hpp"
 #include "leaf/core/math/dim.hpp"
 #include "leaf/core/math/pos.hpp"
 
-#include <rt_ext_swapchain.h>
+#include <rt_swapchain.h>
 
 namespace rt {
 	struct PlatformWindow;
 	struct PlatformCursor;
-	struct window_t;
 	using lf::dim2;
 	using lf::pos2;
 
@@ -30,7 +29,7 @@ namespace rt {
 	PlatformWindow* create_platform_window(const PlatformWindowCreateInfo& info);
 	void destroy_platform_window(PlatformWindow* window);
 	void bind_platform_window_swapchain(PlatformWindow* window, rt_swapchain swapchain);
-	void platform_window_owner(PlatformWindow* window, window_t* owner);
+	void platform_window_owner(PlatformWindow* window, lf::Window* owner);
 	void platform_window_clear_owner(PlatformWindow* window);
 	void platform_window_title(PlatformWindow* window, string_view title);
 	void platform_window_show(PlatformWindow* window);

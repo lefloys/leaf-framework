@@ -152,6 +152,7 @@ namespace lf {
 	struct RmlRenderInterface::TextureData {
 		rt::unique<rt::texture> image;
 		rt::unique<rt::texture_view> view;
+		rt::unique<rt::sampler> sampler;
 		dim2<u32> size{};
 	};
 
@@ -237,21 +238,24 @@ namespace lf {
 	}
 
 	RmlRenderInterface::RmlRenderInterface() {
-		upload_queue = rt::Queue::Query(rt::QueueCapability::Graphics);
-		program = rt::unique(rt::GraphicsProgram::Create());
-		rt::GraphicsProgram::Source(program, leaf_rml_ui_rtslp.view());
+		upload_queue = rt::unique(rt::Queue::Create(rt::QueueCapability::Graphics));
+		upload_commands = rt::unique(rt::Cmd::Create());
+		program = rt::unique(rt::Program::Create());
+		rt::Program::Source(program, "main", leaf_rml_ui_rtslp.view());
 		rt::vertex_attribute attributes[] = {
 			{ "position", static_cast<u32>(offsetof(UiVertex, position)), rt::Format::Rg32Float },
 			{ "uv", static_cast<u32>(offsetof(UiVertex, uv)), rt::Format::Rg32Float },
 			{ "color", static_cast<u32>(offsetof(UiVertex, color)), rt::Format::Rgba32Float },
 		};
-		rt::vertex_layout layout{ sizeof(UiVertex), attributes, 3 };
-		rt::GraphicsProgram::VertexLayout(program, layout);
-		rt::GraphicsProgram::RasterState(program, rt::CullMode::None, rt::FrontFace::CounterClockwise, rt::FillMode::Solid);
-		rt::GraphicsProgram::BlendState(program, true, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA, RT_BLEND_OP_ADD, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA, RT_BLEND_OP_ADD);
-		rt::GraphicsProgram::Finalize(program);
-		uniform_location = rt::GraphicsProgram::UniformLocation(program, "UiDraw");
-		texture_location = rt::GraphicsProgram::UniformLocation(program, "UiTexture");
+		rt::vertex_input input{ attributes, 3, sizeof(UiVertex) };
+		rt::vertex_layout layout{ &input, 1 };
+		rt::Program::VertexLayout(program, layout);
+		rt::Program::RasterState(program, rt::CullMode::None, rt::FrontFace::CounterClockwise, rt::FillMode::Solid);
+		rt::Program::BlendState(program, true, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA, RT_BLEND_OP_ADD, RT_BLEND_ONE, RT_BLEND_ONE_MINUS_SRC_ALPHA, RT_BLEND_OP_ADD);
+		rt::Program::Finalize(program);
+		vertex_location = rt::Program::InputLocation(program, { attributes, 3 });
+		uniform_location = rt::Program::UniformLocation(program, "UiDraw");
+		texture_location = rt::Program::UniformLocation(program, "UiTexture");
 		const array<u08, 4> white_pixel{ 255, 255, 255, 255 };
 		white_texture = create_texture_data(1, 1, white_pixel.data());
 	}
@@ -261,7 +265,6 @@ namespace lf {
 	void RmlRenderInterface::begin(rt::view<rt::command_buffer> command_buffer, dim2<u32> viewport_size) {
 		current_command_buffer = command_buffer;
 		current_framebuffer_size = viewport_size;
-		uniform_buffer_index = 0;
 		batch_vertex_buffer_index = 0;
 		program_bound = false;
 		bound_texture = RT_NULL_HANDLE;
@@ -380,10 +383,16 @@ namespace lf {
 		unique_ptr<TextureData> texture_data = make_unique<TextureData>();
 		texture_data->size = { width, height };
 		texture_data->image = rt::unique<rt::texture>(rt::Texture::Create());
-		rt::Texture::Data(upload_queue, texture_data->image, RT_TEXTURE_2D, 0, width, height, 1, RT_RGBA8_UNORM, pixels);
+		rt::Texture::Resize(texture_data->image, RT_TEXTURE_2D, RT_RGBA8_UNORM, { width, height, 1 });
+		rt::Cmd::Reset(upload_commands);
+		rt::Cmd::Begin(upload_commands);
+		rt::Cmd::TextureData(upload_commands, texture_data->image, { RT_TEXTURE_ASPECT_COLOR, 0, 1, 0, 1, { width, height, 1 }, {} }, reinterpret_cast<const u08*>(pixels));
+		rt::Cmd::End(upload_commands);
+		rt::Timepoint::Wait(rt::Queue::Submit(upload_queue, upload_commands));
 		texture_data->view = rt::unique<rt::texture_view>(rt::TextureView::CreateFromTexture(texture_data->image));
-		rt::TextureView::Filter(texture_data->view, RT_FILTER_LINEAR, RT_FILTER_LINEAR, RT_MIP_FILTER_NONE);
-		rt::TextureView::Address(texture_data->view, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
+		texture_data->sampler = rt::unique<rt::sampler>(rt::Sampler::Create());
+		rt::Sampler::SetFilter(texture_data->sampler, RT_FILTER_LINEAR, RT_FILTER_LINEAR, RT_MIP_FILTER_NONE);
+		rt::Sampler::SetAddress(texture_data->sampler, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP, RT_ADDRESS_CLAMP);
 		return texture_data;
 	}
 	Rml::TextureHandle RmlRenderInterface::create_texture(u32 width, u32 height, const void* pixels) {
@@ -465,12 +474,10 @@ namespace lf {
 		if (batch_vertex_buffer_index >= batch_vertex_buffers.size()) {
 			batch_vertex_buffers.push_back(rt::unique<rt::buffer>(rt::Buffer::Create()));
 			batch_vertex_buffer_sizes.push_back(vertex_bytes);
-			rt::Buffer::Data(batch_vertex_buffers.back(), rt::BufferMode::Dynamic, rt::BufferUsage::Vertex, vertex_bytes, vertices.data());
+			rt::Buffer::Resize(batch_vertex_buffers.back(), RT_DEVICE_MEMORY, vertex_bytes);
 		} else if (batch_vertex_buffer_sizes[batch_vertex_buffer_index] < vertex_bytes) {
 			batch_vertex_buffer_sizes[batch_vertex_buffer_index] = vertex_bytes;
-			rt::Buffer::Data(batch_vertex_buffers[batch_vertex_buffer_index], rt::BufferMode::Dynamic, rt::BufferUsage::Vertex, vertex_bytes, vertices.data());
-		} else {
-			rt::Buffer::Subdata(batch_vertex_buffers[batch_vertex_buffer_index], 0, vertex_bytes, vertices.data());
+			rt::Buffer::Resize(batch_vertex_buffers[batch_vertex_buffer_index], RT_DEVICE_MEMORY, vertex_bytes);
 		}
 		rt::view<rt::buffer> draw_vertices = batch_vertex_buffers[batch_vertex_buffer_index];
 		++batch_vertex_buffer_index;
@@ -481,30 +488,23 @@ namespace lf {
 		uniform.translation[0] = 0.0f;
 		uniform.translation[1] = 0.0f;
 		uniform.texture_mode = texture_data == white_texture.get() ? 0.0f : 1.0f;
-		if (uniform_buffer_index >= uniform_buffers.size()) {
-			uniform_buffers.push_back(rt::unique<rt::buffer>(rt::Buffer::Create()));
-			rt::Buffer::Data(uniform_buffers.back(), rt::BufferMode::Dynamic, rt::BufferUsage::Uniform, sizeof(uniform), &uniform);
-		} else {
-			rt::Buffer::Subdata(uniform_buffers[uniform_buffer_index], 0, sizeof(uniform), &uniform);
-		}
-		rt::view<rt::buffer> draw_uniform_buffer = uniform_buffers[uniform_buffer_index];
-		++uniform_buffer_index;
-
 		{
-			rt::view<rt::graphics_program> draw_program = program;
+			rt::view<rt::program> draw_program = program;
 			rt::view<rt::texture_view> draw_texture = texture_data->view;
 			if (!program_bound) {
-				rtCmdUseGraphicsProgram(current_command_buffer, draw_program);
+				rt::Cmd::UseProgram(current_command_buffer, draw_program);
 				program_bound = true;
 			}
-			rtCmdSetScissor(current_command_buffer, static_cast<u32>(left), static_cast<u32>(top), static_cast<u32>(right - left), static_cast<u32>(bottom - top));
-			rtCmdUniformBuffer(current_command_buffer, uniform_location, draw_uniform_buffer, 0, sizeof(uniform));
+			rt::Cmd::BufferData(current_command_buffer, draw_vertices, { vertex_bytes, 0 }, reinterpret_cast<const u08*>(vertices.data()));
+			rt::Cmd::SetScissor(current_command_buffer, static_cast<u32>(left), static_cast<u32>(top), static_cast<u32>(right - left), static_cast<u32>(bottom - top));
+			rt::Cmd::UniformData(current_command_buffer, uniform_location, reinterpret_cast<const u08*>(&uniform), sizeof(uniform));
 			if (bound_texture != draw_texture.value) {
-				rtCmdUniformTexture(current_command_buffer, texture_location, draw_texture);
+				rt::Cmd::BindTexture(current_command_buffer, texture_location, draw_texture);
+				rt::Cmd::BindSampler(current_command_buffer, texture_location, texture_data->sampler);
 				bound_texture = draw_texture.value;
 			}
-			rtCmdBindVertexBuffer(current_command_buffer, draw_vertices, 0);
-			rtCmdDraw(current_command_buffer, static_cast<u32>(vertices.size()), 0);
+			rt::Cmd::VertexBuffer(current_command_buffer, vertex_location, draw_vertices, { vertex_bytes, 0 });
+			rt::Cmd::Draw(current_command_buffer, static_cast<u32>(vertices.size()), 0);
 		}
 		rt::detail::check_rutile_error("failed to record RmlUi geometry");
 	}

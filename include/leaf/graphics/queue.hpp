@@ -13,7 +13,7 @@ namespace rt {
 	};
 
 	namespace Queue {
-		handle<queue> Query(QueueCapability capability);
+		handle<queue> Create(QueueCapability capability);
 		void Wait(view<queue> queue, timepoint timepoint);
 		timepoint Submit(view<queue> queue, view<command_buffer> command_buffer);
 		timepoint Flush(view<queue> queue);

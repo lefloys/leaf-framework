@@ -84,12 +84,9 @@ namespace lf {
 		}
 	}
 
-	Scene::Scene()
-		: Scene{ rt::Window::Create() } {}
-
-	Scene::Scene(rt::handle<rt::window> display)
-		: display{ std::move(display) } {
-		const dim2<u32> size = rt::Window::Size(this->display);
+	Scene::Scene(Window& display)
+		: display(display) {
+		const dim2<u32> size = this->display.size();
 		context = Rml::CreateContext("scene", { static_cast<i32>(size.width), static_cast<i32>(size.height) });
 		if (!context) throw runtime_exception("failed to create RML scene context");
 	}
@@ -101,7 +98,7 @@ namespace lf {
 
 	void Scene::show() {
 		if (rml_document) rml_document->Show();
-		rt::Window::Show(display);
+		display.show();
 	}
 
 	void Scene::set_rml(string_view source) {
@@ -146,13 +143,12 @@ namespace lf {
 		return frequency::from_hertz(frame_rate.rate());
 	}
 
-	rt::view<rt::window> Scene::window() const {
+	Window& Scene::window() {
 		return display;
 	}
 
-	rt::unique<rt::window> Scene::release_window() {
-		unload_document();
-		return std::move(display);
+	const Window& Scene::window() const {
+		return display;
 	}
 
 	void Scene::ProcessEvent(Rml::Event& event) {
@@ -176,7 +172,7 @@ namespace lf {
 
 	void Scene::input() {
 		if (!rml_document) return;
-		for (const rt::input_event& event : rt::Window::InputEvents(display)) {
+		for (const rt::input_event& event : display.input_events()) {
 			switch (event.type) {
 			case INPUT_EVENT_CONTROL:
 				if (event.control.type == INPUT_CONTROL_BUTTON) {
@@ -226,23 +222,22 @@ namespace lf {
 				break;
 			}
 		}
-		rt::Window::UpdateInput(display);
+		display.update_input();
 	}
 
 	void Scene::render() {
-		if (!rt::Window::Drawable(display)) return;
-		const dim2<u32> size = rt::Window::Size(display);
+		if (!display.drawable()) return;
+		const dim2<u32> size = display.size();
 		if (context->GetDimensions() != Rml::Vector2i{ static_cast<i32>(size.width), static_cast<i32>(size.height) }) {
 			context->SetDimensions({ static_cast<i32>(size.width), static_cast<i32>(size.height) });
 		}
-		const rt::view<rt::queue> queue = rt::Queue::Query(rt::QueueCapability::Graphics);
-		const rt::view<rt::command_buffer> commands = rt::Window::BeginFrame(display, queue);
+		const rt::view<rt::command_buffer> commands = display.begin_frame();
 		if (!commands) return;
 		context->Update();
 		rml_renderer().begin(commands, size);
 		context->Render();
 		rml_renderer().end();
-		rt::Window::EndFrame(display);
+		display.end_frame();
 	}
 
 	bool Scene::update() {
@@ -250,7 +245,7 @@ namespace lf {
 		input();
 		render();
 		frame_rate.mark();
-		return !rt::Window::ShouldClose(display);
+		return !display.should_close();
 	}
 
 	void Scene::unload_document() {
